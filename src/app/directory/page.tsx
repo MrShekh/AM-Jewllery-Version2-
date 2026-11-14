@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppShell, AppShellUser } from "@/components/AppShell";
@@ -9,6 +9,12 @@ import {
   PROCESS_DISPLAY_LABELS,
   ProcessType,
 } from "@/lib/domain/types";
+import {
+  fetchActorCached,
+  fetchCachedJson,
+  getCachedActor,
+  getCachedJson,
+} from "@/lib/client-cache";
 
 interface CustomerRow {
   id: string;
@@ -33,9 +39,20 @@ interface KarigarRow {
 
 export default function DirectoryPage() {
   const router = useRouter();
-  const [actor, setActor] = useState<AppShellUser | null>(null);
-  const [customers, setCustomers] = useState<CustomerRow[]>([]);
-  const [karigars, setKarigars] = useState<KarigarRow[]>([]);
+  const [actor, setActor] = useState<AppShellUser | null>(() => getCachedActor());
+  const [customers, setCustomers] = useState<CustomerRow[]>(
+    () => getCachedJson<{ customers: CustomerRow[] }>("/api/customers")?.customers || []
+  );
+  const [karigars, setKarigars] = useState<KarigarRow[]>(
+    () => getCachedJson<{ karigars: KarigarRow[] }>("/api/karigars")?.karigars || []
+  );
+  const [activeTab, setActiveTab] = useState<"all" | "customers" | "karigars">(() => {
+    if (typeof window !== "undefined") {
+      const t = new URLSearchParams(window.location.search).get("tab");
+      if (t === "customers" || t === "karigars") return t;
+    }
+    return "all";
+  });
   const [searchCustomer, setSearchCustomer] = useState("");
   const [searchKarigar, setSearchKarigar] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -123,28 +140,55 @@ export default function DirectoryPage() {
   ]);
   const [savingKarigar, setSavingKarigar] = useState(false);
 
-  const loadData = useCallback(async () => {
-    const meRes = await fetch("/api/auth/me");
-    if (meRes.status === 401) {
-      router.push("/login?redirect=/directory");
-      return;
-    }
-    const meData = await meRes.json();
-    setActor(meData.actor);
-
-    const [cRes, kRes] = await Promise.all([
-      fetch(`/api/customers?search=${encodeURIComponent(searchCustomer)}`),
-      fetch(`/api/karigars?search=${encodeURIComponent(searchKarigar)}`),
-    ]);
-    const cData = await cRes.json();
-    const kData = await kRes.json();
-    if (cData.ok) setCustomers(cData.customers);
-    if (kData.ok) setKarigars(kData.karigars);
-  }, [router, searchCustomer, searchKarigar]);
+  const loadData = useCallback(
+    async (force = false) => {
+      const [resolvedActor, cData, kData] = await Promise.all([
+        fetchActorCached(),
+        fetchCachedJson<{ ok?: boolean; customers?: CustomerRow[] }>(
+          "/api/customers",
+          { force, ttlMs: 120_000 }
+        ),
+        fetchCachedJson<{ ok?: boolean; karigars?: KarigarRow[] }>(
+          "/api/karigars",
+          { force, ttlMs: 120_000 }
+        ),
+      ]);
+      if (!resolvedActor) {
+        router.push("/login?redirect=/directory");
+        return;
+      }
+      setActor(resolvedActor);
+      if (cData.ok && cData.customers) setCustomers(cData.customers);
+      if (kData.ok && kData.karigars) setKarigars(kData.karigars);
+    },
+    [router]
+  );
 
   useEffect(() => {
-    loadData();
+    void loadData(false);
   }, [loadData]);
+
+  const filteredCustomers = useMemo(() => {
+    const q = searchCustomer.trim().toLowerCase();
+    if (!q) return customers;
+    return customers.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.customerCode.toLowerCase().includes(q) ||
+        (c.phone || "").toLowerCase().includes(q)
+    );
+  }, [customers, searchCustomer]);
+
+  const filteredKarigars = useMemo(() => {
+    const q = searchKarigar.trim().toLowerCase();
+    if (!q) return karigars;
+    return karigars.filter(
+      (k) =>
+        k.name.toLowerCase().includes(q) ||
+        k.karigarCode.toLowerCase().includes(q) ||
+        (k.phone || "").toLowerCase().includes(q)
+    );
+  }, [karigars, searchKarigar]);
 
   function toggleCapability(p: ProcessType) {
     setKarCapabilities((prev) =>
@@ -255,8 +299,36 @@ export default function DirectoryPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {(
+            [
+              ["all", "All"],
+              ["customers", `Customers (${customers.length})`],
+              ["karigars", `Karigars (${karigars.length})`],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xs border cursor-pointer ${
+                activeTab === id
+                  ? "bg-blue-700 text-white border-blue-700"
+                  : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div
+          className={`grid grid-cols-1 gap-4 ${
+            activeTab === "all" ? "lg:grid-cols-2" : ""
+          }`}
+        >
           {/* Customers Panel */}
+          {(activeTab === "all" || activeTab === "customers") && (
           <div className="bg-white border border-slate-200 rounded-xs p-4 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-2">
               <h2 className="text-sm font-bold text-slate-900">
@@ -335,7 +407,7 @@ export default function DirectoryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {customers.length === 0 ? (
+                  {filteredCustomers.length === 0 ? (
                     <tr>
                       <td
                         colSpan={5}
@@ -345,7 +417,7 @@ export default function DirectoryPage() {
                       </td>
                     </tr>
                   ) : (
-                    customers.map((c) => (
+                    filteredCustomers.map((c) => (
                       <tr
                         key={c.id}
                         className="border-b border-slate-100 hover:bg-slate-50"
@@ -388,8 +460,10 @@ export default function DirectoryPage() {
               </table>
             </div>
           </div>
+          )}
 
           {/* Karigars Panel */}
+          {(activeTab === "all" || activeTab === "karigars") && (
           <div className="bg-white border border-slate-200 rounded-xs p-4 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-2">
               <h2 className="text-sm font-bold text-slate-900">
@@ -492,7 +566,7 @@ export default function DirectoryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {karigars.length === 0 ? (
+                  {filteredKarigars.length === 0 ? (
                     <tr>
                       <td
                         colSpan={5}
@@ -502,7 +576,7 @@ export default function DirectoryPage() {
                       </td>
                     </tr>
                   ) : (
-                    karigars.map((k) => (
+                    filteredKarigars.map((k) => (
                       <tr
                         key={k.id}
                         className="border-b border-slate-100 hover:bg-slate-50"
@@ -574,6 +648,7 @@ export default function DirectoryPage() {
               </table>
             </div>
           </div>
+          )}
         </div>
 
         {editingKarigar && (

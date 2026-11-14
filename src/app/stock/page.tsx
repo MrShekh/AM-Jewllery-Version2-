@@ -8,6 +8,12 @@ import {
   PurityStockRow,
 } from "@/lib/domain/erp-service";
 import { getTodayBusinessDateString } from "@/lib/date-and-export";
+import {
+  fetchActorCached,
+  fetchCachedJson,
+  getCachedActor,
+  getCachedJson,
+} from "@/lib/client-cache";
 
 interface JournalHistoryRow {
   id: string;
@@ -50,11 +56,23 @@ interface StockSaleRow {
 
 export default function StockPage() {
   const router = useRouter();
-  const [actor, setActor] = useState<AppShellUser | null>(null);
+  const cachedStock = getCachedJson<{
+    ok?: boolean;
+    reconciliation?: DailyReconciliationReport;
+    history?: JournalHistoryRow[];
+    sales?: StockSaleRow[];
+  }>("/api/stock");
+  const [actor, setActor] = useState<AppShellUser | null>(() => getCachedActor());
   const [reconciliation, setReconciliation] =
-    useState<DailyReconciliationReport | null>(null);
-  const [history, setHistory] = useState<JournalHistoryRow[]>([]);
-  const [sales, setSales] = useState<StockSaleRow[]>([]);
+    useState<DailyReconciliationReport | null>(
+      () => cachedStock?.reconciliation || null
+    );
+  const [history, setHistory] = useState<JournalHistoryRow[]>(
+    () => cachedStock?.history || []
+  );
+  const [sales, setSales] = useState<StockSaleRow[]>(
+    () => cachedStock?.sales || []
+  );
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -74,10 +92,14 @@ export default function StockPage() {
   const [addWeight, setAddWeight] = useState("");
   const [addDescription, setAddDescription] = useState("");
 
-  // Form 2: Convert Fine -> Karat
+  // Form 2: Convert Fine <-> Karat
+  const [convDirection, setConvDirection] = useState<"FINE_TO_KARAT" | "KARAT_TO_FINE">(
+    "FINE_TO_KARAT"
+  );
   const [convDate, setConvDate] = useState(getTodayBusinessDateString());
   const [convTargetPurityId, setConvTargetPurityId] = useState("");
   const [convFineWeight, setConvFineWeight] = useState("");
+  const [convActualOutput, setConvActualOutput] = useState("");
   const [convDescription, setConvDescription] = useState("");
 
   // Form 3: Sell Gold
@@ -99,42 +121,50 @@ export default function StockPage() {
     useState<JournalHistoryRow | null>(null);
   const [reversalReason, setReversalReason] = useState("");
 
-  const loadData = useCallback(async () => {
-    const meRes = await fetch("/api/auth/me");
-    if (meRes.status === 401) {
-      router.push("/login?redirect=/stock");
-      return;
-    }
-    const meData = await meRes.json();
-    setActor(meData.actor);
+  const loadData = useCallback(
+    async (force = false) => {
+      const [resolvedActor, stkData] = await Promise.all([
+        fetchActorCached(),
+        fetchCachedJson<{
+          ok?: boolean;
+          reconciliation?: DailyReconciliationReport;
+          history?: JournalHistoryRow[];
+          sales?: StockSaleRow[];
+        }>("/api/stock", { force }),
+      ]);
+      if (!resolvedActor) {
+        router.push("/login?redirect=/stock");
+        return;
+      }
+      setActor(resolvedActor);
 
-    const stkRes = await fetch("/api/stock");
-    const stkData = await stkRes.json();
-    if (stkData.ok) {
-      setReconciliation(stkData.reconciliation);
-      setHistory(stkData.history || []);
-      setSales(stkData.sales || []);
+      if (stkData.ok && stkData.reconciliation) {
+        setReconciliation(stkData.reconciliation);
+        setHistory(stkData.history || []);
+        setSales(stkData.sales || []);
 
-      const purities: PurityStockRow[] = stkData.reconciliation?.byPurity || [];
-      const nonFinePurities = purities.filter(
-        (p) => !p.isFineCategory && Number(p.touchPercent) < 99
-      );
-      const primaryFine =
-        purities.find((p) => Number(p.touchPercent) === 100) ||
-        purities.find((p) => p.code === "ADMIN_FINE_GOLD") ||
-        purities.find((p) => p.isFineCategory) ||
-        purities[0];
-      if (!addPurityId && primaryFine) {
-        setAddPurityId(primaryFine.purityId);
+        const purities: PurityStockRow[] = stkData.reconciliation?.byPurity || [];
+        const nonFinePurities = purities.filter(
+          (p) => !p.isFineCategory && Number(p.touchPercent) < 99
+        );
+        const primaryFine =
+          purities.find((p) => Number(p.touchPercent) === 100) ||
+          purities.find((p) => p.code === "ADMIN_FINE_GOLD") ||
+          purities.find((p) => p.isFineCategory) ||
+          purities[0];
+        if (!addPurityId && primaryFine) {
+          setAddPurityId(primaryFine.purityId);
+        }
+        if (!convTargetPurityId && nonFinePurities.length > 0) {
+          setConvTargetPurityId(nonFinePurities[0].purityId);
+        }
+        if (!sellPurityId && primaryFine) {
+          setSellPurityId(primaryFine.purityId);
+        }
       }
-      if (!convTargetPurityId && nonFinePurities.length > 0) {
-        setConvTargetPurityId(nonFinePurities[0].purityId);
-      }
-      if (!sellPurityId && primaryFine) {
-        setSellPurityId(primaryFine.purityId);
-      }
-    }
-  }, [router, addPurityId, convTargetPurityId, sellPurityId]);
+    },
+    [router, addPurityId, convTargetPurityId, sellPurityId]
+  );
 
   useEffect(() => {
     void loadData();
@@ -235,19 +265,26 @@ export default function StockPage() {
       setError("Fine gold purity is not configured.");
       return;
     }
-    const fineAmt = Number(convFineWeight);
-    const targetPurity = allPurities.find(
+    const inputAmt = Number(convFineWeight);
+    const karatPurity = allPurities.find(
       (p) => p.purityId === convTargetPurityId
     );
-    if (!targetPurity || !(fineAmt > 0)) {
-      setError("Please select a target karat and enter a valid fine weight.");
+    if (!karatPurity || !(inputAmt > 0)) {
+      setError("Please select a karat purity and enter a valid weight.");
       return;
     }
-    const targetTouch = Number(targetPurity.touchPercent);
+    const karatTouch = Number(karatPurity.touchPercent);
     const fineTouch = Number(finePurity.touchPercent || 100);
-    // Calculate source physical weight from fine Purity so theoreticalFineWeight matches fineAmt
-    const sourcePhysical = (fineAmt * 100) / fineTouch;
-    const targetOutputWeight = (fineAmt * 100) / targetTouch;
+
+    const isFineToKarat = convDirection === "FINE_TO_KARAT";
+    const sourcePurityId = isFineToKarat ? finePurity.purityId : karatPurity.purityId;
+    const targetPurityId = isFineToKarat ? karatPurity.purityId : finePurity.purityId;
+    const sourcePhysical = isFineToKarat ? (inputAmt * 100) / fineTouch : inputAmt;
+    const expectedOutput = isFineToKarat
+      ? (inputAmt * 100) / karatTouch
+      : (inputAmt * karatTouch) / fineTouch;
+    const actualOutput =
+      Number(convActualOutput) > 0 ? Number(convActualOutput) : expectedOutput;
 
     setSubmitting(true);
     try {
@@ -256,36 +293,45 @@ export default function StockPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "POST_CONVERSION",
-          conversionType: "FINE_TO_KARAT",
+          conversionType: convDirection,
           businessDate: convDate,
-          sourcePurityId: finePurity.purityId,
+          sourcePurityId,
           sourceWeight: sourcePhysical.toFixed(3),
-          targetPurityId: targetPurity.purityId,
-          actualOutputWeight: targetOutputWeight.toFixed(3),
+          targetPurityId,
+          actualOutputWeight: actualOutput.toFixed(3),
           returnedMetalWeight: "0",
           residueWeight: "0",
           lossTreatment: "ACCEPTED",
           notes:
             convDescription.trim() ||
-            `Converted ${fineAmt.toFixed(3)}g Fine → ${targetOutputWeight.toFixed(
-              3
-            )}g of ${targetPurity.displayLabel}`,
+            (isFineToKarat
+              ? `Converted ${inputAmt.toFixed(3)}g Fine → ${actualOutput.toFixed(
+                  3
+                )}g of ${karatPurity.displayLabel}`
+              : `Converted ${inputAmt.toFixed(3)}g ${karatPurity.displayLabel} → ${actualOutput.toFixed(
+                  3
+                )}g Fine`),
           idempotencyKey: `ui_conv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        setError(data.error || "Failed to convert fine gold to karat");
+        setError(data.error || "Failed to convert gold");
       } else {
         setConvFineWeight("");
+        setConvActualOutput("");
         setConvDescription("");
         setShowConvertForm(false);
         setMessage(
-          `Converted ${fineAmt.toFixed(2)}g Fine → ${targetOutputWeight.toFixed(
-            2
-          )}g of ${targetPurity.displayLabel}`
+          isFineToKarat
+            ? `Converted ${inputAmt.toFixed(2)}g Fine → ${actualOutput.toFixed(
+                2
+              )}g of ${karatPurity.displayLabel}`
+            : `Converted ${inputAmt.toFixed(2)}g ${karatPurity.displayLabel} → ${actualOutput.toFixed(
+                2
+              )}g Fine`
         );
-        await loadData();
+        await loadData(true);
       }
     } finally {
       setSubmitting(false);
@@ -679,7 +725,42 @@ export default function StockPage() {
                 {directFineGold.toFixed(2)}g
               </span>
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConvDirection("FINE_TO_KARAT");
+                    setConvActualOutput("");
+                  }}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded border cursor-pointer ${
+                    convDirection === "FINE_TO_KARAT"
+                      ? "bg-purple-600 text-white border-purple-600"
+                      : "bg-white text-gray-700 border-gray-300"
+                  }`}
+                >
+                  Fine → Karat
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConvDirection("KARAT_TO_FINE");
+                    setConvActualOutput("");
+                  }}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded border cursor-pointer ${
+                    convDirection === "KARAT_TO_FINE"
+                      ? "bg-purple-600 text-white border-purple-600"
+                      : "bg-white text-gray-700 border-gray-300"
+                  }`}
+                >
+                  Karat → Fine
+                </button>
+              </div>
+              <span className="text-xs text-gray-500">
+                Calculation preview is shown below; enter actual measured output if different.
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Date
@@ -694,7 +775,7 @@ export default function StockPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Target Karat
+                  {convDirection === "FINE_TO_KARAT" ? "Target Karat" : "Source Karat"}
                 </label>
                 <select
                   value={convTargetPurityId}
@@ -710,17 +791,33 @@ export default function StockPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Fine Amount to Convert (grams)
+                  {convDirection === "FINE_TO_KARAT"
+                    ? "Fine Amount to Convert (g)"
+                    : "Karat Weight to Convert (g)"}
                 </label>
                 <input
                   type="number"
-                  step="0.01"
-                  min="0.01"
+                  step="0.001"
+                  min="0.001"
                   value={convFineWeight}
                   onChange={(e) => setConvFineWeight(e.target.value)}
                   placeholder="e.g. 50"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Actual Physical Output (g)
+                </label>
+                <input
+                  type="number"
+                  step="0.001"
+                  min="0.001"
+                  value={convActualOutput}
+                  onChange={(e) => setConvActualOutput(e.target.value)}
+                  placeholder="Auto from preview"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 />
               </div>
             </div>
@@ -730,20 +827,41 @@ export default function StockPage() {
                   (p) => p.purityId === convTargetPurityId
                 );
                 if (!targetP) return null;
+                const fineTouch = Number(finePurity?.touchPercent || 100);
                 const outG =
-                  (Number(convFineWeight) * 100) / Number(targetP.touchPercent);
+                  convDirection === "FINE_TO_KARAT"
+                    ? (Number(convFineWeight) * 100) / Number(targetP.touchPercent)
+                    : (Number(convFineWeight) * Number(targetP.touchPercent)) / fineTouch;
                 return (
                   <div className="bg-purple-50 border border-purple-200 rounded-md p-3 text-sm text-purple-900">
-                    <span className="font-semibold">
-                      {Number(convFineWeight).toFixed(2)}g Fine
-                    </span>{" "}
-                    →{" "}
-                    <span className="font-bold text-purple-700">
-                      {outG.toFixed(2)}g of {targetP.displayLabel} gold
-                    </span>{" "}
-                    <span className="text-xs text-purple-600">
-                      (Fine × 100 ÷ {targetP.touchPercent})
-                    </span>
+                    <span className="font-semibold">Calculation Preview:</span>{" "}
+                    {convDirection === "FINE_TO_KARAT" ? (
+                      <>
+                        <span className="font-semibold">
+                          {Number(convFineWeight).toFixed(3)}g Fine
+                        </span>{" "}
+                        →{" "}
+                        <span className="font-bold text-purple-700">
+                          {outG.toFixed(3)}g of {targetP.displayLabel} gold
+                        </span>{" "}
+                        <span className="text-xs text-purple-600">
+                          (Fine × 100 ÷ {targetP.touchPercent})
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-semibold">
+                          {Number(convFineWeight).toFixed(3)}g {targetP.displayLabel}
+                        </span>{" "}
+                        →{" "}
+                        <span className="font-bold text-purple-700">
+                          {outG.toFixed(3)}g Fine Gold
+                        </span>{" "}
+                        <span className="text-xs text-purple-600">
+                          (Karat × {targetP.touchPercent} ÷ {fineTouch})
+                        </span>
+                      </>
+                    )}
                   </div>
                 );
               })()}

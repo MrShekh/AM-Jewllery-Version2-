@@ -3,6 +3,7 @@
 import React, { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { sanitizeRedirectPath } from "@/lib/auth-redirect";
+import { invalidateClientCache, setCachedActor } from "@/lib/client-cache";
 
 function LoginFormContent() {
   const router = useRouter();
@@ -33,6 +34,10 @@ function LoginFormContent() {
         setError(data.error || "Sign in failed");
         setLoading(false);
         return;
+      }
+      if (data.actor) {
+        invalidateClientCache();
+        setCachedActor(data.actor);
       }
       router.push(data.redirectTo || redirectTarget);
       router.refresh();

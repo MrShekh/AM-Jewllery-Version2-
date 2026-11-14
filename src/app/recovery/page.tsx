@@ -12,6 +12,12 @@ import {
   formatKolkataDateDDMMYYYY,
   getTodayBusinessDateString,
 } from "@/lib/date-and-export";
+import {
+  fetchActorCached,
+  fetchCachedJson,
+  getCachedActor,
+  getCachedJson,
+} from "@/lib/client-cache";
 
 interface KarigarSummary {
   karigarId: string;
@@ -137,7 +143,7 @@ function RecoveryContent() {
   const searchParams = useSearchParams();
   const initialKarigarId = searchParams.get("karigarId") || "";
 
-  const [actor, setActor] = useState<AppShellUser | null>(null);
+  const [actor, setActor] = useState<AppShellUser | null>(() => getCachedActor());
   const [karigarSummaries, setKarigarSummaries] = useState<KarigarSummary[]>([]);
   const [eligibleLosses, setEligibleLosses] = useState<EligibleLossRow[]>([]);
   const [touchGroups, setTouchGroups] = useState<TouchGroupRow[]>([]);
@@ -146,7 +152,9 @@ function RecoveryContent() {
   const [periodRecon, setPeriodRecon] = useState<PeriodReconciliation | null>(
     null
   );
-  const [purities, setPurities] = useState<PurityItem[]>([]);
+  const [purities, setPurities] = useState<PurityItem[]>(
+    () => getCachedJson<{ purities: PurityItem[] }>("/api/purities")?.purities || []
+  );
 
   // Filters
   const [karigarFilter, setKarigarFilter] = useState<string>(initialKarigarId);
@@ -194,46 +202,57 @@ function RecoveryContent() {
   const [success, setSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
 
-  const loadWorkspace = useCallback(async () => {
-    const meRes = await fetch("/api/auth/me");
-    if (meRes.status === 401) {
-      router.push("/login?redirect=/recovery");
-      return;
-    }
-    const meData = await meRes.json();
-    setActor(meData.actor);
+  const loadWorkspace = useCallback(
+    async (force = false) => {
+      const qs = new URLSearchParams();
+      if (karigarFilter) qs.set("karigarId", karigarFilter);
+      if (processFilter) qs.set("processType", processFilter);
+      if (fromDate) qs.set("fromDate", fromDate);
+      if (toDate) qs.set("toDate", toDate);
 
-    const qs = new URLSearchParams();
-    if (karigarFilter) qs.set("karigarId", karigarFilter);
-    if (processFilter) qs.set("processType", processFilter);
-    if (fromDate) qs.set("fromDate", fromDate);
-    if (toDate) qs.set("toDate", toDate);
+      const [resolvedActor, recData, purData] = await Promise.all([
+        fetchActorCached(),
+        fetchCachedJson<{
+          ok?: boolean;
+          karigarSummaries?: KarigarSummary[];
+          eligibleLosses?: EligibleLossRow[];
+          touchGroups?: TouchGroupRow[];
+          settlements?: RecoverySettlementRow[];
+          receipts?: RecoveryReceiptRow[];
+          periodReconciliation?: PeriodReconciliation | null;
+        }>(`/api/recovery?${qs.toString()}`, { force }),
+        fetchCachedJson<{ ok?: boolean; purities?: PurityItem[] }>(
+          "/api/purities",
+          { ttlMs: 300_000 }
+        ),
+      ]);
 
-    const [recRes, purRes] = await Promise.all([
-      fetch(`/api/recovery?${qs.toString()}`),
-      fetch("/api/purities"),
-    ]);
-    const recData = await recRes.json();
-    const purData = await purRes.json();
-
-    if (recData.ok) {
-      const summaries: KarigarSummary[] = recData.karigarSummaries || [];
-      setKarigarSummaries(summaries);
-      setEligibleLosses(recData.eligibleLosses || []);
-      setTouchGroups(recData.touchGroups || []);
-      setSettlements(recData.settlements || []);
-      setReceipts(recData.receipts || []);
-      setPeriodRecon(recData.periodReconciliation || null);
-      if (!karigarFilter && summaries.length > 0) {
-        const firstWithOutstanding =
-          summaries.find((k) => Number(k.outstandingFine) > 0) ?? summaries[0];
-        setKarigarFilter(firstWithOutstanding.karigarId);
+      if (!resolvedActor) {
+        router.push("/login?redirect=/recovery");
+        return;
       }
-    }
-    if (purData.ok) {
-      setPurities(purData.purities || []);
-    }
-  }, [router, karigarFilter, processFilter, fromDate, toDate]);
+      setActor(resolvedActor);
+
+      if (recData.ok) {
+        const summaries: KarigarSummary[] = recData.karigarSummaries || [];
+        setKarigarSummaries(summaries);
+        setEligibleLosses(recData.eligibleLosses || []);
+        setTouchGroups(recData.touchGroups || []);
+        setSettlements(recData.settlements || []);
+        setReceipts(recData.receipts || []);
+        setPeriodRecon(recData.periodReconciliation || null);
+        if (!karigarFilter && summaries.length > 0) {
+          const firstWithOutstanding =
+            summaries.find((k) => Number(k.outstandingFine) > 0) ?? summaries[0];
+          setKarigarFilter(firstWithOutstanding.karigarId);
+        }
+      }
+      if (purData.ok) {
+        setPurities(purData.purities || []);
+      }
+    },
+    [router, karigarFilter, processFilter, fromDate, toDate]
+  );
 
   useEffect(() => {
     loadWorkspace();

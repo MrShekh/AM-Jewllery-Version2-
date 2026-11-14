@@ -27,6 +27,12 @@ import {
   formatMonthKeyLabel,
   getTodayBusinessDateString,
 } from "@/lib/date-and-export";
+import {
+  fetchActorCached,
+  fetchCachedJson,
+  getCachedActor,
+  getCachedJson,
+} from "@/lib/client-cache";
 
 interface RegisterProcessItem {
   id: string;
@@ -171,13 +177,30 @@ function ProductionRegisterContent() {
   const orderIdFromUrl = searchParams.get("order");
   const scannedParam = searchParams.get("scanned");
 
-  const [actor, setActor] = useState<AppShellUser | null>(null);
-  const [rows, setRows] = useState<RegisterOrderRow[]>([]);
-  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
-  const [karigars, setKarigars] = useState<KarigarOption[]>([]);
+  const [actor, setActor] = useState<AppShellUser | null>(() => getCachedActor());
+  const cachedInitOrders = getCachedJson<{
+    ok?: boolean;
+    rows: RegisterOrderRow[];
+    availableMonths: string[];
+  }>("/api/orders?status=ACTIVE");
+  const [rows, setRows] = useState<RegisterOrderRow[]>(
+    () => cachedInitOrders?.rows || []
+  );
+  const [availableMonths, setAvailableMonths] = useState<string[]>(
+    () => cachedInitOrders?.availableMonths || []
+  );
+  const [karigars, setKarigars] = useState<KarigarOption[]>(
+    () => getCachedJson<{ karigars: KarigarOption[] }>("/api/karigars")?.karigars || []
+  );
   const [purities, setPurities] = useState<
     Array<{ id: string; displayLabel: string; touchPercent: string }>
-  >([]);
+  >(
+    () =>
+      getCachedJson<{
+        purities: Array<{ id: string; displayLabel: string; touchPercent: string }>;
+      }>("/api/purities")?.purities || []
+  );
+  const [mobileProcessTab, setMobileProcessTab] = useState<ProcessType>("FILING");
 
   // Register filters
   const [monthKey, setMonthKey] = useState<string>("ALL");
@@ -248,59 +271,73 @@ function ProductionRegisterContent() {
   const [addFilingGoldIdempotencyKey, setAddFilingGoldIdempotencyKey] =
     useState<string>("");
 
-  const loadRegister = useCallback(async () => {
-    const meRes = await fetch("/api/auth/me");
-    if (meRes.status === 401) {
-      const target = orderIdFromUrl
-        ? `/production-register?order=${encodeURIComponent(orderIdFromUrl)}`
-        : "/production-register";
-      router.push(`/login?redirect=${encodeURIComponent(target)}`);
-      return;
-    }
-    const meData = await meRes.json();
-    setActor(meData.actor);
+  const loadRegister = useCallback(
+    async (force = false) => {
+      const qs = new URLSearchParams();
+      if (monthKey && monthKey !== "ALL") qs.set("monthKey", monthKey);
+      if (search.trim()) qs.set("search", search.trim());
+      if (statusFilter && statusFilter !== "ALL") qs.set("status", statusFilter);
+      if (purityFilter && purityFilter !== "ALL")
+        qs.set("purityId", purityFilter);
+      if (processFilter) qs.set("processType", processFilter);
 
-    const qs = new URLSearchParams();
-    if (monthKey && monthKey !== "ALL") qs.set("monthKey", monthKey);
-    if (search.trim()) qs.set("search", search.trim());
-    if (statusFilter && statusFilter !== "ALL") qs.set("status", statusFilter);
-    if (purityFilter && purityFilter !== "ALL")
-      qs.set("purityId", purityFilter);
-    if (processFilter) qs.set("processType", processFilter);
+      const ordersUrl = `/api/orders?${qs.toString()}`;
 
-    const [ordRes, karRes, purRes] = await Promise.all([
-      fetch(`/api/orders?${qs.toString()}`),
-      fetch("/api/karigars"),
-      fetch("/api/purities"),
-    ]);
+      const [resolvedActor, ordData, karData, purData] = await Promise.all([
+        fetchActorCached(),
+        fetchCachedJson<{
+          ok?: boolean;
+          rows?: RegisterOrderRow[];
+          availableMonths?: string[];
+        }>(ordersUrl, { force }),
+        fetchCachedJson<{ ok?: boolean; karigars?: KarigarOption[] }>(
+          "/api/karigars",
+          { ttlMs: 300_000 }
+        ),
+        fetchCachedJson<{
+          ok?: boolean;
+          purities?: Array<{
+            id: string;
+            displayLabel: string;
+            touchPercent: string;
+          }>;
+        }>("/api/purities", { ttlMs: 300_000 }),
+      ]);
 
-    const ordData = await ordRes.json();
-    const karData = await karRes.json();
-    const purData = await purRes.json();
-
-    if (ordData.ok) {
-      setRows(ordData.rows);
-      setAvailableMonths(ordData.availableMonths);
-    }
-    if (karData.ok) {
-      setKarigars(karData.karigars);
-      if (karData.karigars.length > 0 && !selectedKarigarId) {
-        setSelectedKarigarId(karData.karigars[0].id);
+      if (!resolvedActor) {
+        const target = orderIdFromUrl
+          ? `/production-register?order=${encodeURIComponent(orderIdFromUrl)}`
+          : "/production-register";
+        router.push(`/login?redirect=${encodeURIComponent(target)}`);
+        return;
       }
-    }
-    if (purData.ok) {
-      setPurities(purData.purities);
-    }
-  }, [
-    router,
-    orderIdFromUrl,
-    monthKey,
-    search,
-    statusFilter,
-    purityFilter,
-    processFilter,
-    selectedKarigarId,
-  ]);
+      setActor(resolvedActor);
+
+      if (ordData.ok && ordData.rows) {
+        setRows(ordData.rows);
+        setAvailableMonths(ordData.availableMonths || []);
+      }
+      if (karData.ok && karData.karigars) {
+        setKarigars(karData.karigars);
+        if (karData.karigars.length > 0 && !selectedKarigarId) {
+          setSelectedKarigarId(karData.karigars[0].id);
+        }
+      }
+      if (purData.ok && purData.purities) {
+        setPurities(purData.purities);
+      }
+    },
+    [
+      router,
+      orderIdFromUrl,
+      monthKey,
+      search,
+      statusFilter,
+      purityFilter,
+      processFilter,
+      selectedKarigarId,
+    ]
+  );
 
   useEffect(() => {
     loadRegister();
@@ -949,10 +986,25 @@ function ProductionRegisterContent() {
             (p) =>
               p.status !== "CLOSED" && Number(p.latestGrossInWeight || 0) > 0
           );
+          const anyClosed = row.original.processes.some(
+            (p) => p.status === "CLOSED"
+          );
           const displayStatus =
-            st === "IN_PROCESS" && openWithKarigar ? "With Karigar" : st;
-          const badgeClass =
             st === "COMPLETED"
+              ? "Completed"
+              : st === "DELIVERED"
+              ? "Delivered"
+              : st === "CANCELLED"
+              ? "Cancelled"
+              : st === "CREATED"
+              ? "Not Started"
+              : openWithKarigar
+              ? "With Karigar"
+              : anyClosed
+              ? "Work Received"
+              : "Not Started";
+          const badgeClass =
+            st === "COMPLETED" || st === "DELIVERED"
               ? "bg-emerald-50 text-emerald-800 border-emerald-300"
               : st === "IN_PROCESS"
               ? "bg-blue-50 text-blue-800 border-blue-300"
@@ -961,7 +1013,7 @@ function ProductionRegisterContent() {
               : "bg-amber-50 text-amber-800 border-amber-300";
           return (
             <span
-              className={`px-1.5 py-0.5 text-[10px] font-mono font-semibold border rounded-xs ${badgeClass}`}
+              className={`px-1.5 py-0.5 text-[10px] font-sans font-semibold border rounded-xs ${badgeClass}`}
             >
               {displayStatus}
             </span>
@@ -1428,9 +1480,9 @@ function ProductionRegisterContent() {
                 className="px-2 py-1.5 text-xs border border-slate-300 rounded-xs bg-white"
               >
                 <option value="ACTIVE">All Orders</option>
-                <option value="CREATED">CREATED</option>
-                <option value="IN_PROCESS">IN_PROCESS</option>
-                <option value="COMPLETED">COMPLETED</option>
+                <option value="CREATED">Not Started</option>
+                <option value="IN_PROCESS">With Karigar / In Process</option>
+                <option value="COMPLETED">Completed</option>
               </select>
               <select
                 value={purityFilter}
@@ -1957,7 +2009,7 @@ function ProductionRegisterContent() {
                                       : "bg-white border border-amber-300 text-amber-900"
                                   }`}
                                 >
-                                  Add Gold
+                                  Add More Gold
                                 </button>
                                 <button
                                   type="button"
@@ -1968,7 +2020,7 @@ function ProductionRegisterContent() {
                                       : "bg-white border border-amber-300 text-amber-900"
                                   }`}
                                 >
-                                  Return Unused
+                                  Return Unused Gold
                                 </button>
                                 <button
                                   type="button"
@@ -1979,7 +2031,7 @@ function ProductionRegisterContent() {
                                       : "bg-white border border-amber-300 text-amber-900"
                                   }`}
                                 >
-                                  Correct Entry
+                                  Correct a Mistake
                                 </button>
                               </div>
                               <button
@@ -2113,7 +2165,7 @@ function ProductionRegisterContent() {
                               </div>
                               <div>
                                 <div className="text-[10px] font-sans text-slate-500">
-                                  New Filing IN
+                                  New Filing IN (Admin deduction now: {Number(addFilingGoldWeight || 0).toFixed(3)} g)
                                 </div>
                                 <div className="font-bold text-emerald-800">
                                   {(
@@ -2663,14 +2715,37 @@ function ProductionRegisterContent() {
           </div>
         )}
 
-        {/* Mobile Cards (usable Give Work / Receive Work on phone) */}
-        <div className="md:hidden space-y-2">
+        {/* Mobile Cards (one readable process section at a time on phones) */}
+        <div className="md:hidden space-y-2.5">
+          <div className="flex items-center gap-1 overflow-x-auto pb-1">
+            {CANONICAL_PROCESS_SEQUENCE.map((pt) => (
+              <button
+                key={`mob_tab_${pt}`}
+                type="button"
+                onClick={() => setMobileProcessTab(pt)}
+                className={`px-2.5 py-1.5 text-[11px] font-semibold rounded-xs border whitespace-nowrap cursor-pointer ${
+                  mobileProcessTab === pt
+                    ? "bg-blue-700 text-white border-blue-700"
+                    : "bg-white text-slate-700 border-slate-300"
+                }`}
+              >
+                {PROCESS_DISPLAY_LABELS[pt]}
+              </button>
+            ))}
+          </div>
+
           {rows.map((row) => {
+            const selectedProc = row.processes.find(
+              (p) => p.processType === mobileProcessTab
+            );
             const openProc =
+              selectedProc ||
               row.processes.find((p) => p.status !== "CLOSED") ||
               row.processes[0];
             const hasIn =
               openProc && Number(openProc.latestGrossInWeight || 0) > 0;
+            const hasOut =
+              openProc && Number(openProc.latestGrossOutWeight || 0) > 0;
             return (
               <div
                 key={`mob_${row.order.id}`}
@@ -2683,15 +2758,45 @@ function ProductionRegisterContent() {
                   </span>
                   <span className="text-[11px] font-semibold text-slate-700">
                     {openProc
-                      ? `${PROCESS_DISPLAY_LABELS[openProc.processType]}${
-                          hasIn ? " (With Karigar)" : ""
+                      ? `${PROCESS_DISPLAY_LABELS[openProc.processType]} • ${
+                          openProc.status === "CLOSED"
+                            ? "Closed"
+                            : hasIn
+                            ? "With Karigar"
+                            : "Not Started"
                         }`
                       : row.order.status}
                   </span>
                 </div>
-                <div className="text-slate-700">
+                <div className="text-slate-700 font-medium">
                   {row.customer.name} — {row.order.orderName}
                 </div>
+                {openProc && (
+                  <div className="grid grid-cols-3 gap-2 bg-slate-50 border border-slate-200 rounded-xs p-2 font-mono text-[11px]">
+                    <div>
+                      <div className="text-[10px] font-sans text-slate-500">IN</div>
+                      <div className="font-semibold">
+                        {hasIn ? `${Number(openProc.latestGrossInWeight).toFixed(3)}g` : "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-sans text-slate-500">OUT</div>
+                      <div className="font-semibold">
+                        {hasOut ? `${Number(openProc.latestGrossOutWeight).toFixed(3)}g` : "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-sans text-slate-500">Loss</div>
+                      <div className="font-semibold">
+                        {openProc.status === "CLOSED"
+                          ? `${Number(openProc.closedLossWeight).toFixed(3)}g`
+                          : hasIn
+                          ? "Pending"
+                          : "—"}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {openProc && openProc.status !== "CLOSED" && (
                   <div className="flex items-center gap-2 pt-1">
                     <button
@@ -2739,7 +2844,11 @@ function ProductionRegisterContent() {
                     <th
                       key={header.id}
                       className={`px-2.5 py-2 text-[11px] font-bold tracking-tight border-r border-slate-200 whitespace-nowrap ${
-                        idx <= 1 ? "text-left bg-slate-100" : "text-right"
+                        idx === 0
+                          ? "text-left bg-slate-100 sticky left-0 z-20 min-w-[72px]"
+                          : idx === 1
+                          ? "text-left bg-slate-100 sticky left-[72px] z-20"
+                          : "text-right"
                       }`}
                     >
                       {header.isPlaceholder
@@ -2791,10 +2900,16 @@ function ProductionRegisterContent() {
                           : "hover:bg-slate-50"
                       }`}
                     >
-                      {row.getVisibleCells().map((cell) => (
+                      {row.getVisibleCells().map((cell, cIdx) => (
                         <td
                           key={cell.id}
-                          className="px-2.5 py-1.5 border-r border-slate-100 whitespace-nowrap"
+                          className={`px-2.5 py-1.5 border-r border-slate-100 whitespace-nowrap ${
+                            cIdx === 0
+                              ? `sticky left-0 z-10 min-w-[72px] ${isSelected ? "bg-blue-50" : "bg-white"}`
+                              : cIdx === 1
+                              ? `sticky left-[72px] z-10 ${isSelected ? "bg-blue-50" : "bg-white"}`
+                              : ""
+                          }`}
                         >
                           {flexRender(
                             cell.column.columnDef.cell,

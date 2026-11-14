@@ -7,6 +7,12 @@ import { AppShell, AppShellUser } from "@/components/AppShell";
 import { Printer, Plus, Trash2, CheckCircle2, AlertTriangle, Share2, Download, FileText } from "lucide-react";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
+import {
+  fetchActorCached,
+  fetchCachedJson,
+  getCachedActor,
+  getCachedJson,
+} from "@/lib/client-cache";
 
 interface CustomerSummary {
   customerId: string;
@@ -182,8 +188,8 @@ function BillingWorkspaceInner() {
   const initialOrderIdsParam = searchParams.get("orderIds") || "";
   const initialTab = (searchParams.get("tab") as "new-bill" | "bills" | "collections" | "templates") || "new-bill";
 
-  const [actor, setActor] = useState<AppShellUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [actor, setActor] = useState<AppShellUser | null>(() => getCachedActor());
+  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -353,52 +359,87 @@ function BillingWorkspaceInner() {
     void refreshWaStatus();
   }, [refreshWaStatus]);
 
-  const loadWorkspace = useCallback(async () => {
-    setLoading(true);
-    try {
-      const meRes = await fetch("/api/auth/me");
-      if (!meRes.ok) {
-        router.replace("/login?redirect=/billing");
-        return;
-      }
-      const meData = await meRes.json();
-      setActor(meData.actor || meData.user);
-
+  const loadWorkspace = useCallback(
+    async (force = false) => {
       const q = customerId ? `?customerId=${encodeURIComponent(customerId)}` : "";
-      const res = await fetch(`/api/billing${q}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to load billing workspace");
-
-      setCustomerSummaries(data.customerSummaries || []);
-      setOrders(data.orders || []);
-      setBills(data.bills || []);
-      setGoldReceipts(data.goldReceipts || []);
-      setCashReceipts(data.cashReceipts || []);
-      setAllocations(data.allocations || []);
-      setTemplates(data.templates || []);
-      setPurities(data.purities || []);
-      if (data.fineReceiptConvention) {
-        setFineReceiptConvention(data.fineReceiptConvention);
-      }
-
-      if (!customerId && data.customerSummaries?.length > 0) {
-        setCustomerId(data.customerSummaries[0].customerId);
-      }
-      if (data.purities?.length > 0 && goldLines[0]?.purityId === "") {
-        setGoldLines([
-          {
-            purityId: data.purities[0].id,
-            grossWeight: "",
-            touchPercent: Number(data.purities[0].touchPercent).toString(),
-          },
+      const url = `/api/billing${q}`;
+      const cached = getCachedJson<Record<string, unknown>>(url);
+      if (!cached || force) setLoading(true);
+      try {
+        const [resolvedActor, data] = await Promise.all([
+          fetchActorCached(),
+          fetchCachedJson<{
+            error?: string;
+            customerSummaries?: CustomerSummary[];
+            orders?: OrderRow[];
+            bills?: BillRow[];
+            goldReceipts?: GoldReceiptRow[];
+            cashReceipts?: CashReceiptRow[];
+            allocations?: Array<{
+              id: string;
+              customerId: string;
+              billId: string;
+              goldReceiptId: string | null;
+              cashReceiptId: string | null;
+              allocatedFineWeight: string;
+              allocatedRupees: string;
+              status: string;
+              businessDate: string;
+            }>;
+            templates?: TemplateConfig[];
+            purities?: PurityOption[];
+            fineReceiptConvention?: {
+              mode: "UNCONFIGURED" | "FINE_EQUIVALENT" | "PHYSICAL_AT_CONFIGURED_TOUCH";
+              configuredTouch: string | null;
+              finePurityId: string;
+              finePurityCode: string;
+              finePurityLabel: string;
+              destinationAccountCode: string;
+              destinationAccountName: string;
+            };
+          }>(url, { force }),
         ]);
+
+        if (!resolvedActor) {
+          router.replace("/login?redirect=/billing");
+          return;
+        }
+        setActor(resolvedActor);
+        if (data.error) throw new Error(data.error);
+
+        setCustomerSummaries(data.customerSummaries || []);
+        setOrders(data.orders || []);
+        setBills(data.bills || []);
+        setGoldReceipts(data.goldReceipts || []);
+        setCashReceipts(data.cashReceipts || []);
+        setAllocations(data.allocations || []);
+        setTemplates(data.templates || []);
+        setPurities(data.purities || []);
+        if (data.fineReceiptConvention) {
+          setFineReceiptConvention(data.fineReceiptConvention);
+        }
+
+        if (!customerId && data.customerSummaries && data.customerSummaries.length > 0) {
+          setCustomerId(data.customerSummaries[0].customerId);
+        }
+        if (data.purities && data.purities.length > 0 && goldLines[0]?.purityId === "") {
+          setGoldLines([
+            {
+              purityId: data.purities[0].id,
+              grossWeight: "",
+              touchPercent: Number(data.purities[0].touchPercent).toString(),
+            },
+          ]);
+        }
+      } catch (err) {
+        setErrorMsg(err instanceof Error ? err.message : "Failed to load billing");
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Failed to load billing");
-    } finally {
-      setLoading(false);
-    }
-  }, [customerId, router]);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [customerId, router]
+  );
 
   useEffect(() => {
     loadWorkspace();

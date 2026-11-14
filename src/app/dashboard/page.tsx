@@ -3,7 +3,21 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { AppShell, AppShellUser } from "@/components/AppShell";
-import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  RefreshCw,
+  PlusCircle,
+  Users,
+  Coins,
+  Scale,
+} from "lucide-react";
+import {
+  fetchActorCached,
+  fetchCachedJson,
+  getCachedActor,
+  getCachedJson,
+} from "@/lib/client-cache";
 
 interface DashboardSummary {
   groupA_adminStock: {
@@ -65,42 +79,46 @@ interface DashboardSummary {
 }
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<AppShellUser | null>(null);
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedDash = getCachedJson<{ summary: DashboardSummary }>("/api/dashboard");
+  const [user, setUser] = useState<AppShellUser | null>(() => getCachedActor());
+  const [summary, setSummary] = useState<DashboardSummary | null>(
+    () => cachedDash?.summary || null
+  );
+  const [loading, setLoading] = useState(!cachedDash?.summary);
   const [error, setError] = useState<string | null>(null);
   const [openCard, setOpenCard] = useState<"A" | "B" | "C" | null>("A");
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (force = false) => {
+    if (!summary || force) setLoading(true);
     setError(null);
     try {
-      const [meRes, dashRes] = await Promise.all([
-        fetch("/api/auth/me", { cache: "no-store" }),
-        fetch("/api/dashboard", { cache: "no-store" }),
+      const [actor, d] = await Promise.all([
+        fetchActorCached(force),
+        fetchCachedJson<{ summary: DashboardSummary; error?: string }>(
+          "/api/dashboard",
+          { force }
+        ),
       ]);
-      if (meRes.ok) {
-        const me = await meRes.json();
-        setUser(me.actor || me.user || null);
-      }
-      const d = await dashRes.json();
-      if (!dashRes.ok) throw new Error(d.error || "Failed to load dashboard");
+      if (actor) setUser(actor);
+      if (d.error) throw new Error(d.error);
       setSummary(d.summary);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to load dashboard");
+      setError(e instanceof Error ? e.message : "Failed to load home summary");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    void loadData();
+    void loadData(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!user) {
     return (
       <div className="p-6 text-xs text-slate-500">
-        Loading workshop dashboard...
+        Loading workshop home...
       </div>
     );
   }
@@ -108,22 +126,54 @@ export default function DashboardPage() {
   return (
     <AppShell actor={user}>
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Header + Quick Shortcuts */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-lg font-bold text-slate-900">
-              Total Stock &amp; Workshop Balance
-            </h1>
+            <h1 className="text-lg font-bold text-slate-900">Workshop Home</h1>
             <p className="text-xs text-slate-500">
-              All totals in fine gold equivalent (g fine); mixed-purity physical weights are labelled separately.
+              All gold balances shown in fine gold equivalent (g fine).
             </p>
           </div>
           <button
-            onClick={() => void loadData()}
-            className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            type="button"
+            onClick={() => void loadData(true)}
+            className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
           >
-            <RefreshCw className="h-3.5 w-3.5" />
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </button>
+        </div>
+
+        {/* 4 Useful Everyday Shortcuts */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <Link
+            href="/orders/new"
+            className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs font-semibold text-blue-900 hover:bg-blue-100 transition-colors"
+          >
+            <PlusCircle className="h-4 w-4 text-blue-700 shrink-0" />
+            <span>New Order</span>
+          </Link>
+          <Link
+            href="/directory?tab=customers"
+            className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-100 transition-colors"
+          >
+            <Users className="h-4 w-4 text-emerald-700 shrink-0" />
+            <span>Receive Customer Gold</span>
+          </Link>
+          <Link
+            href="/recovery"
+            className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 transition-colors"
+          >
+            <Coins className="h-4 w-4 text-amber-700 shrink-0" />
+            <span>Recover Karigar Gold</span>
+          </Link>
+          <Link
+            href="/stock"
+            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors"
+          >
+            <Scale className="h-4 w-4 text-slate-700 shrink-0" />
+            <span>Add/Purchase Gold</span>
+          </Link>
         </div>
 
         {error && (
@@ -132,87 +182,30 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {loading || !summary ? (
+        {loading && !summary ? (
           <div className="rounded border border-slate-200 bg-white p-6 text-center text-xs text-slate-500">
-            Loading workshop stock summary...
+            Loading workshop gold balances...
           </div>
-        ) : (
+        ) : summary ? (
           <>
-            {/* Top Formula Strip */}
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">
-                  Total Accounted Gold (A + B + C)
-                </div>
-                <div className="mt-1 text-xl font-bold tabular-nums text-amber-950">
-                  {summary.totals.totalAccountedGoldFine} g fine
-                </div>
-                <div className="mt-0.5 text-[11px] text-amber-800">
-                  Admin + Customer Owed + Production &amp; Loss
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-slate-200 bg-white p-3">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                  Physical Gold On Hand
-                </div>
-                <div className="mt-1 text-xl font-bold tabular-nums text-slate-900">
-                  {summary.totals.physicalGoldFine} g fine
-                </div>
-                <div className="mt-0.5 text-[11px] text-slate-500 tabular-nums">
-                  {summary.totals.physicalGoldMixed} g mixed physical (Admin + WIP + FG)
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-slate-200 bg-white p-3">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                  Credits &amp; Return Obligations
-                </div>
-                <div className="mt-1 text-xs text-slate-700 tabular-nums">
-                  Unused Customer Credits:{" "}
-                  <span className="font-semibold text-blue-700">
-                    {summary.totals.unusedCustomerGoldCredits} g fine
-                  </span>
-                </div>
-                <div className="mt-0.5 text-xs text-slate-700 tabular-nums">
-                  Karigar Return Obligations:{" "}
-                  <span className="font-semibold text-indigo-700">
-                    {summary.totals.karigarReturnObligations} g fine
-                  </span>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
-                  Net Tracked Gold Position
-                </div>
-                <div className="mt-1 text-xl font-bold tabular-nums text-emerald-950">
-                  {summary.totals.netTrackedGoldPosition} g fine
-                </div>
-                <div className="mt-0.5 text-[11px] text-emerald-800">
-                  Accounted Gold minus unallocated credits/obligations
-                </div>
-              </div>
-            </div>
-
-            {/* 3 Main Groups: A, B, C */}
+            {/* 3 Main Balance Cards */}
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-              {/* Group A: Admin Stock */}
-              <div className="rounded-lg border border-slate-200 bg-white">
+              {/* 1. Gold Available with Admin */}
+              <div className="rounded-lg border border-emerald-200 bg-white">
                 <button
                   type="button"
                   onClick={() => setOpenCard(openCard === "A" ? null : "A")}
-                  className="flex w-full items-center justify-between p-4 text-left hover:bg-slate-50"
+                  className="flex w-full items-center justify-between p-4 text-left hover:bg-emerald-50/40 cursor-pointer"
                 >
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                      A. Admin Stock
+                    <div className="text-xs font-bold uppercase tracking-wide text-emerald-800">
+                      Gold Available with Admin
                     </div>
-                    <div className="mt-1 text-lg font-bold tabular-nums text-slate-900">
+                    <div className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
                       {summary.groupA_adminStock.totalFine} g fine
                     </div>
                     <div className="text-[11px] text-slate-500 tabular-nums">
-                      {summary.groupA_adminStock.mixedPhysical} g mixed physical
+                      {summary.groupA_adminStock.mixedPhysical} g mixed physical on hand
                     </div>
                   </div>
                   {openCard === "A" ? (
@@ -248,31 +241,31 @@ export default function DashboardPage() {
                     <div className="mt-2 text-right">
                       <Link
                         href="/stock"
-                        className="text-[11px] font-semibold text-amber-700 hover:underline"
+                        className="text-[11px] font-semibold text-blue-700 hover:underline"
                       >
-                        Open Stock &amp; Journal →
+                        View Gold Stock →
                       </Link>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Group B: Customer Gold Owed */}
-              <div className="rounded-lg border border-slate-200 bg-white">
+              {/* 2. Gold Due from Customers */}
+              <div className="rounded-lg border border-blue-200 bg-white">
                 <button
                   type="button"
                   onClick={() => setOpenCard(openCard === "B" ? null : "B")}
-                  className="flex w-full items-center justify-between p-4 text-left hover:bg-slate-50"
+                  className="flex w-full items-center justify-between p-4 text-left hover:bg-blue-50/40 cursor-pointer"
                 >
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                      B. Customer Gold Owed
+                    <div className="text-xs font-bold uppercase tracking-wide text-blue-800">
+                      Gold Due from Customers
                     </div>
-                    <div className="mt-1 text-lg font-bold tabular-nums text-slate-900">
+                    <div className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
                       {summary.groupB_customerGoldOwed.totalFine} g fine
                     </div>
                     <div className="text-[11px] text-slate-500">
-                      {summary.groupB_customerGoldOwed.openBillCount} open posted bill(s)
+                      Across {summary.groupB_customerGoldOwed.openBillCount} unpaid bill(s)
                     </div>
                   </div>
                   {openCard === "B" ? (
@@ -284,19 +277,26 @@ export default function DashboardPage() {
                 {openCard === "B" && (
                   <div className="border-t border-slate-100 px-4 py-3 text-xs">
                     {summary.groupB_customerGoldOwed.items.length === 0 ? (
-                      <p className="text-slate-500">No outstanding customer bill gold.</p>
+                      <p className="text-slate-500">No unpaid customer gold dues.</p>
                     ) : (
                       <table className="w-full">
                         <thead>
                           <tr className="border-b border-slate-200 text-left text-[11px] text-slate-500">
                             <th className="py-1">Bill #</th>
-                            <th className="py-1 text-right">Outstanding Fine</th>
+                            <th className="py-1 text-right">Due (g fine)</th>
                           </tr>
                         </thead>
                         <tbody>
                           {summary.groupB_customerGoldOwed.items.map((b) => (
                             <tr key={b.billId} className="border-b border-slate-100">
-                              <td className="py-1 font-medium">{b.billNumber}</td>
+                              <td className="py-1 font-medium">
+                                <Link
+                                  href={`/customers/${b.customerId}`}
+                                  className="text-blue-700 hover:underline"
+                                >
+                                  {b.billNumber}
+                                </Link>
+                              </td>
                               <td className="py-1 text-right tabular-nums font-semibold">
                                 {b.outstandingFine} g
                               </td>
@@ -308,31 +308,31 @@ export default function DashboardPage() {
                     <div className="mt-2 text-right">
                       <Link
                         href="/billing"
-                        className="text-[11px] font-semibold text-amber-700 hover:underline"
+                        className="text-[11px] font-semibold text-blue-700 hover:underline"
                       >
-                        Open Billing &amp; Settlement →
+                        View Bills →
                       </Link>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Group C: Production & Recovery Balance */}
-              <div className="rounded-lg border border-slate-200 bg-white">
+              {/* 3. Gold in Production & Recovery */}
+              <div className="rounded-lg border border-amber-200 bg-white">
                 <button
                   type="button"
                   onClick={() => setOpenCard(openCard === "C" ? null : "C")}
-                  className="flex w-full items-center justify-between p-4 text-left hover:bg-slate-50"
+                  className="flex w-full items-center justify-between p-4 text-left hover:bg-amber-50/40 cursor-pointer"
                 >
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                      C. Production &amp; Recovery Balance
+                    <div className="text-xs font-bold uppercase tracking-wide text-amber-800">
+                      Gold in Production &amp; Recovery
                     </div>
-                    <div className="mt-1 text-lg font-bold tabular-nums text-slate-900">
+                    <div className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
                       {summary.groupC_productionAndRecovery.totalFine} g fine
                     </div>
                     <div className="text-[11px] text-slate-500 tabular-nums">
-                      WIP {summary.groupC_productionAndRecovery.wipFine} + FG{" "}
+                      With Karigars {summary.groupC_productionAndRecovery.wipFine} + Finished{" "}
                       {summary.groupC_productionAndRecovery.finishedGoodsFine} + Loss{" "}
                       {summary.groupC_productionAndRecovery.outstandingLossFine}
                     </div>
@@ -347,7 +347,8 @@ export default function DashboardPage() {
                   <div className="space-y-3 border-t border-slate-100 px-4 py-3 text-xs">
                     <div>
                       <div className="font-semibold text-slate-700">
-                        Work In Progress ({summary.groupC_productionAndRecovery.wipFine} g fine)
+                        Work with karigars / between processes (
+                        {summary.groupC_productionAndRecovery.wipFine} g fine)
                       </div>
                       {summary.groupC_productionAndRecovery.wipOrders.length === 0 ? (
                         <div className="text-slate-400">None</div>
@@ -355,9 +356,12 @@ export default function DashboardPage() {
                         <ul className="mt-1 space-y-0.5">
                           {summary.groupC_productionAndRecovery.wipOrders.map((w) => (
                             <li key={w.orderId} className="flex justify-between">
-                              <span>
+                              <Link
+                                href={`/production-register?order=${w.orderId}`}
+                                className="text-blue-700 hover:underline"
+                              >
                                 Bag #{w.bagNumber} ({w.orderName})
-                              </span>
+                              </Link>
                               <span className="tabular-nums font-medium">
                                 {w.custodyFine} g fine
                               </span>
@@ -369,7 +373,7 @@ export default function DashboardPage() {
 
                     <div>
                       <div className="font-semibold text-slate-700">
-                        Finished Goods Awaiting Delivery (
+                        Finished jewellery waiting for delivery (
                         {summary.groupC_productionAndRecovery.finishedGoodsFine} g fine)
                       </div>
                       {summary.groupC_productionAndRecovery.finishedGoodsOrders.length === 0 ? (
@@ -379,9 +383,12 @@ export default function DashboardPage() {
                           {summary.groupC_productionAndRecovery.finishedGoodsOrders.map(
                             (fg) => (
                               <li key={fg.orderId} className="flex justify-between">
-                                <span>
+                                <Link
+                                  href={`/production-register?order=${fg.orderId}`}
+                                  className="text-blue-700 hover:underline"
+                                >
                                   Bag #{fg.bagNumber} ({fg.orderName})
-                                </span>
+                                </Link>
                                 <span className="tabular-nums font-medium">
                                   {fg.netWeight} g net
                                 </span>
@@ -394,7 +401,7 @@ export default function DashboardPage() {
 
                     <div>
                       <div className="font-semibold text-slate-700">
-                        Outstanding Process Losses (
+                        Loss remaining to recover (
                         {summary.groupC_productionAndRecovery.outstandingLossFine} g fine)
                       </div>
                       {summary.groupC_productionAndRecovery.outstandingLosses.length === 0 ? (
@@ -420,23 +427,98 @@ export default function DashboardPage() {
                     <div className="flex justify-between pt-1">
                       <Link
                         href="/production-register"
-                        className="text-[11px] font-semibold text-amber-700 hover:underline"
+                        className="text-[11px] font-semibold text-blue-700 hover:underline"
                       >
-                        Production Register →
+                        View Orders →
                       </Link>
                       <Link
                         href="/recovery"
-                        className="text-[11px] font-semibold text-amber-700 hover:underline"
+                        className="text-[11px] font-semibold text-blue-700 hover:underline"
                       >
-                        Karigar Recovery →
+                        Recover Karigar Gold →
                       </Link>
                     </div>
                   </div>
                 )}
               </div>
             </div>
+
+            {/* Total Accounted Gold + Expandable Physical/Advance/Net Breakdown */}
+            <div className="rounded-lg border border-amber-300 bg-amber-50/70 p-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wide text-amber-900">
+                    Total Accounted Gold
+                  </div>
+                  <div className="mt-0.5 text-2xl font-bold tabular-nums text-amber-950">
+                    {summary.totals.totalAccountedGoldFine} g fine
+                  </div>
+                  <p className="mt-0.5 text-xs text-amber-900">
+                    Sum of gold with Admin ({summary.groupA_adminStock.totalFine}g) + gold due from customers ({summary.groupB_customerGoldOwed.totalFine}g) + gold in orders &amp; karigar recovery ({summary.groupC_productionAndRecovery.totalFine}g).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowBreakdown((v) => !v)}
+                  className="inline-flex items-center gap-1.5 rounded border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-100 cursor-pointer"
+                >
+                  {showBreakdown ? (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  )}
+                  <span>Physical Gold, Credits &amp; Net Position</span>
+                </button>
+              </div>
+
+              {showBreakdown && (
+                <div className="grid grid-cols-1 gap-3 pt-2 border-t border-amber-200 md:grid-cols-3">
+                  <div className="rounded border border-slate-200 bg-white p-3">
+                    <div className="text-[11px] font-semibold uppercase text-slate-600">
+                      Physical Gold On Hand
+                    </div>
+                    <div className="mt-1 text-lg font-bold tabular-nums text-slate-900">
+                      {summary.totals.physicalGoldFine} g fine
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-slate-500 tabular-nums">
+                      {summary.totals.physicalGoldMixed} g mixed physical (Admin + With Karigars + Finished)
+                    </div>
+                  </div>
+
+                  <div className="rounded border border-slate-200 bg-white p-3">
+                    <div className="text-[11px] font-semibold uppercase text-slate-600">
+                      Customer Advances &amp; Return Obligations
+                    </div>
+                    <div className="mt-1 text-xs text-slate-700 tabular-nums">
+                      Unused Customer Advances:{" "}
+                      <span className="font-semibold text-blue-700">
+                        {summary.totals.unusedCustomerGoldCredits} g fine
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-xs text-slate-700 tabular-nums">
+                      Karigar Return Obligations:{" "}
+                      <span className="font-semibold text-indigo-700">
+                        {summary.totals.karigarReturnObligations} g fine
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="rounded border border-emerald-300 bg-emerald-50 p-3">
+                    <div className="text-[11px] font-semibold uppercase text-emerald-800">
+                      Net Tracked Gold Position
+                    </div>
+                    <div className="mt-1 text-lg font-bold tabular-nums text-emerald-950">
+                      {summary.totals.netTrackedGoldPosition} g fine
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-emerald-800">
+                      Total Accounted Gold minus unused customer advances &amp; obligations
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </>
-        )}
+        ) : null}
       </div>
     </AppShell>
   );

@@ -4,6 +4,12 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { AppShell, AppShellUser } from "@/components/AppShell";
+import {
+  fetchActorCached,
+  fetchCachedJson,
+  getCachedActor,
+  getCachedJson,
+} from "@/lib/client-cache";
 
 type OrderTab = "ALL" | "ONGOING" | "COMPLETED" | "DELIVERED" | "CANCELLED";
 
@@ -170,9 +176,15 @@ export default function CustomerProfilePage() {
   const customerId = params?.id || "";
   const router = useRouter();
 
-  const [actor, setActor] = useState<AppShellUser | null>(null);
-  const [workspace, setWorkspace] = useState<ProfileWorkspace | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [actor, setActor] = useState<AppShellUser | null>(() => getCachedActor());
+  const [workspace, setWorkspace] = useState<ProfileWorkspace | null>(() =>
+    customerId
+      ? getCachedJson<ProfileWorkspace>(
+          `/api/customers?customerId=${encodeURIComponent(customerId)}&orderTab=ALL`
+        )
+      : null
+  );
+  const [loading, setLoading] = useState(!workspace);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -238,49 +250,58 @@ export default function CustomerProfilePage() {
   const [refundReason, setRefundReason] = useState<string>("");
   const [postingRefund, setPostingRefund] = useState(false);
 
-  const loadWorkspace = useCallback(async () => {
-    if (!customerId) return;
-    setLoading(true);
-    try {
-      const meRes = await fetch("/api/auth/me");
-      if (meRes.status === 401) {
-        router.push(`/login?redirect=/customers/${customerId}`);
-        return;
-      }
-      const meData = await meRes.json();
-      setActor(meData.actor);
+  const loadWorkspace = useCallback(
+    async (force = false) => {
+      if (!customerId) return;
+      if (!workspace || force) setLoading(true);
+      try {
+        const qs = new URLSearchParams({
+          customerId,
+          orderTab,
+        });
+        if (monthFilter) qs.set("monthFilter", monthFilter);
+        const url = `/api/customers?${qs.toString()}`;
 
-      const qs = new URLSearchParams({
-        customerId,
-        orderTab,
-      });
-      if (monthFilter) qs.set("monthFilter", monthFilter);
+        const [resolvedActor, data] = await Promise.all([
+          fetchActorCached(),
+          fetchCachedJson<ProfileWorkspace & { ok?: boolean; error?: string }>(
+            url,
+            { force }
+          ),
+        ]);
 
-      const res = await fetch(`/api/customers?${qs.toString()}`);
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        setError(data.error || "Failed to load customer profile");
-      } else {
-        setWorkspace(data);
-        setEditName(data.customer.name || "");
-        setEditPhone(data.customer.phone || "");
-        setEditEmail(data.customer.email || "");
-        setEditAddress(data.customer.address || "");
-        if (data.fineReceiptConvention?.mode !== "UNCONFIGURED") {
-          setConvMode(data.fineReceiptConvention.mode);
-          if (data.fineReceiptConvention.configuredTouch) {
-            setConvTouch(
-              Number(data.fineReceiptConvention.configuredTouch).toFixed(2)
-            );
+        if (!resolvedActor) {
+          router.push(`/login?redirect=/customers/${customerId}`);
+          return;
+        }
+        setActor(resolvedActor);
+
+        if (!data.ok) {
+          setError(data.error || "Failed to load customer profile");
+        } else {
+          setWorkspace(data);
+          setEditName(data.customer.name || "");
+          setEditPhone(data.customer.phone || "");
+          setEditEmail(data.customer.email || "");
+          setEditAddress(data.customer.address || "");
+          if (data.fineReceiptConvention?.mode !== "UNCONFIGURED") {
+            setConvMode(data.fineReceiptConvention.mode);
+            if (data.fineReceiptConvention.configuredTouch) {
+              setConvTouch(
+                Number(data.fineReceiptConvention.configuredTouch).toFixed(2)
+              );
+            }
           }
         }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Network error");
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Network error");
-    } finally {
-      setLoading(false);
-    }
-  }, [customerId, orderTab, monthFilter, router]);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [customerId, orderTab, monthFilter, router]
+  );
 
   useEffect(() => {
     void loadWorkspace();
@@ -456,16 +477,14 @@ export default function CustomerProfilePage() {
     setMessage(null);
     setPostingReceipt(true);
     try {
-      // Auto-configure Mode A if unconfigured so the user isn't blocked by a separate setup step
+      // Require explicit one-time owner setup if fine receipt convention is unconfigured
       if (workspace.fineReceiptConvention.mode === "UNCONFIGURED") {
-        await fetch("/api/customers", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "CONFIGURE_FINE_CONVENTION",
-            mode: "FINE_EQUIVALENT",
-          }),
-        });
+        setShowConventionSettings(true);
+        setError(
+          "One-time setup required: please select whether fine gold receipts are entered as Fine Equivalent (g fine) or Physical Weight at a fixed touch."
+        );
+        setPostingReceipt(false);
+        return;
       }
 
       const res = await fetch("/api/customers", {

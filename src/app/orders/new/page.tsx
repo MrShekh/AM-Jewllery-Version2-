@@ -19,6 +19,12 @@ import {
   ProcessType,
 } from "@/lib/domain/types";
 import { getTodayBusinessDateString } from "@/lib/date-and-export";
+import {
+  fetchActorCached,
+  fetchCachedJson,
+  getCachedActor,
+  getCachedJson,
+} from "@/lib/client-cache";
 
 interface CustomerOption {
   id: string;
@@ -36,9 +42,13 @@ interface PurityOption {
 
 export default function NewOrderPage() {
   const router = useRouter();
-  const [actor, setActor] = useState<AppShellUser | null>(null);
-  const [customers, setCustomers] = useState<CustomerOption[]>([]);
-  const [purities, setPurities] = useState<PurityOption[]>([]);
+  const [actor, setActor] = useState<AppShellUser | null>(() => getCachedActor());
+  const [customers, setCustomers] = useState<CustomerOption[]>(
+    () => getCachedJson<{ customers: CustomerOption[] }>("/api/customers")?.customers || []
+  );
+  const [purities, setPurities] = useState<PurityOption[]>(
+    () => getCachedJson<{ purities: PurityOption[] }>("/api/purities")?.purities || []
+  );
 
   const [bagNumber, setBagNumber] = useState("");
   const [customerId, setCustomerId] = useState("");
@@ -69,27 +79,30 @@ export default function NewOrderPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const loadInitial = useCallback(async () => {
-    const meRes = await fetch("/api/auth/me");
-    if (meRes.status === 401) {
+    const [resolvedActor, cData, pData] = await Promise.all([
+      fetchActorCached(),
+      fetchCachedJson<{ ok?: boolean; customers?: CustomerOption[] }>(
+        "/api/customers",
+        { ttlMs: 120_000 }
+      ),
+      fetchCachedJson<{ ok?: boolean; purities?: PurityOption[] }>(
+        "/api/purities",
+        { ttlMs: 300_000 }
+      ),
+    ]);
+    if (!resolvedActor) {
       router.push("/login?redirect=/orders/new");
       return;
     }
-    const meData = await meRes.json();
-    setActor(meData.actor);
+    setActor(resolvedActor);
 
-    const [cRes, pRes] = await Promise.all([
-      fetch("/api/customers"),
-      fetch("/api/purities"),
-    ]);
-    const cData = await cRes.json();
-    const pData = await pRes.json();
-    if (cData.ok) {
+    if (cData.ok && cData.customers) {
       setCustomers(cData.customers);
       if (cData.customers.length > 0 && !customerId) {
         setCustomerId(cData.customers[0].id);
       }
     }
-    if (pData.ok) {
+    if (pData.ok && pData.purities) {
       setPurities(pData.purities);
       if (pData.purities.length > 0 && !purityId) {
         setPurityId(pData.purities[0].id);

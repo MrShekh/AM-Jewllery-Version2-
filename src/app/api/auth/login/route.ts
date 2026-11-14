@@ -28,10 +28,21 @@ export async function POST(req: NextRequest) {
       redirectTo,
     });
 
+    const isHttps =
+      req.headers.get("x-forwarded-proto") === "https" ||
+      req.nextUrl.protocol === "https:" ||
+      (process.env.APP_BASE_URL || "").startsWith("https://");
+    const cookieSecure =
+      process.env.COOKIE_SECURE === "true"
+        ? true
+        : process.env.COOKIE_SECURE === "false"
+        ? false
+        : isHttps;
+
     res.cookies.set(SESSION_COOKIE_NAME, token, {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: cookieSecure,
       path: "/",
       expires: expiresAt,
     });

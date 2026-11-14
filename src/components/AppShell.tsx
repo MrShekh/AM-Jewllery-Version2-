@@ -4,20 +4,27 @@ import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard,
+  Home,
   ClipboardList,
   PlusCircle,
   Scale,
   Users,
+  Hammer,
   ShieldCheck,
   Coins,
   Receipt,
+  Settings,
+  ChevronDown,
   LogOut,
   QrCode,
   X,
   Camera,
   CheckCircle2,
 } from "lucide-react";
+import {
+  clearAllClientCache,
+  installMutationCacheInvalidator,
+} from "@/lib/client-cache";
 
 export interface AppShellUser {
   userId: string;
@@ -33,9 +40,17 @@ export const AppShell: React.FC<{
 }> = ({ actor, children }) => {
   const pathname = usePathname();
   const router = useRouter();
+  const [currentTab, setCurrentTab] = useState<string>("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setCurrentTab(new URLSearchParams(window.location.search).get("tab") || "");
+    }
+  }, [pathname]);
 
   const [scanBanner, setScanBanner] = useState<string | null>(null);
   const [scannerModalOpen, setScannerModalOpen] = useState<boolean>(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState<boolean>(false);
   const [lanBaseUrl, setLanBaseUrl] = useState<string>("");
   const [manualBagOrQrInput, setManualBagOrQrInput] = useState<string>("");
   const [scannerError, setScannerError] = useState<string | null>(null);
@@ -43,54 +58,91 @@ export const AppShell: React.FC<{
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const mountedAtRef = useRef<number>(Date.now());
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    installMutationCacheInvalidator();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setMoreMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const navItems = [
     {
       href: "/dashboard",
-      label: "Dashboard",
-      icon: LayoutDashboard,
+      matchPath: "/dashboard",
+      label: "Home",
+      icon: Home,
     },
     {
       href: "/production-register",
-      label: "Production Register",
+      matchPath: "/production-register",
+      label: "Orders",
       icon: ClipboardList,
     },
+    {
+      href: "/directory?tab=customers",
+      matchPath: "/directory",
+      matchTab: "customers",
+      label: "Customers",
+      icon: Users,
+    },
+    {
+      href: "/directory?tab=karigars",
+      matchPath: "/directory",
+      matchTab: "karigars",
+      label: "Karigars",
+      icon: Hammer,
+    },
+    {
+      href: "/stock",
+      matchPath: "/stock",
+      label: "Gold Stock",
+      icon: Scale,
+    },
+    {
+      href: "/billing",
+      matchPath: "/billing",
+      label: "Bills",
+      icon: Receipt,
+    },
+  ];
+
+  const secondaryItems = [
     {
       href: "/orders/new",
       label: "New Order",
       icon: PlusCircle,
     },
     {
-      href: "/stock",
-      label: "Stock & Journal",
-      icon: Scale,
-    },
-    {
-      href: "/directory",
-      label: "Customers & Karigars",
-      icon: Users,
-    },
-    {
       href: "/recovery",
-      label: "Karigar Recovery",
+      label: "Recover Karigar Gold",
       icon: Coins,
     },
     {
-      href: "/billing",
-      label: "Billing & Settlement",
-      icon: Receipt,
+      href: "/reconciliation",
+      label: "Daily Check & Audit",
+      icon: ShieldCheck,
     },
     {
-      href: "/reconciliation",
-      label: "Daily Reconciliation",
-      icon: ShieldCheck,
+      href: "/billing?tab=templates",
+      label: "Bill Templates & Settings",
+      icon: Settings,
     },
   ];
 
-  // Background Phone-to-Laptop QR Scan Bridge listener
+  // Background Phone-to-Laptop QR Scan Bridge listener (paused when tab is hidden)
   useEffect(() => {
     let active = true;
     const pollQrBridge = async () => {
+      if (typeof document !== "undefined" && document.hidden) return;
       try {
         const res = await fetch("/api/qr-bridge?client=laptop", {
           cache: "no-store",
@@ -136,7 +188,7 @@ export const AppShell: React.FC<{
     };
 
     pollQrBridge();
-    const interval = setInterval(pollQrBridge, 1200);
+    const interval = setInterval(pollQrBridge, 4000);
     return () => {
       active = false;
       clearInterval(interval);
@@ -242,6 +294,7 @@ export const AppShell: React.FC<{
   }
 
   async function handleLogout() {
+    clearAllClientCache();
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
@@ -270,9 +323,23 @@ export const AppShell: React.FC<{
             <nav className="hidden md:flex items-center gap-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
-                const active =
-                  pathname === item.href ||
-                  (item.href !== "/" && pathname.startsWith(item.href));
+                let active = false;
+                if (item.matchPath === "/directory") {
+                  active =
+                    pathname.startsWith("/directory") &&
+                    (item.matchTab === "karigars"
+                      ? currentTab === "karigars"
+                      : currentTab !== "karigars");
+                } else if (item.matchPath === "/customers") {
+                  active = pathname.startsWith("/customers");
+                } else {
+                  active =
+                    pathname === item.matchPath ||
+                    (item.matchPath !== "/" && pathname.startsWith(item.matchPath));
+                }
+                if (item.matchTab === "customers" && pathname.startsWith("/customers/")) {
+                  active = true;
+                }
                 return (
                   <Link
                     key={item.href}
@@ -288,6 +355,43 @@ export const AppShell: React.FC<{
                   </Link>
                 );
               })}
+
+              {/* Settings / More secondary menu */}
+              <div className="relative" ref={moreMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setMoreMenuOpen((v) => !v)}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xs text-xs font-medium transition-colors cursor-pointer ${
+                    pathname.startsWith("/recovery") ||
+                    pathname.startsWith("/reconciliation") ||
+                    pathname.startsWith("/orders/new")
+                      ? "bg-blue-50 text-blue-800 border border-blue-200"
+                      : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                  }`}
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>More</span>
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+                {moreMenuOpen && (
+                  <div className="absolute left-0 mt-1 w-56 bg-white border border-slate-200 rounded-xs shadow-lg py-1 z-50">
+                    {secondaryItems.map((sub) => {
+                      const SubIcon = sub.icon;
+                      return (
+                        <Link
+                          key={sub.href}
+                          href={sub.href}
+                          onClick={() => setMoreMenuOpen(false)}
+                          className="flex items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                        >
+                          <SubIcon className="w-3.5 h-3.5 text-slate-500" />
+                          <span>{sub.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </nav>
           </div>
 
@@ -324,6 +428,23 @@ export const AppShell: React.FC<{
             </button>
           </div>
         </div>
+
+        {/* Mobile quick-scroll navigation */}
+        <nav className="md:hidden flex items-center gap-1 px-3 py-1.5 border-t border-slate-100 overflow-x-auto bg-slate-50">
+          {[...navItems, ...secondaryItems].map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link
+                key={`mob_${item.href}`}
+                href={item.href}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xs text-[11px] font-medium whitespace-nowrap bg-white border border-slate-200 text-slate-700 hover:bg-blue-50"
+              >
+                <Icon className="w-3 h-3" />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
 
         {scanBanner && (
           <div className="bg-emerald-700 text-white px-4 py-2 text-xs font-bold flex items-center justify-center gap-2">
