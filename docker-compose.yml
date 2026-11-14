@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: am_jewellers_v2_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: am_v2_user
+      POSTGRES_PASSWORD: am_v2_dev_password_change_me
+      POSTGRES_DB: am_jewellers_v2_dev
+      TZ: Asia/Kolkata
+    ports:
+      - "5433:5432"
+    volumes:
+      - am_jewellers_v2_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U am_v2_user -d am_jewellers_v2_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  am_jewellers_v2_pgdata:
+

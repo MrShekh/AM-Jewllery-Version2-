@@ -1,0 +1,1223 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER_ADMIN
+  OPERATOR
+}
+
+enum ProcessType {
+  FILING
+  FREE_POLISH
+  SETTING
+  FINAL_POLISH
+}
+
+enum OrderStatus {
+  DRAFT
+  CREATED
+  IN_PROCESS
+  COMPLETED
+  CANCELLED
+  CANCELLATION_PENDING_RECONCILIATION
+}
+
+enum OrderProcessStatus {
+  PENDING
+  IN_PROGRESS
+  PARTIAL_RETURN
+  CLOSED
+}
+
+enum ProcessVisitStatus {
+  OPEN
+  PARTIAL
+  CLOSED
+  REVERSED
+}
+
+enum StoneDirection {
+  ADDED
+  RETAINED
+  REMOVED_LOST
+}
+
+enum LossEligibilityStatus {
+  PENDING_ORDER_COMPLETION
+  ELIGIBLE
+  VOIDED
+}
+
+enum StockAccountType {
+  OPENING_EQUITY
+  EXTERNAL_SUPPLIER_INFLOW
+  ADMIN_KARAT_POOL
+  KARIGAR_CUSTODY
+  FINISHED_GOODS
+  CUSTOMER_DELIVERED
+  PROCESS_LOSS
+}
+
+enum JournalTransactionType {
+  OPENING_BALANCE
+  STOCK_RECEIPT
+  STOCK_RECEIPT_REVERSAL
+  ORDER_METAL_ISSUE
+  PROCESS_CUSTODY_TRANSFER
+  PROCESS_LOSS_RECOGNITION
+  ORDER_COMPLETION_FINISHED_GOODS
+  CONTROLLED_REVERSAL
+  KARIGAR_RECOVERY_RECEIPT
+  KARIGAR_RECOVERY_RECEIPT_REVERSAL
+  KARIGAR_RECOVERY_REFUND
+  BILL_POST_AND_DELIVER
+  BILL_CANCELLATION_REVERSAL
+  CUSTOMER_GOLD_RECEIPT
+  CUSTOMER_GOLD_RECEIPT_REVERSAL
+  CUSTOMER_GOLD_REFUND
+  STOCK_SALE
+  STOCK_SALE_REVERSAL
+  PURITY_CONVERSION
+  REFINING_BATCH
+  FILING_UNUSED_RETURN
+  FILING_CORRECTION
+  CUSTOMER_CASH_RECEIPT_REVERSAL
+}
+
+enum RecoveryReceiptStatus {
+  POSTED
+  REVERSED
+}
+
+enum RecoveryAllocationStatus {
+  ACTIVE
+  UNDONE
+  REVERSED_WITH_RECEIPT
+}
+
+enum LossWriteOffStatus {
+  ACTIVE
+  REVERSED
+}
+
+enum JournalLineDirection {
+  DEBIT_IN
+  CREDIT_OUT
+}
+
+enum MetalMovementType {
+  ADMIN_ISSUE_TO_ORDER
+  PROCESS_TRANSFER
+  KARIGAR_PARTIAL_RETURN
+  KARIGAR_FINAL_RETURN
+  ADDITIONAL_ADMIN_ISSUE
+  RETURN_TO_ADMIN_STOCK
+  FINISHED_GOODS_COMPLETION
+  CUSTOMER_DELIVERY
+  REVERSAL
+  FILING_UNUSED_RETURN
+  FILING_CORRECTION
+}
+
+enum OrderDeliveryStatus {
+  NOT_DELIVERED
+  DELIVERED
+  RETURNED
+}
+
+enum OrderBillingStatus {
+  UNBILLED
+  BILLED
+  REVERSED
+}
+
+enum BillType {
+  ORDER_DELIVERY
+  MANUAL_COMMERCIAL
+}
+
+enum BillStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+enum BillDeliveryStatus {
+  NOT_DELIVERED
+  DELIVERED
+  REVERSED
+}
+
+enum BillSettlementStatus {
+  UNPAID
+  PARTIALLY_SETTLED
+  SETTLED
+}
+
+enum BillingBasis {
+  NET_METAL
+  GROSS_WEIGHT
+  MANUAL
+}
+
+enum BillLineType {
+  ORDER_LINE
+  MANUAL_SERVICE
+  MANUAL_FINE_CHARGE
+  MANUAL_STONE_INR
+  MANUAL_DISCOUNT
+}
+
+enum CustomerReceiptStatus {
+  POSTED
+  REVERSED
+}
+
+enum CustomerAllocationStatus {
+  ACTIVE
+  UNDONE
+  REVERSED_WITH_RECEIPT
+  RELEASED_ON_BILL_CANCEL
+}
+
+model Organization {
+  id                          String   @id @default(cuid())
+  code                        String   @unique
+  name                        String
+  timezone                    String   @default("Asia/Kolkata")
+  customerFineReceiptMode     String   @default("UNCONFIGURED") // UNCONFIGURED | FINE_EQUIVALENT | PHYSICAL_AT_CONFIGURED_TOUCH
+  customerFineConfiguredTouch Decimal? @db.Decimal(8, 4)
+  customerFineAccountPurityId String?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  users                User[]
+  sessions             UserSession[]
+  purities             PurityDefinition[]
+  stockAccounts        StockAccount[]
+  customers            Customer[]
+  karigars             Karigar[]
+  karigarCapabilities  KarigarCapability[]
+  orders               Order[]
+  orderProcesses       OrderProcess[]
+  processVisits        ProcessVisit[]
+  metalMovements       MetalMovement[]
+  stoneComponentEntries StoneComponentEntry[]
+  processLossRecords   ProcessLossRecord[]
+  journalTransactions  JournalTransaction[]
+  journalLines         JournalLine[]
+  auditEvents          AuditEvent[]
+  attachments          Attachment[]
+
+  // Karigar Recovery module
+  recoveryReceipts     RecoveryReceipt[]
+  recoveryReceiptLines RecoveryReceiptLine[]
+  recoveryAllocations  RecoveryAllocation[]
+  lossWriteOffs        LossWriteOff[]
+  recoverySettlements  RecoverySettlement[]
+  makingDeductions     MakingDeductionAllocation[]
+  castingBatches             CastingBatch[]
+  customerBills              CustomerBill[]
+  customerSettlements        CustomerSettlement[]
+  billSequences              BillSequence[]
+  billTemplates              BillTemplate[]
+  customerGoldReceipts       CustomerGoldReceipt[]
+  customerGoldReceiptLines   CustomerGoldReceiptLine[]
+  customerCashReceipts       CustomerCashReceipt[]
+  customerPaymentAllocations CustomerPaymentAllocation[]
+  stockSales                 StockSale[]
+  stockConversions           StockConversion[]
+  billShareTokens            BillShareToken[]
+}
+
+model User {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  email          String
+  name           String
+  passwordHash   String
+  role           UserRole     @default(OPERATOR)
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  sessions            UserSession[]
+  journalTransactions JournalTransaction[]
+  auditEvents         AuditEvent[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+}
+
+model UserSession {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash      String       @unique
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime     @default(now())
+
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model PurityDefinition {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  code           String
+  displayLabel   String
+  karatLabel     String
+  touchPercent   Decimal      @db.Decimal(8, 4)
+  isFineCategory Boolean      @default(false)
+  isActive       Boolean      @default(true)
+  sortOrder      Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  stockAccounts       StockAccount[]
+  orders              Order[]
+  journalTransactions JournalTransaction[]
+  stockSales          StockSale[]
+  sourceConversions   StockConversion[]    @relation("ConversionSourcePurity")
+  targetConversions   StockConversion[]    @relation("ConversionTargetPurity")
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, displayLabel])
+  @@index([organizationId])
+}
+
+model StockAccount {
+  id                    String           @id @default(cuid())
+  organizationId        String
+  organization          Organization     @relation(fields: [organizationId], references: [id])
+  accountCode           String
+  name                  String
+  accountType           StockAccountType
+  purityId              String?
+  purity                PurityDefinition? @relation(fields: [purityId], references: [id])
+  karigarId             String?
+  karigar               Karigar?          @relation(fields: [karigarId], references: [id])
+  cachedPhysicalBalance Decimal          @default(0) @db.Decimal(18, 6)
+  cachedFineBalance     Decimal          @default(0) @db.Decimal(18, 6)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  journalLines JournalLine[]
+
+  @@unique([organizationId, accountCode])
+  @@index([organizationId, accountType])
+  @@index([organizationId, purityId])
+}
+
+model Customer {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  customerCode   String
+  name           String
+  phone          String?
+  email          String?
+  address        String?
+  gstNumber      String?
+  notes          String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  orders                     Order[]
+  customerBills              CustomerBill[]
+  customerSettlements        CustomerSettlement[]
+  customerGoldReceipts       CustomerGoldReceipt[]
+  customerCashReceipts       CustomerCashReceipt[]
+  customerPaymentAllocations CustomerPaymentAllocation[]
+
+  @@unique([organizationId, customerCode])
+  @@index([organizationId, name])
+}
+
+model Karigar {
+  id                  String       @id @default(cuid())
+  organizationId      String
+  organization        Organization @relation(fields: [organizationId], references: [id])
+  karigarCode         String
+  name                String
+  phone               String?
+  specializationNotes String?
+  isActive            Boolean      @default(true)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  capabilities        KarigarCapability[]
+  stockAccounts       StockAccount[]
+  orderProcesses      OrderProcess[]
+  processVisits       ProcessVisit[]
+  metalMovements      MetalMovement[]
+  processLossRecords  ProcessLossRecord[]
+  journalTransactions JournalTransaction[]
+  journalLines        JournalLine[]
+  recoveryReceipts    RecoveryReceipt[]
+  lossWriteOffs       LossWriteOff[]
+  recoverySettlements RecoverySettlement[]
+  makingDeductions    MakingDeductionAllocation[]
+
+  @@unique([organizationId, karigarCode])
+  @@index([organizationId, name])
+}
+
+model KarigarCapability {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  karigarId      String
+  karigar        Karigar      @relation(fields: [karigarId], references: [id], onDelete: Cascade)
+  processType    ProcessType
+  isDefault      Boolean      @default(false)
+  isActive       Boolean      @default(true)
+
+  @@unique([karigarId, processType])
+  @@index([organizationId, processType])
+}
+
+model Order {
+  id                       String           @id @default(cuid())
+  organizationId           String
+  organization             Organization     @relation(fields: [organizationId], references: [id])
+  bagNumber                String
+  customerId               String
+  customer                 Customer         @relation(fields: [customerId], references: [id])
+  orderName                String
+  photoUrl                 String?
+  purityId                 String
+  purity                   PurityDefinition @relation(fields: [purityId], references: [id])
+  touchSnapshot            Decimal          @db.Decimal(8, 4)
+  targetWeight             Decimal?         @db.Decimal(18, 6)
+  size                     String?
+  orderDate                DateTime
+  dueDate                  DateTime?
+  notes                    String?
+  adDetailsJson            String?
+  status                   OrderStatus      @default(CREATED)
+  initialIssuedMetalWeight Decimal          @default(0) @db.Decimal(18, 6)
+  retainedStoneWeight      Decimal          @default(0) @db.Decimal(18, 6)
+  finishedGrossWeight      Decimal?         @db.Decimal(18, 6)
+  finishedStoneWeight      Decimal?         @db.Decimal(18, 6)
+  finishedNetMetalWeight   Decimal?         @db.Decimal(18, 6)
+  finishedFineWeight       Decimal?         @db.Decimal(18, 6)
+  totalRawLossWeight       Decimal          @default(0) @db.Decimal(18, 6)
+  totalFineLossWeight      Decimal          @default(0) @db.Decimal(18, 6)
+  completedAt              DateTime?
+  completedById            String?
+  deliveryStatus           OrderDeliveryStatus @default(NOT_DELIVERED)
+  deliveredAt              DateTime?
+  deliveredById            String?
+  billingStatus            OrderBillingStatus  @default(UNBILLED)
+  activeBillId             String?
+  cancelledAt              DateTime?
+  cancellationReason       String?
+  createdById              String
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+
+  processes            OrderProcess[]
+  processVisits        ProcessVisit[]
+  metalMovements       MetalMovement[]
+  stoneComponentEntries StoneComponentEntry[]
+  processLossRecords   ProcessLossRecord[]
+  journalTransactions  JournalTransaction[]
+  journalLines         JournalLine[]
+  attachments          Attachment[]
+
+  @@unique([organizationId, bagNumber])
+  @@index([organizationId, status])
+  @@index([organizationId, orderDate])
+  @@index([organizationId, customerId])
+}
+
+model OrderProcess {
+  id                    String             @id @default(cuid())
+  organizationId        String
+  organization          Organization       @relation(fields: [organizationId], references: [id])
+  orderId               String
+  order                 Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  processType           ProcessType
+  canonicalSequence     Int
+  sequenceOrder         Int
+  assignedKarigarId     String?
+  assignedKarigar       Karigar?           @relation(fields: [assignedKarigarId], references: [id])
+  status                OrderProcessStatus @default(PENDING)
+  issuedMetalWeight     Decimal            @default(0) @db.Decimal(18, 6)
+  returnedMetalWeight   Decimal            @default(0) @db.Decimal(18, 6)
+  closedLossWeight      Decimal            @default(0) @db.Decimal(18, 6)
+  custodyMetalWeight    Decimal            @default(0) @db.Decimal(18, 6)
+  carriedStoneInWeight  Decimal            @default(0) @db.Decimal(18, 6)
+  addedStoneWeight      Decimal            @default(0) @db.Decimal(18, 6)
+  removedStoneWeight    Decimal            @default(0) @db.Decimal(18, 6)
+  carriedStoneOutWeight Decimal            @default(0) @db.Decimal(18, 6)
+  latestGrossInWeight   Decimal            @default(0) @db.Decimal(18, 6)
+  latestGrossOutWeight  Decimal            @default(0) @db.Decimal(18, 6)
+  closedAt              DateTime?
+  closedById            String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  visits                ProcessVisit[]
+  metalMovements        MetalMovement[]
+  stoneComponentEntries StoneComponentEntry[]
+  processLossRecords    ProcessLossRecord[]
+  journalTransactions   JournalTransaction[]
+  journalLines          JournalLine[]
+
+  @@unique([orderId, processType])
+  @@index([organizationId, orderId])
+}
+
+model ProcessVisit {
+  id                     String             @id @default(cuid())
+  organizationId         String
+  organization           Organization       @relation(fields: [organizationId], references: [id])
+  orderId                String
+  order                  Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderProcessId         String
+  orderProcess           OrderProcess       @relation(fields: [orderProcessId], references: [id], onDelete: Cascade)
+  visitNumber            Int
+  karigarId              String
+  karigar                Karigar            @relation(fields: [karigarId], references: [id])
+  businessDate           DateTime
+  status                 ProcessVisitStatus @default(OPEN)
+  grossInWeight          Decimal            @default(0) @db.Decimal(18, 6)
+  nonGoldInWeight        Decimal            @default(0) @db.Decimal(18, 6)
+  metalInWeight          Decimal            @default(0) @db.Decimal(18, 6)
+  grossOutWeight         Decimal            @default(0) @db.Decimal(18, 6)
+  nonGoldOutWeight       Decimal            @default(0) @db.Decimal(18, 6)
+  metalOutWeight         Decimal            @default(0) @db.Decimal(18, 6)
+  custodyRemainingWeight Decimal            @default(0) @db.Decimal(18, 6)
+  rawLossWeight          Decimal            @default(0) @db.Decimal(18, 6)
+  touchSnapshot          Decimal            @db.Decimal(8, 4)
+  fineLossWeight         Decimal            @default(0) @db.Decimal(18, 6)
+  notes                  String?
+  idempotencyKey         String             @unique
+  createdById            String
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  metalMovements        MetalMovement[]
+  stoneComponentEntries StoneComponentEntry[]
+  processLossRecords    ProcessLossRecord[]
+  journalTransactions   JournalTransaction[]
+
+  @@index([organizationId, orderId])
+  @@index([orderProcessId])
+}
+
+model MetalMovement {
+  id                   String            @id @default(cuid())
+  organizationId       String
+  organization         Organization      @relation(fields: [organizationId], references: [id])
+  orderId              String
+  order                Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderProcessId       String?
+  orderProcess         OrderProcess?     @relation(fields: [orderProcessId], references: [id])
+  processVisitId       String?
+  processVisit         ProcessVisit?     @relation(fields: [processVisitId], references: [id])
+  movementType         MetalMovementType
+  fromProcessType      ProcessType?
+  toProcessType        ProcessType?
+  karigarId            String?
+  karigar              Karigar?          @relation(fields: [karigarId], references: [id])
+  businessDate         DateTime
+  grossWeight          Decimal           @db.Decimal(18, 6)
+  nonGoldWeight        Decimal           @default(0) @db.Decimal(18, 6)
+  netMetalWeight       Decimal           @db.Decimal(18, 6)
+  touchSnapshot        Decimal           @db.Decimal(8, 4)
+  fineEquivalentWeight Decimal           @db.Decimal(18, 6)
+  journalTransactionId String?
+  idempotencyKey       String            @unique
+  notes                String?
+  createdById          String
+  createdAt            DateTime          @default(now())
+
+  @@index([organizationId, orderId])
+}
+
+model StoneComponentEntry {
+  id             String         @id @default(cuid())
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  orderId        String
+  order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderProcessId String
+  orderProcess   OrderProcess   @relation(fields: [orderProcessId], references: [id], onDelete: Cascade)
+  processVisitId String?
+  processVisit   ProcessVisit?  @relation(fields: [processVisitId], references: [id])
+  componentType  String
+  direction      StoneDirection @default(ADDED)
+  sizeLabel      String?
+  pieces         Int            @default(0)
+  weightGrams    Decimal        @db.Decimal(18, 6)
+  notes          String?
+  createdById    String
+  createdAt      DateTime       @default(now())
+
+  @@index([organizationId, orderId])
+  @@index([orderProcessId])
+}
+
+model ProcessLossRecord {
+  id                       String                @id @default(cuid())
+  organizationId           String
+  organization             Organization          @relation(fields: [organizationId], references: [id])
+  orderId                  String
+  order                    Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderProcessId           String
+  orderProcess             OrderProcess          @relation(fields: [orderProcessId], references: [id], onDelete: Cascade)
+  processVisitId           String
+  processVisit             ProcessVisit          @relation(fields: [processVisitId], references: [id])
+  karigarId                String
+  karigar                  Karigar               @relation(fields: [karigarId], references: [id])
+  processType              ProcessType
+  businessDate             DateTime
+  rawMetalLossWeight       Decimal               @db.Decimal(18, 6)
+  touchSnapshot            Decimal               @db.Decimal(8, 4)
+  fineEquivalentLossWeight Decimal               @db.Decimal(18, 6)
+  eligibilityStatus        LossEligibilityStatus @default(PENDING_ORDER_COMPLETION)
+  journalTransactionId     String?
+  eligibleAt               DateTime?
+  notes                    String?
+  createdById              String
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+
+  recoveryAllocations RecoveryAllocation[]
+  lossWriteOffs       LossWriteOff[]
+  makingDeductions    MakingDeductionAllocation[]
+
+  @@index([organizationId, orderId])
+  @@index([organizationId, karigarId, eligibilityStatus])
+}
+
+model JournalTransaction {
+  id                      String                 @id @default(cuid())
+  organizationId          String
+  organization            Organization           @relation(fields: [organizationId], references: [id])
+  transactionNumber       String
+  transactionType         JournalTransactionType
+  businessDate            DateTime
+  purityId                String
+  purity                  PurityDefinition       @relation(fields: [purityId], references: [id])
+  touchSnapshot           Decimal                @db.Decimal(8, 4)
+  physicalWeight          Decimal                @db.Decimal(18, 6)
+  fineEquivalentWeight    Decimal                @db.Decimal(18, 6)
+  sourceReference         String?
+  reason                  String
+  orderId                 String?
+  order                   Order?                 @relation(fields: [orderId], references: [id])
+  orderProcessId          String?
+  orderProcess            OrderProcess?          @relation(fields: [orderProcessId], references: [id])
+  processVisitId          String?
+  processVisit            ProcessVisit?          @relation(fields: [processVisitId], references: [id])
+  karigarId               String?
+  karigar                 Karigar?               @relation(fields: [karigarId], references: [id])
+  idempotencyKey          String                 @unique
+  reversalOfTransactionId String?                @unique
+  reversalOfTransaction   JournalTransaction?    @relation("TransactionReversal", fields: [reversalOfTransactionId], references: [id])
+  reversedByTransaction   JournalTransaction?    @relation("TransactionReversal")
+  isReversed              Boolean                @default(false)
+  actorId                 String
+  actor                   User                   @relation(fields: [actorId], references: [id])
+  createdAt               DateTime               @default(now())
+
+  lines JournalLine[]
+
+  @@unique([organizationId, transactionNumber])
+  @@index([organizationId, businessDate])
+  @@index([organizationId, transactionType])
+  @@index([organizationId, orderId])
+}
+
+model JournalLine {
+  id                   String               @id @default(cuid())
+  organizationId       String
+  organization         Organization         @relation(fields: [organizationId], references: [id])
+  journalTransactionId String
+  journalTransaction   JournalTransaction   @relation(fields: [journalTransactionId], references: [id], onDelete: Cascade)
+  accountId            String
+  account              StockAccount         @relation(fields: [accountId], references: [id])
+  direction            JournalLineDirection
+  signedPhysicalDelta  Decimal              @db.Decimal(18, 6)
+  touchSnapshot        Decimal              @db.Decimal(8, 4)
+  signedFineDelta      Decimal              @db.Decimal(18, 6)
+  orderId              String?
+  order                Order?               @relation(fields: [orderId], references: [id])
+  orderProcessId       String?
+  orderProcess         OrderProcess?        @relation(fields: [orderProcessId], references: [id])
+  karigarId            String?
+  karigar              Karigar?             @relation(fields: [karigarId], references: [id])
+  description          String
+  createdAt            DateTime             @default(now())
+
+  @@index([organizationId, accountId])
+  @@index([journalTransactionId])
+}
+
+model AuditEvent {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  actorId        String?
+  actor          User?        @relation(fields: [actorId], references: [id])
+  entityType     String
+  entityId       String
+  action         String
+  summary        String
+  metadataJson   String?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, entityType, entityId])
+  @@index([organizationId, createdAt])
+}
+
+model Attachment {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  orderId        String?
+  order          Order?       @relation(fields: [orderId], references: [id])
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  storagePath    String
+  publicUrl      String
+  uploadedById   String
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, orderId])
+}
+
+// ============================================================================
+// KARIGAR RECOVERY MODULE (Receipts, Multi-Purity Lines, Allocations, Write-Offs)
+// ============================================================================
+
+model RecoveryReceipt {
+  id                    String                @id @default(cuid())
+  organizationId        String
+  organization          Organization          @relation(fields: [organizationId], references: [id])
+  karigarId             String?
+  karigar               Karigar?              @relation(fields: [karigarId], references: [id])
+  receiptNumber         String
+  businessDate          DateTime
+  recoveredGrossWeight  Decimal               @db.Decimal(18, 6)
+  recoveredTouchPercent Decimal               @db.Decimal(8, 4)
+  recoveredFineWeight   Decimal               @db.Decimal(18, 6)
+  unallocatedFineWeight Decimal               @default(0) @db.Decimal(18, 6)
+  referenceNumber       String?
+  notes                 String?
+  status                RecoveryReceiptStatus @default(POSTED)
+  idempotencyKey        String                @unique
+  journalTransactionId  String?
+  createdById           String
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  reversedAt            DateTime?
+  reversalReason        String?
+  recoverySettlementId  String?
+
+  lines       RecoveryReceiptLine[]
+  allocations RecoveryAllocation[]
+
+  @@unique([organizationId, receiptNumber])
+  @@index([organizationId, karigarId, status])
+  @@index([organizationId, businessDate])
+}
+
+model RecoveryReceiptLine {
+  id                   String          @id @default(cuid())
+  organizationId       String
+  organization         Organization    @relation(fields: [organizationId], references: [id])
+  recoveryReceiptId    String
+  recoveryReceipt      RecoveryReceipt @relation(fields: [recoveryReceiptId], references: [id], onDelete: Cascade)
+  purityId             String
+  destinationAccountId String
+  grossWeight          Decimal         @db.Decimal(18, 6)
+  touchPercent         Decimal         @db.Decimal(8, 4)
+  fineWeight           Decimal         @db.Decimal(18, 6)
+  journalTransactionId String
+  createdAt            DateTime        @default(now())
+
+  @@index([recoveryReceiptId])
+  @@index([organizationId, purityId])
+}
+
+model RecoveryAllocation {
+  id                  String                   @id @default(cuid())
+  organizationId      String
+  organization        Organization             @relation(fields: [organizationId], references: [id])
+  recoveryReceiptId   String
+  recoveryReceipt     RecoveryReceipt          @relation(fields: [recoveryReceiptId], references: [id])
+  processLossRecordId String
+  processLossRecord   ProcessLossRecord        @relation(fields: [processLossRecordId], references: [id])
+  allocatedFineWeight Decimal                  @db.Decimal(18, 6)
+  status              RecoveryAllocationStatus @default(ACTIVE)
+  businessDate        DateTime
+  notes               String?
+  idempotencyKey      String                   @unique
+  createdById         String
+  createdAt           DateTime                 @default(now())
+  undoneAt            DateTime?
+  undoneById          String?
+  undoReason          String?
+
+  @@index([organizationId, recoveryReceiptId, status])
+  @@index([organizationId, processLossRecordId, status])
+}
+
+model LossWriteOff {
+  id                   String             @id @default(cuid())
+  organizationId       String
+  organization         Organization       @relation(fields: [organizationId], references: [id])
+  processLossRecordId  String
+  processLossRecord    ProcessLossRecord  @relation(fields: [processLossRecordId], references: [id])
+  karigarId            String
+  karigar              Karigar            @relation(fields: [karigarId], references: [id])
+  writtenOffFineWeight Decimal            @db.Decimal(18, 6)
+  businessDate         DateTime
+  reason               String
+  status               LossWriteOffStatus @default(ACTIVE)
+  idempotencyKey       String             @unique
+  createdById          String
+  createdAt            DateTime           @default(now())
+  reversedAt           DateTime?
+  reversalReason       String?
+  recoverySettlementId String?
+
+  @@index([organizationId, processLossRecordId, status])
+  @@index([organizationId, karigarId, status])
+}
+
+model RecoverySettlement {
+  id                    String       @id @default(cuid())
+  organizationId        String
+  organization          Organization @relation(fields: [organizationId], references: [id])
+  karigarId             String
+  karigar               Karigar      @relation(fields: [karigarId], references: [id])
+  settlementNumber      String
+  businessDate          DateTime
+  scopeType             String // SINGLE_TOUCH | ALL_TOUCHES
+  scopeTouchPercent     Decimal?     @db.Decimal(8, 4)
+  scopeProcessType      ProcessType?
+  grossSelectedFine     Decimal      @db.Decimal(18, 6)
+  makingDeductionFine   Decimal      @db.Decimal(18, 6)
+  makingInputWeight     Decimal      @db.Decimal(18, 6)
+  makingInputUnit       String // RAW_AT_TOUCH | FINE
+  netExpectedFine       Decimal      @db.Decimal(18, 6)
+  receivedFine          Decimal      @db.Decimal(18, 6)
+  differenceFine        Decimal      @db.Decimal(18, 6)
+  shortageAction        String? // CARRY_FORWARD | ACCEPT_AND_CLEAR | ACCEPT_PART | NONE | EXCESS
+  acceptedShortageFine  Decimal      @default(0) @db.Decimal(18, 6)
+  carriedShortageFine   Decimal      @default(0) @db.Decimal(18, 6)
+  excessFine            Decimal      @default(0) @db.Decimal(18, 6)
+  recoveryReceiptId     String?
+  notes                 String?
+  status                String       @default("POSTED") // POSTED | REVERSED
+  idempotencyKey        String       @unique
+  createdById           String
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  reversedAt            DateTime?
+  reversalReason        String?
+
+  makingDeductions MakingDeductionAllocation[]
+
+  @@unique([organizationId, settlementNumber])
+  @@index([organizationId, karigarId, businessDate])
+}
+
+model MakingDeductionAllocation {
+  id                   String             @id @default(cuid())
+  organizationId       String
+  organization         Organization       @relation(fields: [organizationId], references: [id])
+  recoverySettlementId String
+  recoverySettlement   RecoverySettlement @relation(fields: [recoverySettlementId], references: [id], onDelete: Cascade)
+  processLossRecordId  String
+  processLossRecord    ProcessLossRecord  @relation(fields: [processLossRecordId], references: [id])
+  karigarId            String
+  karigar              Karigar            @relation(fields: [karigarId], references: [id])
+  deductedFineWeight   Decimal            @db.Decimal(18, 6)
+  businessDate         DateTime
+  reason               String?
+  status               String             @default("ACTIVE") // ACTIVE | REVERSED
+  idempotencyKey       String             @unique
+  createdById          String
+  createdAt            DateTime           @default(now())
+  reversedAt           DateTime?
+  reversalReason       String?
+
+  @@index([organizationId, processLossRecordId, status])
+  @@index([organizationId, karigarId, status])
+  @@index([recoverySettlementId])
+}
+
+model CastingBatch {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  batchNumber    String
+  businessDate   DateTime
+  inputFineGold  Decimal      @db.Decimal(18, 6)
+  alloyAdded     Decimal      @db.Decimal(18, 6)
+  outputWeight   Decimal      @db.Decimal(18, 6)
+  targetTouch    Decimal      @db.Decimal(8, 4)
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, batchNumber])
+}
+
+model BillSequence {
+  organizationId String       @id
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  prefix         String       @default("INV")
+  nextNumber     Int          @default(1)
+  updatedAt      DateTime     @updatedAt
+}
+
+model BillTemplate {
+  id                  String       @id @default(cuid())
+  organizationId      String
+  organization        Organization @relation(fields: [organizationId], references: [id])
+  name                String
+  isDefault           Boolean      @default(false)
+  businessName        String
+  contactInfo         String
+  logoUrl             String?
+  headerText          String?
+  footerText          String?
+  signatureUrl        String?
+  showPhotoColumn     Boolean      @default(false)
+  visibleColumnsJson  String
+  columnLabelsJson    String
+  columnWidthsJson    String?
+  notesAndTerms       String?
+  fontSizePx          Int          @default(12)
+  paperSize           String       @default("A4")
+  createdById         String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  @@index([organizationId, isDefault])
+}
+
+model CustomerBill {
+  id                     String               @id @default(cuid())
+  organizationId         String
+  organization           Organization         @relation(fields: [organizationId], references: [id])
+  customerId             String
+  customer               Customer             @relation(fields: [customerId], references: [id])
+  billNumber             String
+  billDate               DateTime
+  billType               BillType             @default(ORDER_DELIVERY)
+  status                 BillStatus           @default(DRAFT)
+  deliveryStatus         BillDeliveryStatus   @default(NOT_DELIVERED)
+  settlementStatus       BillSettlementStatus @default(UNPAID)
+  totalFineGold          Decimal              @db.Decimal(18, 6)
+  totalCashRupees        Decimal              @db.Decimal(18, 2)
+  deliveredFineMetal           Decimal              @default(0) @db.Decimal(18, 6)
+  commercialMakingFine         Decimal              @default(0) @db.Decimal(18, 6)
+  historicalFineBalance        Decimal              @default(0) @db.Decimal(18, 6)
+  historicalInrBalance         Decimal              @default(0) @db.Decimal(18, 2)
+  previousAdvanceFineSnapshot  Decimal              @default(0) @db.Decimal(18, 6)
+  appliedAdvanceFineSnapshot   Decimal              @default(0) @db.Decimal(18, 6)
+  newReceiptFineSnapshot       Decimal              @default(0) @db.Decimal(18, 6)
+  closingFineDueSnapshot       Decimal              @default(0) @db.Decimal(18, 6)
+  remainingAdvanceFineSnapshot Decimal              @default(0) @db.Decimal(18, 6)
+  templateId                   String?
+  templateSnapshotJson   String?
+  customerSnapshotJson   String?
+  previewHtml            String?
+  notes                  String?
+  idempotencyKey         String?              @unique
+  journalTransactionId   String?
+  postedAt               DateTime?
+  postedById             String?
+  cancelledAt            DateTime?
+  cancelledById          String?
+  cancellationReason     String?
+  creditNoteNumber       String?
+  createdById            String?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @default(now()) @updatedAt
+
+  lines       CustomerBillLine[]
+  allocations CustomerPaymentAllocation[]
+  shareTokens BillShareToken[]
+
+  @@unique([organizationId, billNumber])
+  @@index([organizationId, customerId, status])
+  @@index([organizationId, billDate])
+}
+
+model CustomerBillLine {
+  id                     String       @id @default(cuid())
+  customerBillId         String
+  customerBill           CustomerBill @relation(fields: [customerBillId], references: [id], onDelete: Cascade)
+  lineType               BillLineType @default(ORDER_LINE)
+  orderId                String?
+  purityId               String?
+  bagNumberSnapshot      String?
+  orderNameSnapshot      String?
+  photoUrlSnapshot       String?
+  description            String
+  grossWeight            Decimal      @default(0) @db.Decimal(18, 6)
+  stoneWeight            Decimal      @default(0) @db.Decimal(18, 6)
+  adKlWeight             Decimal      @default(0) @db.Decimal(18, 6)
+  netWeight              Decimal      @default(0) @db.Decimal(18, 6)
+  touchSnapshot          Decimal      @default(0) @db.Decimal(8, 4)
+  chargeableWeight       Decimal      @default(0) @db.Decimal(18, 6)
+  billingBasis           BillingBasis @default(NET_METAL)
+  wastagePercent         Decimal      @default(0) @db.Decimal(8, 4)
+  makingPercentagePoints Decimal      @default(0) @db.Decimal(8, 4)
+  metalChargeFine        Decimal      @default(0) @db.Decimal(18, 6)
+  makingChargeFine       Decimal      @default(0) @db.Decimal(18, 6)
+  extraFineCharge        Decimal      @default(0) @db.Decimal(18, 6)
+  fineDiscount           Decimal      @default(0) @db.Decimal(18, 6)
+  fineGold               Decimal      @default(0) @db.Decimal(18, 6)
+  makingCharges          Decimal      @default(0) @db.Decimal(18, 2)
+  stoneChargeRupees      Decimal      @default(0) @db.Decimal(18, 2)
+  rupeeDiscount          Decimal      @default(0) @db.Decimal(18, 2)
+  adjustmentReason       String?
+
+  @@index([customerBillId])
+  @@index([orderId])
+}
+
+model CustomerGoldReceipt {
+  id                    String                @id @default(cuid())
+  organizationId        String
+  organization          Organization          @relation(fields: [organizationId], references: [id])
+  customerId            String
+  customer              Customer              @relation(fields: [customerId], references: [id])
+  receiptNumber         String
+  businessDate          DateTime
+  totalGrossWeight       Decimal               @db.Decimal(18, 6)
+  totalFineWeight        Decimal               @db.Decimal(18, 6)
+  unallocatedFineWeight  Decimal               @db.Decimal(18, 6)
+  refundedFineWeight     Decimal               @default(0) @db.Decimal(18, 6)
+  inputModeSnapshot      String                @default("FINE_EQUIVALENT")
+  physicalWeightProvided Boolean               @default(true)
+  status                 CustomerReceiptStatus @default(POSTED)
+  referenceNumber       String?
+  notes                 String?
+  idempotencyKey        String                @unique
+  journalTransactionId  String?
+  createdById           String
+  createdAt             DateTime              @default(now())
+  reversedAt            DateTime?
+  reversedById          String?
+  reversalReason        String?
+
+  lines       CustomerGoldReceiptLine[]
+  allocations CustomerPaymentAllocation[]
+
+  @@unique([organizationId, receiptNumber])
+  @@index([organizationId, customerId, status])
+}
+
+model CustomerGoldReceiptLine {
+  id                   String              @id @default(cuid())
+  organizationId       String
+  organization         Organization        @relation(fields: [organizationId], references: [id])
+  receiptId            String
+  receipt              CustomerGoldReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  purityId             String
+  grossWeight          Decimal             @db.Decimal(18, 6)
+  touchPercent         Decimal             @db.Decimal(8, 4)
+  fineWeight           Decimal             @db.Decimal(18, 6)
+  journalTransactionId String?
+
+  @@index([organizationId, receiptId])
+}
+
+model CustomerCashReceipt {
+  id                String                @id @default(cuid())
+  organizationId    String
+  organization      Organization          @relation(fields: [organizationId], references: [id])
+  customerId        String
+  customer          Customer              @relation(fields: [customerId], references: [id])
+  receiptNumber     String
+  businessDate      DateTime
+  amountRupees      Decimal               @db.Decimal(18, 2)
+  unallocatedRupees Decimal               @db.Decimal(18, 2)
+  paymentMode       String                @default("CASH")
+  status            CustomerReceiptStatus @default(POSTED)
+  referenceNumber   String?
+  notes             String?
+  idempotencyKey    String                @unique
+  createdById       String
+  createdAt         DateTime              @default(now())
+  reversedAt        DateTime?
+  reversedById      String?
+  reversalReason    String?
+
+  allocations CustomerPaymentAllocation[]
+
+  @@unique([organizationId, receiptNumber])
+  @@index([organizationId, customerId, status])
+}
+
+model CustomerPaymentAllocation {
+  id                  String                   @id @default(cuid())
+  organizationId      String
+  organization        Organization             @relation(fields: [organizationId], references: [id])
+  customerId          String
+  customer            Customer                 @relation(fields: [customerId], references: [id])
+  billId              String
+  bill                CustomerBill             @relation(fields: [billId], references: [id])
+  goldReceiptId       String?
+  goldReceipt         CustomerGoldReceipt?     @relation(fields: [goldReceiptId], references: [id])
+  cashReceiptId       String?
+  cashReceipt         CustomerCashReceipt?     @relation(fields: [cashReceiptId], references: [id])
+  allocatedFineWeight Decimal                  @default(0) @db.Decimal(18, 6)
+  allocatedRupees     Decimal                  @default(0) @db.Decimal(18, 2)
+  status              CustomerAllocationStatus @default(ACTIVE)
+  businessDate        DateTime
+  notes               String?
+  idempotencyKey      String                   @unique
+  createdById         String
+  createdAt           DateTime                 @default(now())
+  undoneAt            DateTime?
+  undoneById          String?
+  undoReason          String?
+
+  @@index([organizationId, customerId, status])
+  @@index([organizationId, billId])
+}
+
+model CustomerSettlement {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  customerId     String
+  customer       Customer     @relation(fields: [customerId], references: [id])
+  settlementDate DateTime
+  fineGoldPaid   Decimal      @db.Decimal(18, 6)
+  cashPaidRupees Decimal      @db.Decimal(18, 2)
+  notes          String?
+  createdAt      DateTime     @default(now())
+}
+
+enum StockSaleStatus {
+  POSTED
+  REVERSED
+}
+
+enum StockSalePaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+}
+
+enum StockConversionType {
+  FINE_TO_KARAT
+  KARAT_TO_FINE
+  REFINING
+  ALLOYING
+}
+
+enum RefiningLossTreatment {
+  NONE
+  OUTSTANDING
+  ACCEPTED
+}
+
+model StockSale {
+  id                   String                 @id @default(cuid())
+  organizationId       String
+  organization         Organization           @relation(fields: [organizationId], references: [id])
+  saleNumber           String
+  businessDate         DateTime
+  purityId             String
+  purity               PurityDefinition       @relation(fields: [purityId], references: [id])
+  physicalWeight       Decimal                @db.Decimal(18, 6)
+  touchPercentSnapshot Decimal                @db.Decimal(8, 4)
+  fineEquivalentWeight Decimal                @db.Decimal(18, 6)
+  buyerName            String
+  buyerPhone           String?
+  pricePerGramRupees   Decimal                @default(0) @db.Decimal(18, 2)
+  totalAmountRupees    Decimal                @default(0) @db.Decimal(18, 2)
+  paidAmountRupees     Decimal                @default(0) @db.Decimal(18, 2)
+  paymentStatus        StockSalePaymentStatus @default(UNPAID)
+  status               StockSaleStatus        @default(POSTED)
+  referenceNumber      String?
+  notes                String?
+  journalTransactionId String?
+  idempotencyKey       String                 @unique
+  createdById          String
+  createdAt            DateTime               @default(now())
+  reversedAt           DateTime?
+  reversedById         String?
+  reversalReason       String?
+
+  @@unique([organizationId, saleNumber])
+  @@index([organizationId, businessDate])
+}
+
+model StockConversion {
+  id                     String                @id @default(cuid())
+  organizationId         String
+  organization           Organization          @relation(fields: [organizationId], references: [id])
+  conversionNumber       String
+  conversionType         StockConversionType
+  businessDate           DateTime
+  sourcePurityId         String
+  sourcePurity           PurityDefinition      @relation("ConversionSourcePurity", fields: [sourcePurityId], references: [id])
+  sourceWeight           Decimal               @db.Decimal(18, 6)
+  sourceTouchPercent     Decimal               @db.Decimal(8, 4)
+  theoreticalFineWeight  Decimal               @db.Decimal(18, 6)
+  targetPurityId         String
+  targetPurity           PurityDefinition      @relation("ConversionTargetPurity", fields: [targetPurityId], references: [id])
+  actualOutputWeight     Decimal               @db.Decimal(18, 6)
+  actualOutputTouch      Decimal               @db.Decimal(8, 4)
+  actualOutputFineWeight Decimal               @db.Decimal(18, 6)
+  residueWeight          Decimal               @default(0) @db.Decimal(18, 6)
+  returnedMetalWeight    Decimal               @default(0) @db.Decimal(18, 6)
+  lossFineWeight         Decimal               @default(0) @db.Decimal(18, 6)
+  lossTreatment          RefiningLossTreatment @default(NONE)
+  refinerOrPartner       String?
+  notes                  String?
+  journalTransactionId   String?
+  idempotencyKey         String                @unique
+  createdById            String
+  createdAt              DateTime              @default(now())
+
+  @@unique([organizationId, conversionNumber])
+  @@index([organizationId, businessDate])
+}
+
+model BillShareToken {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  billId          String
+  bill            CustomerBill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  token           String       @unique
+  isRevoked       Boolean      @default(false)
+  expiresAt       DateTime?
+  createdByUserId String
+  createdAt       DateTime     @default(now())
+  revokedAt       DateTime?
+
+  @@index([organizationId, billId])
+}
+
+
