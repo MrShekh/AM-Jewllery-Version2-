@@ -18,6 +18,10 @@ import {
   getCachedActor,
   getCachedJson,
 } from "@/lib/client-cache";
+import type {
+  AdminMakingChargeSummary,
+  MakingChargeFilter,
+} from "@/lib/admin-making-charge";
 
 interface DashboardSummary {
   groupA_adminStock: {
@@ -79,30 +83,86 @@ interface DashboardSummary {
 }
 
 export default function DashboardPage() {
-  const cachedDash = getCachedJson<{ summary: DashboardSummary }>("/api/dashboard");
+  const cachedDash = getCachedJson<{
+    summary: DashboardSummary;
+    adminMakingCharge?: AdminMakingChargeSummary | null;
+  }>("/api/dashboard");
   const [user, setUser] = useState<AppShellUser | null>(() => getCachedActor());
   const [summary, setSummary] = useState<DashboardSummary | null>(
     () => cachedDash?.summary || null
   );
+  const [adminMakingCharge, setAdminMakingCharge] =
+    useState<AdminMakingChargeSummary | null>(
+      () => cachedDash?.adminMakingCharge || null
+    );
+  const [makingFilter, setMakingFilter] = useState<MakingChargeFilter>("today");
+  const [makingMonth, setMakingMonth] = useState<string>(() =>
+    new Date().toISOString().slice(0, 7)
+  );
+  const [makingFrom, setMakingFrom] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10)
+  );
+  const [makingTo, setMakingTo] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10)
+  );
+  const [showMakingBills, setShowMakingBills] = useState(false);
   const [loading, setLoading] = useState(!cachedDash?.summary);
   const [error, setError] = useState<string | null>(null);
   const [openCard, setOpenCard] = useState<"A" | "B" | "C" | null>("A");
   const [showBreakdown, setShowBreakdown] = useState(false);
 
-  const loadData = async (force = false) => {
+  const buildDashboardUrl = (
+    filter: MakingChargeFilter,
+    month: string,
+    from: string,
+    to: string
+  ) => {
+    const qs = new URLSearchParams({ makingFilter: filter });
+    if (filter === "month" && month) qs.set("month", month);
+    if (filter === "range") {
+      if (from) qs.set("from", from);
+      if (to) qs.set("to", to);
+    }
+    return `/api/dashboard?${qs.toString()}`;
+  };
+
+  const loadData = async (
+    force = false,
+    override?: {
+      filter?: MakingChargeFilter;
+      month?: string;
+      from?: string;
+      to?: string;
+    }
+  ) => {
+    const activeFilter = override?.filter ?? makingFilter;
+    const activeMonth = override?.month ?? makingMonth;
+    const activeFrom = override?.from ?? makingFrom;
+    const activeTo = override?.to ?? makingTo;
+    const dashUrl = buildDashboardUrl(
+      activeFilter,
+      activeMonth,
+      activeFrom,
+      activeTo
+    );
+
     if (!summary || force) setLoading(true);
     setError(null);
     try {
       const [actor, d] = await Promise.all([
         fetchActorCached(force),
-        fetchCachedJson<{ summary: DashboardSummary; error?: string }>(
-          "/api/dashboard",
-          { force }
-        ),
+        fetchCachedJson<{
+          summary: DashboardSummary;
+          adminMakingCharge?: AdminMakingChargeSummary | null;
+          error?: string;
+        }>(dashUrl, { force: force || activeFilter !== "today" }),
       ]);
       if (actor) setUser(actor);
       if (d.error) throw new Error(d.error);
       setSummary(d.summary);
+      if (d.adminMakingCharge !== undefined) {
+        setAdminMakingCharge(d.adminMakingCharge);
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load home summary");
     } finally {
@@ -188,6 +248,155 @@ export default function DashboardPage() {
           </div>
         ) : summary ? (
           <>
+            {/* Admin Internal Making Charge Card */}
+            {user.role === "OWNER_ADMIN" && adminMakingCharge && (
+              <div className="rounded-lg border border-amber-300 bg-white p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-wide text-amber-800">
+                      Total Making Charge (Admin Internal)
+                    </div>
+                    <div className="mt-1 flex items-baseline gap-2.5">
+                      <span className="text-2xl font-bold font-mono tabular-nums text-slate-900">
+                        ₹
+                        {Number(adminMakingCharge.totalRupees).toLocaleString("en-IN", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                      <span className="text-xs font-medium text-slate-600">
+                        ({adminMakingCharge.billCount}{" "}
+                        {adminMakingCharge.billCount === 1 ? "bill" : "bills"} •{" "}
+                        {adminMakingCharge.fromDate === adminMakingCharge.toDate
+                          ? adminMakingCharge.fromDate
+                          : `${adminMakingCharge.fromDate} to ${adminMakingCharge.toDate}`}
+                        )
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(
+                      [
+                        ["today", "Today"],
+                        ["month", "Monthly"],
+                        ["range", "Date Range"],
+                      ] as const
+                    ).map(([fId, fLabel]) => (
+                      <button
+                        key={fId}
+                        type="button"
+                        onClick={() => {
+                          setMakingFilter(fId);
+                          void loadData(true, { filter: fId });
+                        }}
+                        className={`px-2.5 py-1 text-xs font-semibold rounded-xs border cursor-pointer ${
+                          makingFilter === fId
+                            ? "bg-amber-600 text-white border-amber-600"
+                            : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                        }`}
+                      >
+                        {fLabel}
+                      </button>
+                    ))}
+
+                    {makingFilter === "month" && (
+                      <input
+                        type="month"
+                        value={makingMonth}
+                        onChange={(e) => {
+                          const nextMonth = e.target.value;
+                          setMakingMonth(nextMonth);
+                          void loadData(true, {
+                            filter: "month",
+                            month: nextMonth,
+                          });
+                        }}
+                        className="px-2 py-1 text-xs border border-slate-300 rounded-xs bg-white font-mono"
+                      />
+                    )}
+
+                    {makingFilter === "range" && (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="date"
+                          value={makingFrom}
+                          onChange={(e) => {
+                            const nextFrom = e.target.value;
+                            setMakingFrom(nextFrom);
+                            void loadData(true, {
+                              filter: "range",
+                              from: nextFrom,
+                              to: makingTo,
+                            });
+                          }}
+                          className="px-2 py-1 text-xs border border-slate-300 rounded-xs bg-white font-mono"
+                        />
+                        <span className="text-xs text-slate-500">to</span>
+                        <input
+                          type="date"
+                          value={makingTo}
+                          onChange={(e) => {
+                            const nextTo = e.target.value;
+                            setMakingTo(nextTo);
+                            void loadData(true, {
+                              filter: "range",
+                              from: makingFrom,
+                              to: nextTo,
+                            });
+                          }}
+                          className="px-2 py-1 text-xs border border-slate-300 rounded-xs bg-white font-mono"
+                        />
+                      </div>
+                    )}
+
+                    {adminMakingCharge.bills.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowMakingBills((v) => !v)}
+                        className="px-2.5 py-1 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xs hover:bg-amber-100 cursor-pointer"
+                      >
+                        {showMakingBills ? "Hide Bills" : "View Bills"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {showMakingBills && adminMakingCharge.bills.length > 0 && (
+                  <div className="border-t border-amber-100 pt-2 overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-left text-[11px] text-slate-500">
+                          <th className="py-1">Bill #</th>
+                          <th className="py-1">Date</th>
+                          <th className="py-1 text-right">Making Charge (₹)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {adminMakingCharge.bills.map((b) => (
+                          <tr key={b.billId} className="border-b border-slate-100">
+                            <td className="py-1 font-mono font-semibold text-slate-900">
+                              {b.billNumber}
+                            </td>
+                            <td className="py-1 font-mono text-slate-600">
+                              {b.billDate}
+                            </td>
+                            <td className="py-1 text-right font-mono font-semibold text-emerald-700">
+                              ₹
+                              {b.amountRupees.toLocaleString("en-IN", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* 3 Main Balance Cards */}
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               {/* 1. Gold Available with Admin */}

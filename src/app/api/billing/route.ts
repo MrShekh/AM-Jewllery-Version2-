@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireServerActor } from "@/lib/auth";
 import { handleApiError } from "@/lib/api-response";
 import { erpService } from "@/lib/domain";
+import { recordBillAdminMakingCharge } from "@/lib/admin-making-charge";
 
 export async function GET(req: NextRequest) {
   try {
@@ -33,6 +34,17 @@ export async function POST(req: NextRequest) {
         notes: body.notes,
         lines: Array.isArray(body.lines) ? body.lines : [],
       });
+      if (body.adminMakingChargeRupees !== undefined) {
+        await recordBillAdminMakingCharge({
+          organizationId: actor.organizationId,
+          actorId: actor.userId,
+          billId: res.bill.id,
+          billNumber: res.bill.billNumber,
+          billDate: res.bill.billDate,
+          customerId: res.bill.customerId,
+          amountRupees: Number(body.adminMakingChargeRupees || 0),
+        });
+      }
       return NextResponse.json({
         ok: true,
         billId: res.bill.id,
@@ -67,6 +79,17 @@ export async function POST(req: NextRequest) {
         lines: Array.isArray(body.lines) ? body.lines : [],
         idempotencyKey,
       });
+      if (body.adminMakingChargeRupees !== undefined) {
+        await recordBillAdminMakingCharge({
+          organizationId: actor.organizationId,
+          actorId: actor.userId,
+          billId: res.bill.id,
+          billNumber: res.bill.billNumber,
+          billDate: res.bill.billDate,
+          customerId: res.bill.customerId,
+          amountRupees: Number(body.adminMakingChargeRupees || 0),
+        });
+      }
       return NextResponse.json({
         ok: true,
         billId: res.bill.id,

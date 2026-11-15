@@ -210,6 +210,7 @@ function BillingWorkspaceInner() {
   const [billDate, setBillDate] = useState(new Date().toISOString().slice(0, 10));
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [billNotes, setBillNotes] = useState("");
+  const [adminMakingCharge, setAdminMakingCharge] = useState("");
   const [applyFineAdvance, setApplyFineAdvance] = useState(true);
   const [applyInrAdvance, setApplyInrAdvance] = useState(true);
   const [draftId, setDraftId] = useState<string | undefined>(undefined);
@@ -629,6 +630,7 @@ function BillingWorkspaceInner() {
           billType,
           templateId: selectedTemplateId || undefined,
           notes: billNotes,
+          adminMakingChargeRupees: Number(adminMakingCharge || 0),
           applyFineAdvance: applyFineAdvance && draftTotals.advUsed > 0,
           customAdvanceFineAmount:
             applyFineAdvance && draftTotals.advUsed > 0
@@ -649,6 +651,7 @@ function BillingWorkspaceInner() {
       } else {
         setDraftId(undefined);
         setSelectedOrderLines({});
+        setAdminMakingCharge("");
         setSuccessMsg(
           `Posted & Delivered Bill ${data.billNumber} (${data.totalFineGold}g fine, ₹${data.totalCashRupees})`
         );
@@ -1871,6 +1874,23 @@ function BillingWorkspaceInner() {
                           className="w-full px-2.5 py-1.5 border border-slate-300 rounded-xs bg-white"
                         />
                       </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-amber-900 mb-0.5">
+                          Admin Internal Making Charge (₹)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={adminMakingCharge}
+                          onChange={(e) => setAdminMakingCharge(e.target.value)}
+                          placeholder="0.00"
+                          className="w-full px-2.5 py-1.5 border border-amber-300 rounded-xs bg-amber-50/40 font-mono"
+                        />
+                        <span className="text-[10px] text-amber-800">
+                          Dashboard only — not shown on customer bill PDF/preview
+                        </span>
+                      </div>
                     </div>
 
                     <div className="bg-white border border-slate-200 rounded-xs p-3 space-y-1.5">
@@ -2182,7 +2202,17 @@ function BillingWorkspaceInner() {
                     </strong>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Admin Making (₹)"
+                    title="Admin internal making charge (hidden from customer bill PDF/preview)"
+                    value={adminMakingCharge}
+                    onChange={(e) => setAdminMakingCharge(e.target.value)}
+                    className="w-36 px-2 py-1.5 text-xs border border-amber-300 bg-amber-50/40 rounded-xs font-mono"
+                  />
                   <input
                     type="text"
                     placeholder="Bill notes..."
