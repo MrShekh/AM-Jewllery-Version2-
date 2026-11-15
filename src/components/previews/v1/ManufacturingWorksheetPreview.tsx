@@ -116,16 +116,13 @@ export const ManufacturingWorksheetPreview: React.FC<
     0
   );
 
-  const procGridClass =
-    "grid grid-cols-[1.15fr_0.8fr_0.8fr_1.05fr_0.8fr_1.15fr]";
-
   return (
     <div
-      className="bg-white p-1.5 rounded-lg shadow-lg border border-gray-300 relative text-black break-inside-avoid"
+      className="bg-white p-2 rounded-lg shadow-lg border border-gray-300 relative text-black"
       style={{
         fontFamily: "Arial, sans-serif",
-        fontSize: "9.5px",
-        width: "365px",
+        fontSize: "10px",
+        width: "400px",
       }}
     >
       {/* Top Header */}
@@ -141,112 +138,89 @@ export const ManufacturingWorksheetPreview: React.FC<
 
       {/* Second Row */}
       <div className="grid grid-cols-6 border-l border-r border-b border-black">
-        <div className="p-1 border-r border-black font-bold text-[11px]">DATE-</div>
-        <div className="p-1 border-r border-black font-bold text-[11px] col-span-2">
+        <div className="p-1 border-r border-black font-bold text-xs">DATE-</div>
+        <div className="p-1 border-r border-black font-bold text-xs col-span-2">
           Customer Name
         </div>
-        <div className="p-1 border-r border-black font-bold text-[11px]">ORDER</div>
-        <div className="p-1 border-r border-black font-bold text-center text-[11px]">
+        <div className="p-1 border-r border-black font-bold text-xs">ORDER</div>
+        <div className="p-1 border-r border-black font-bold text-center text-xs">
           {getKaratDisplay(selectedKarat)}
         </div>
-        <div className="p-1 text-center text-[11px]"></div>
+        <div className="p-1 text-center text-xs"></div>
       </div>
 
       {/* Third Row - Values */}
       <div className="grid grid-cols-6 border-l border-r border-b border-black">
-        <div className="p-1 border-r border-black text-center text-[11px]">
+        <div className="p-1 border-r border-black text-center text-xs">
           {formatDate(date)}
         </div>
-        <div className="p-1 border-r border-black text-center font-bold text-[11px] col-span-2">
+        <div className="p-1 border-r border-black text-center font-bold text-xs col-span-2">
           {customerName}
         </div>
-        <div className="p-1 border-r border-black text-center text-[11px]">
+        <div className="p-1 border-r border-black text-center text-xs">
           {orderName}
         </div>
-        <div className="p-1 border-r border-black text-center font-bold text-[11px]">
+        <div className="p-1 border-r border-black text-center font-bold text-xs">
           {size ? `Size - ${size}` : ""}
         </div>
-        <div className="p-1 text-center font-bold text-[11px]">D DATE -</div>
+        <div className="p-1 text-center font-bold text-xs">D DATE -</div>
       </div>
 
       {/* Fourth Row - Process Header */}
-      <div className={`${procGridClass} border-l border-r border-b border-black`}>
-        <div className="p-0.5 border-r border-black text-center font-bold text-[9px] leading-tight flex items-center justify-center">
-          Entry / Date
+      <div className="grid grid-cols-5 border-l border-r border-b border-black">
+        <div className="p-1 border-r border-black"></div>
+        <div className="p-1 border-r border-black text-center font-bold text-xs">
+          IN
         </div>
-        <div className="p-0.5 border-r border-black text-center font-bold text-[9px] leading-tight flex items-center justify-center">
-          IN (g)
+        <div className="p-1 border-r border-black text-center font-bold text-xs">
+          OUT
         </div>
-        <div className="p-0.5 border-r border-black text-center font-bold text-[9px] leading-tight flex items-center justify-center">
-          OUT (g)
+        <div className="p-1 border-r border-black text-center font-bold text-xs">
+          LOSS
         </div>
-        <div className="p-0.5 border-r border-black text-center font-bold text-[8.5px] leading-tight flex items-center justify-center">
-          Extra Return (g)
-        </div>
-        <div className="p-0.5 border-r border-black text-center font-bold text-[9px] leading-tight flex items-center justify-center">
-          Loss (g)
-        </div>
-        <div className="p-0.5 text-center text-[10px] flex items-center justify-center">
-          {formatDate(deliveryDate)}
-        </div>
+        <div className="p-1 text-center text-xs">{formatDate(deliveryDate)}</div>
       </div>
 
       {/* Process Rows: FAILING through F PALISH with optional QR code above the image */}
       <div className="relative">
-        {/* FAILING (3 handwriting rows) */}
-        <div className={`${procGridClass} border-l border-r border-b border-black`}>
-          <div className="p-0.5 border-r border-black font-bold text-[10px] h-5 flex items-center">
+        {/* FAILING */}
+        <div className="grid grid-cols-5 border-l border-r border-b border-black">
+          <div className="p-1 border-r border-black font-bold text-xs">
             FAILING
           </div>
-          <div className="p-0.5 border-r border-black h-5"></div>
-          <div className="p-0.5 border-r border-black h-5"></div>
-          <div className="p-0.5 border-r border-black h-5"></div>
-          <div className="p-0.5 border-r border-black h-5"></div>
-          <div className="p-0.5 h-5"></div>
-        </div>
-        <div className={`${procGridClass} border-l border-r border-b border-black`}>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 h-4"></div>
-        </div>
-        <div className={`${procGridClass} border-l border-r border-b border-black`}>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 h-4"></div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 h-8"></div>
         </div>
 
-        {/* F PALISH (3 handwriting rows) */}
-        <div className={`${procGridClass} border-l border-r border-b border-black`}>
-          <div className="p-0.5 border-r border-black font-bold text-[10px] h-5 flex items-center">
+        {/* Empty Row after FAILING */}
+        <div className="grid grid-cols-5 border-l border-r border-b border-black">
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 h-6"></div>
+        </div>
+
+        {/* F PALISH */}
+        <div className="grid grid-cols-5 border-l border-r border-b border-black">
+          <div className="p-1 border-r border-black font-bold text-xs">
             F PALISH
           </div>
-          <div className="p-0.5 border-r border-black h-5"></div>
-          <div className="p-0.5 border-r border-black h-5"></div>
-          <div className="p-0.5 border-r border-black h-5"></div>
-          <div className="p-0.5 border-r border-black h-5"></div>
-          <div className="p-0.5 h-5"></div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 h-8"></div>
         </div>
-        <div className={`${procGridClass} border-l border-r border-b border-black`}>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 h-4"></div>
-        </div>
-        <div className={`${procGridClass} border-l border-r border-b border-black`}>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 h-4"></div>
+
+        {/* Empty Row after F PALISH */}
+        <div className="grid grid-cols-5 border-l border-r border-b border-black">
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 h-6"></div>
         </div>
 
         {/* QR Code placed directly above the product image in the right column */}
@@ -262,54 +236,34 @@ export const ManufacturingWorksheetPreview: React.FC<
             <img
               src={qrDataUrl}
               alt={`QR Code for Bag ${qrCodeBagNumber || orderNumber}`}
-              className="w-[64px] h-[64px] object-contain block"
+              className="w-[70px] h-[70px] object-contain block"
             />
           </div>
         )}
       </div>
 
-      {/* SETTING (3 handwriting rows) + AD with merged image space */}
+      {/* SETTING and AD with merged image space */}
       <div className="relative">
-        {/* SETTING Row 1 */}
-        <div className={`${procGridClass} border-l border-r border-b border-black`}>
-          <div className="p-0.5 border-r border-black font-bold text-[10px] h-5 flex items-center">
+        {/* SETTING Row */}
+        <div className="grid grid-cols-5 border-l border-r border-b border-black">
+          <div className="p-1 border-r border-black font-bold text-xs">
             SETTING
           </div>
-          <div className="p-0.5 border-r border-black h-5"></div>
-          <div className="p-0.5 border-r border-black h-5"></div>
-          <div className="p-0.5 border-r border-black h-5"></div>
-          <div className="p-0.5 border-r border-black h-5"></div>
-          <div className="p-0.5 h-5"></div>
-        </div>
-        {/* SETTING Row 2 */}
-        <div className={`${procGridClass} border-l border-r border-b border-black`}>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 h-4"></div>
-        </div>
-        {/* SETTING Row 3 */}
-        <div className={`${procGridClass} border-l border-r border-b border-black`}>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 border-r border-black h-4"></div>
-          <div className="p-0.5 h-4"></div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 h-8"></div>
         </div>
 
         {/* AD Row - Blue Background */}
-        <div className={`${procGridClass} border-l border-r border-b border-black bg-blue-200`}>
-          <div className="p-0.5 border-r border-black font-bold text-center text-[10px] h-5 flex items-center justify-center">
+        <div className="grid grid-cols-5 border-l border-r border-b border-black bg-blue-200">
+          <div className="p-1 border-r border-black font-bold text-center text-xs">
             AD
           </div>
-          <div className="p-0.5 border-r border-black h-5"></div>
-          <div className="p-0.5 border-r border-black h-5"></div>
-          <div className="p-0.5 border-r border-black h-5"></div>
-          <div className="p-0.5 border-r border-black h-5"></div>
-          <div className="p-0.5 h-5 bg-white"></div>
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 h-6 bg-white"></div>
         </div>
 
         {/* Product Image spanning SETTING and AD rows */}
@@ -318,7 +272,7 @@ export const ManufacturingWorksheetPreview: React.FC<
             className="absolute top-0 right-0 flex items-center justify-center border-l border-black bg-white"
             style={{
               width: "20%",
-              height: "72px",
+              height: "56px",
               padding: "2px",
             }}
           >
@@ -333,19 +287,18 @@ export const ManufacturingWorksheetPreview: React.FC<
       </div>
 
       {/* KL Row - Blue Background */}
-      <div className={`${procGridClass} border-l border-r border-b border-black bg-blue-200`}>
-        <div className="p-0.5 border-r border-black font-bold text-center text-[10px] h-6 flex items-center justify-center">
+      <div className="grid grid-cols-5 border-l border-r border-b border-black bg-blue-200">
+        <div className="p-1 border-r border-black font-bold text-center text-xs">
           KL
         </div>
-        <div className="p-0.5 border-r border-black h-6"></div>
-        <div className="p-0.5 border-r border-black h-6"></div>
-        <div className="p-0.5 border-r border-black h-6"></div>
-        <div className="p-0.5 border-r border-black h-6"></div>
-        <div className="p-0.5 h-6 flex items-center justify-center bg-white">
-          <div className="text-center leading-tight">
-            <div className="text-[10px] font-bold text-red-600">WT-</div>
+        <div className="p-1 border-r border-black h-6"></div>
+        <div className="p-1 border-r border-black h-6"></div>
+        <div className="p-1 border-r border-black h-6"></div>
+        <div className="p-1 h-6 flex items-center justify-center bg-white">
+          <div className="text-center">
+            <div className="text-xs font-bold text-red-600">WT-</div>
             {weightInGrams > 0 && (
-              <div className="text-[10px] font-bold text-blue-600">
+              <div className="text-xs font-bold text-blue-600">
                 {weightInGrams}g
               </div>
             )}
@@ -354,55 +307,36 @@ export const ManufacturingWorksheetPreview: React.FC<
       </div>
 
       {/* TOTAL Row */}
-      <div className={`${procGridClass} border-l border-r border-b border-black bg-gray-200`}>
-        <div className="p-0.5 border-r border-black font-bold text-center text-[10px] h-5 flex items-center justify-center">
+      <div className="grid grid-cols-5 border-l border-r border-b border-black bg-gray-200">
+        <div className="p-1 border-r border-black font-bold text-center text-xs">
           TOTAL
         </div>
-        <div className="p-0.5 border-r border-black h-5"></div>
-        <div className="p-0.5 border-r border-black h-5"></div>
-        <div className="p-0.5 border-r border-black h-5"></div>
-        <div className="p-0.5 border-r border-black h-5"></div>
-        <div className="p-0.5 h-5 bg-white"></div>
+        <div className="p-1 border-r border-black h-6"></div>
+        <div className="p-1 border-r border-black h-6"></div>
+        <div className="p-1 border-r border-black h-6"></div>
+        <div className="p-1 h-6 bg-white"></div>
       </div>
 
       {/* Empty Row after TOTAL */}
-      <div className={`${procGridClass} border-l border-r border-b border-black`}>
-        <div className="p-0.5 border-r border-black h-5"></div>
-        <div className="p-0.5 border-r border-black h-5"></div>
-        <div className="p-0.5 border-r border-black h-5"></div>
-        <div className="p-0.5 border-r border-black h-5"></div>
-        <div className="p-0.5 border-r border-black h-5"></div>
-        <div className="p-0.5 h-5 text-center font-bold text-[9px] flex items-center justify-center">
+      <div className="grid grid-cols-5 border-l border-r border-b border-black">
+        <div className="p-1 border-r border-black h-6"></div>
+        <div className="p-1 border-r border-black h-6"></div>
+        <div className="p-1 border-r border-black h-6"></div>
+        <div className="p-1 border-r border-black h-6"></div>
+        <div className="p-1 h-6 text-center font-bold text-xs flex items-center justify-center">
           FENESH WT
         </div>
       </div>
 
-      {/* PALISH (3 handwriting rows) */}
-      <div className={`${procGridClass} border-l border-r border-b border-black bg-gray-200`}>
-        <div className="p-0.5 border-r border-black font-bold text-center text-[10px] h-5 flex items-center justify-center">
+      {/* PALISH Row */}
+      <div className="grid grid-cols-5 border-l border-r border-b border-black bg-gray-200">
+        <div className="p-1 border-r border-black font-bold text-center text-xs">
           PALISH
         </div>
-        <div className="p-0.5 border-r border-black h-5"></div>
-        <div className="p-0.5 border-r border-black h-5"></div>
-        <div className="p-0.5 border-r border-black h-5"></div>
-        <div className="p-0.5 border-r border-black h-5"></div>
-        <div className="p-0.5 h-5 bg-white"></div>
-      </div>
-      <div className={`${procGridClass} border-l border-r border-b border-black`}>
-        <div className="p-0.5 border-r border-black h-4"></div>
-        <div className="p-0.5 border-r border-black h-4"></div>
-        <div className="p-0.5 border-r border-black h-4"></div>
-        <div className="p-0.5 border-r border-black h-4"></div>
-        <div className="p-0.5 border-r border-black h-4"></div>
-        <div className="p-0.5 h-4"></div>
-      </div>
-      <div className={`${procGridClass} border-l border-r border-b border-black`}>
-        <div className="p-0.5 border-r border-black h-4"></div>
-        <div className="p-0.5 border-r border-black h-4"></div>
-        <div className="p-0.5 border-r border-black h-4"></div>
-        <div className="p-0.5 border-r border-black h-4"></div>
-        <div className="p-0.5 border-r border-black h-4"></div>
-        <div className="p-0.5 h-4"></div>
+        <div className="p-1 border-r border-black h-8"></div>
+        <div className="p-1 border-r border-black h-8"></div>
+        <div className="p-1 border-r border-black h-8"></div>
+        <div className="p-1 h-8 bg-white"></div>
       </div>
 
       {/* AD Details Header */}
