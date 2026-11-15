@@ -1,6 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
+import QRCode from "qrcode";
+import { buildOrderQrTargetUrl } from "@/components/previews/OrderQrAttachment";
 
 export interface AdDetail {
   id: string;
@@ -20,6 +22,8 @@ export interface ManufacturingWorksheetPreviewProps {
   selectedProcesses: string[];
   adDetails: AdDetail[];
   productImage?: string;
+  qrCodeOrderId?: string;
+  qrCodeBagNumber?: string;
 }
 
 export const ManufacturingWorksheetPreview: React.FC<
@@ -35,7 +39,56 @@ export const ManufacturingWorksheetPreview: React.FC<
   size,
   adDetails,
   productImage,
+  qrCodeOrderId,
+  qrCodeBagNumber,
 }) => {
+  const [qrDataUrl, setQrDataUrl] = useState<string>("");
+  const [detectedBaseUrl, setDetectedBaseUrl] = useState<string>("");
+
+  const showQr = qrCodeOrderId !== undefined || qrCodeBagNumber !== undefined;
+
+  useEffect(() => {
+    if (!showQr) return;
+    let active = true;
+    fetch("/api/qr-bridge")
+      .then((res) => res.json())
+      .then((data) => {
+        if (active && data?.lanBaseUrl) {
+          setDetectedBaseUrl(data.lanBaseUrl);
+        }
+      })
+      .catch(() => {
+        // Fallback to window.location.origin
+      });
+    return () => {
+      active = false;
+    };
+  }, [showQr]);
+
+  useEffect(() => {
+    if (!showQr) {
+      setQrDataUrl("");
+      return;
+    }
+    const effectiveIdentifier =
+      qrCodeOrderId || (qrCodeBagNumber ? `bag-${qrCodeBagNumber}` : "pending");
+    const targetUrl = buildOrderQrTargetUrl(effectiveIdentifier, detectedBaseUrl);
+    let mounted = true;
+    QRCode.toDataURL(targetUrl, {
+      width: 140,
+      margin: 1,
+      errorCorrectionLevel: "M",
+    })
+      .then((url) => {
+        if (mounted) setQrDataUrl(url);
+      })
+      .catch(() => {
+        if (mounted) setQrDataUrl("");
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [showQr, qrCodeOrderId, qrCodeBagNumber, detectedBaseUrl]);
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "";
     const d = new Date(dateStr);
@@ -128,45 +181,65 @@ export const ManufacturingWorksheetPreview: React.FC<
         <div className="p-1 text-center text-xs">{formatDate(deliveryDate)}</div>
       </div>
 
-      {/* Process Rows */}
-      {/* FAILING */}
-      <div className="grid grid-cols-5 border-l border-r border-b border-black">
-        <div className="p-1 border-r border-black font-bold text-xs">
-          FAILING
+      {/* Process Rows: FAILING through F PALISH with optional QR code above the image */}
+      <div className="relative">
+        {/* FAILING */}
+        <div className="grid grid-cols-5 border-l border-r border-b border-black">
+          <div className="p-1 border-r border-black font-bold text-xs">
+            FAILING
+          </div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 h-8"></div>
         </div>
-        <div className="p-1 border-r border-black h-8"></div>
-        <div className="p-1 border-r border-black h-8"></div>
-        <div className="p-1 border-r border-black h-8"></div>
-        <div className="p-1 h-8"></div>
-      </div>
 
-      {/* Empty Row after FAILING */}
-      <div className="grid grid-cols-5 border-l border-r border-b border-black">
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 h-6"></div>
-      </div>
-
-      {/* F PALISH */}
-      <div className="grid grid-cols-5 border-l border-r border-b border-black">
-        <div className="p-1 border-r border-black font-bold text-xs">
-          F PALISH
+        {/* Empty Row after FAILING */}
+        <div className="grid grid-cols-5 border-l border-r border-b border-black">
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 h-6"></div>
         </div>
-        <div className="p-1 border-r border-black h-8"></div>
-        <div className="p-1 border-r border-black h-8"></div>
-        <div className="p-1 border-r border-black h-8"></div>
-        <div className="p-1 h-8"></div>
-      </div>
 
-      {/* Empty Row after F PALISH */}
-      <div className="grid grid-cols-5 border-l border-r border-b border-black">
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 h-6"></div>
+        {/* F PALISH */}
+        <div className="grid grid-cols-5 border-l border-r border-b border-black">
+          <div className="p-1 border-r border-black font-bold text-xs">
+            F PALISH
+          </div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 h-8"></div>
+        </div>
+
+        {/* Empty Row after F PALISH */}
+        <div className="grid grid-cols-5 border-l border-r border-b border-black">
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 border-r border-black h-6"></div>
+          <div className="p-1 h-6"></div>
+        </div>
+
+        {/* QR Code placed directly above the product image in the right column */}
+        {showQr && qrDataUrl && (
+          <div
+            className="absolute top-0 bottom-0 right-0 flex items-center justify-center border-l border-r border-b border-black bg-white"
+            style={{
+              width: "20%",
+              padding: "2px",
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={qrDataUrl}
+              alt={`QR Code for Bag ${qrCodeBagNumber || orderNumber}`}
+              className="w-[70px] h-[70px] object-contain block"
+            />
+          </div>
+        )}
       </div>
 
       {/* SETTING and AD with merged image space */}

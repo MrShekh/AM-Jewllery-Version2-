@@ -12,7 +12,6 @@ import {
 import { AppShell, AppShellUser } from "@/components/AppShell";
 import { ManufacturingWorksheetPreview } from "@/components/previews/v1/ManufacturingWorksheetPreview";
 import { downloadManufacturingWorksheet } from "@/components/previews/v1/manufacturingWorksheetGenerator";
-import { OrderQrAttachment } from "@/components/previews/OrderQrAttachment";
 import {
   adaptV2OrderToV1WorksheetPDFData,
   adaptV2OrderToV1WorksheetProps,
@@ -1429,13 +1428,8 @@ function ProductionRegisterContent() {
               ),
               adDetailsJson: selectedOrderRow.order.adDetailsJson,
             })}
-          />
-          <OrderQrAttachment
-            orderId={selectedOrderRow.order.id}
-            bagNumber={selectedOrderRow.order.bagNumber}
-            orderName={selectedOrderRow.order.orderName}
-            purityLabel={selectedOrderRow.purity.displayLabel}
-            customerName={selectedOrderRow.customer.name}
+            qrCodeOrderId={selectedOrderRow.order.id}
+            qrCodeBagNumber={selectedOrderRow.order.bagNumber}
           />
         </div>
       )}
@@ -2641,7 +2635,7 @@ function ProductionRegisterContent() {
               <div className="flex flex-col md:flex-row items-start justify-center gap-6 p-2">
                 <div>
                   <div className="text-xs font-bold text-slate-700 mb-2">
-                    Preserved V1 Job Card (Unchanged 400px Layout) + External QR Attachment
+                    Job Card (With QR Above Image)
                   </div>
                   <ManufacturingWorksheetPreview
                     {...adaptV2OrderToV1WorksheetProps({
@@ -2662,14 +2656,8 @@ function ProductionRegisterContent() {
                       ),
                       adDetailsJson: selectedOrderRow.order.adDetailsJson,
                     })}
-                  />
-                  {/* Rule 2: QR attachment placed OUTSIDE the original 400px worksheet content area */}
-                  <OrderQrAttachment
-                    orderId={selectedOrderRow.order.id}
-                    bagNumber={selectedOrderRow.order.bagNumber}
-                    orderName={selectedOrderRow.order.orderName}
-                    purityLabel={selectedOrderRow.purity.displayLabel}
-                    customerName={selectedOrderRow.customer.name}
+                    qrCodeOrderId={selectedOrderRow.order.id}
+                    qrCodeBagNumber={selectedOrderRow.order.bagNumber}
                   />
                 </div>
 

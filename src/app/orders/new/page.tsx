@@ -8,7 +8,6 @@ import {
   ManufacturingWorksheetPreview,
 } from "@/components/previews/v1/ManufacturingWorksheetPreview";
 import { downloadManufacturingWorksheet } from "@/components/previews/v1/manufacturingWorksheetGenerator";
-import { OrderQrAttachment } from "@/components/previews/OrderQrAttachment";
 import {
   adaptV2OrderToV1WorksheetPDFData,
   adaptV2OrderToV1WorksheetProps,
@@ -243,15 +242,12 @@ export default function NewOrderPage() {
 
   return (
     <AppShell actor={actor}>
-      {/* Dedicated Print-Only Container: prints ONLY the Job Card + QR Attachment */}
+      {/* Dedicated Print-Only Container: prints ONLY the Job Card with embedded QR */}
       <div className="print-only-worksheet">
-        <ManufacturingWorksheetPreview {...v1PreviewProps} />
-        <OrderQrAttachment
-          orderId=""
-          bagNumber={bagNumber}
-          orderName={orderName}
-          purityLabel={selectedPurity?.displayLabel || "22K (92%)"}
-          customerName={selectedCustomer?.name || quickCustomerName || ""}
+        <ManufacturingWorksheetPreview
+          {...v1PreviewProps}
+          qrCodeOrderId=""
+          qrCodeBagNumber={bagNumber}
         />
       </div>
 
@@ -588,13 +584,10 @@ export default function NewOrderPage() {
                 Exact V1 Typography & Borders
               </span>
             </div>
-            <ManufacturingWorksheetPreview {...v1PreviewProps} />
-            <OrderQrAttachment
-              orderId=""
-              bagNumber={bagNumber}
-              orderName={orderName}
-              purityLabel={selectedPurity?.displayLabel || "22K (92%)"}
-              customerName={selectedCustomer?.name || quickCustomerName || ""}
+            <ManufacturingWorksheetPreview
+              {...v1PreviewProps}
+              qrCodeOrderId=""
+              qrCodeBagNumber={bagNumber}
             />
           </div>
         </div>
