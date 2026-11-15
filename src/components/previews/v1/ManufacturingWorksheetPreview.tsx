@@ -167,13 +167,16 @@ export const ManufacturingWorksheetPreview: React.FC<
       </div>
 
       {/* Fourth Row - Process Header */}
-      <div className="grid grid-cols-5 border-l border-r border-b border-black">
+      <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
         <div className="p-1 border-r border-black"></div>
         <div className="p-1 border-r border-black text-center font-bold text-xs">
           IN
         </div>
         <div className="p-1 border-r border-black text-center font-bold text-xs">
           OUT
+        </div>
+        <div className="p-1 border-r border-black text-center font-bold text-[10px] leading-tight flex items-center justify-center">
+          EXTRA
         </div>
         <div className="p-1 border-r border-black text-center font-bold text-xs">
           LOSS
@@ -184,10 +187,11 @@ export const ManufacturingWorksheetPreview: React.FC<
       {/* Process Rows: FAILING through F PALISH with optional QR code above the image */}
       <div className="relative">
         {/* FAILING */}
-        <div className="grid grid-cols-5 border-l border-r border-b border-black">
+        <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
           <div className="p-1 border-r border-black font-bold text-xs">
             FAILING
           </div>
+          <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 border-r border-black h-8"></div>
@@ -195,7 +199,8 @@ export const ManufacturingWorksheetPreview: React.FC<
         </div>
 
         {/* Empty Row after FAILING */}
-        <div className="grid grid-cols-5 border-l border-r border-b border-black">
+        <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
+          <div className="p-1 border-r border-black h-6"></div>
           <div className="p-1 border-r border-black h-6"></div>
           <div className="p-1 border-r border-black h-6"></div>
           <div className="p-1 border-r border-black h-6"></div>
@@ -204,10 +209,11 @@ export const ManufacturingWorksheetPreview: React.FC<
         </div>
 
         {/* F PALISH */}
-        <div className="grid grid-cols-5 border-l border-r border-b border-black">
+        <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
           <div className="p-1 border-r border-black font-bold text-xs">
             F PALISH
           </div>
+          <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 border-r border-black h-8"></div>
@@ -215,7 +221,8 @@ export const ManufacturingWorksheetPreview: React.FC<
         </div>
 
         {/* Empty Row after F PALISH */}
-        <div className="grid grid-cols-5 border-l border-r border-b border-black">
+        <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
+          <div className="p-1 border-r border-black h-6"></div>
           <div className="p-1 border-r border-black h-6"></div>
           <div className="p-1 border-r border-black h-6"></div>
           <div className="p-1 border-r border-black h-6"></div>
@@ -245,10 +252,11 @@ export const ManufacturingWorksheetPreview: React.FC<
       {/* SETTING and AD with merged image space */}
       <div className="relative">
         {/* SETTING Row */}
-        <div className="grid grid-cols-5 border-l border-r border-b border-black">
+        <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
           <div className="p-1 border-r border-black font-bold text-xs">
             SETTING
           </div>
+          <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 border-r border-black h-8"></div>
@@ -256,10 +264,11 @@ export const ManufacturingWorksheetPreview: React.FC<
         </div>
 
         {/* AD Row - Blue Background */}
-        <div className="grid grid-cols-5 border-l border-r border-b border-black bg-blue-200">
+        <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black bg-blue-200">
           <div className="p-1 border-r border-black font-bold text-center text-xs">
             AD
           </div>
+          <div className="p-1 border-r border-black h-6"></div>
           <div className="p-1 border-r border-black h-6"></div>
           <div className="p-1 border-r border-black h-6"></div>
           <div className="p-1 border-r border-black h-6"></div>
@@ -287,10 +296,11 @@ export const ManufacturingWorksheetPreview: React.FC<
       </div>
 
       {/* KL Row - Blue Background */}
-      <div className="grid grid-cols-5 border-l border-r border-b border-black bg-blue-200">
+      <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black bg-blue-200">
         <div className="p-1 border-r border-black font-bold text-center text-xs">
           KL
         </div>
+        <div className="p-1 border-r border-black h-6"></div>
         <div className="p-1 border-r border-black h-6"></div>
         <div className="p-1 border-r border-black h-6"></div>
         <div className="p-1 border-r border-black h-6"></div>
@@ -307,10 +317,11 @@ export const ManufacturingWorksheetPreview: React.FC<
       </div>
 
       {/* TOTAL Row */}
-      <div className="grid grid-cols-5 border-l border-r border-b border-black bg-gray-200">
+      <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black bg-gray-200">
         <div className="p-1 border-r border-black font-bold text-center text-xs">
           TOTAL
         </div>
+        <div className="p-1 border-r border-black h-6"></div>
         <div className="p-1 border-r border-black h-6"></div>
         <div className="p-1 border-r border-black h-6"></div>
         <div className="p-1 border-r border-black h-6"></div>
@@ -318,7 +329,8 @@ export const ManufacturingWorksheetPreview: React.FC<
       </div>
 
       {/* Empty Row after TOTAL */}
-      <div className="grid grid-cols-5 border-l border-r border-b border-black">
+      <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
+        <div className="p-1 border-r border-black h-6"></div>
         <div className="p-1 border-r border-black h-6"></div>
         <div className="p-1 border-r border-black h-6"></div>
         <div className="p-1 border-r border-black h-6"></div>
@@ -329,10 +341,11 @@ export const ManufacturingWorksheetPreview: React.FC<
       </div>
 
       {/* PALISH Row */}
-      <div className="grid grid-cols-5 border-l border-r border-b border-black bg-gray-200">
+      <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black bg-gray-200">
         <div className="p-1 border-r border-black font-bold text-center text-xs">
           PALISH
         </div>
+        <div className="p-1 border-r border-black h-8"></div>
         <div className="p-1 border-r border-black h-8"></div>
         <div className="p-1 border-r border-black h-8"></div>
         <div className="p-1 border-r border-black h-8"></div>
