@@ -261,6 +261,60 @@ export default function DirectoryPage() {
     }
   }
 
+  async function handleDeleteCustomer(c: CustomerRow) {
+    if (
+      !window.confirm(
+        `Delete customer "${c.name}" (${c.customerCode})? This only succeeds if they have no orders, bills, or receipts.`
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch(
+        `/api/customers?customerId=${encodeURIComponent(c.id)}`,
+        { method: "DELETE" }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setError(data.error || "Failed to delete customer");
+      } else {
+        setMessage(`Deleted customer ${c.name} (${c.customerCode})`);
+        await loadData();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete customer");
+    }
+  }
+
+  async function handleDeleteKarigar(k: KarigarRow) {
+    if (
+      !window.confirm(
+        `Delete karigar "${k.name}" (${k.karigarCode})? This only succeeds if they have no order processes, gold movements, or recovery records.`
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch(
+        `/api/karigars?karigarId=${encodeURIComponent(k.id)}`,
+        { method: "DELETE" }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setError(data.error || "Failed to delete karigar");
+      } else {
+        setMessage(`Deleted karigar ${k.name} (${k.karigarCode})`);
+        await loadData();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete karigar");
+    }
+  }
+
   if (!actor) {
     return <div className="p-6 text-xs text-slate-600">Loading directory...</div>;
   }
@@ -452,6 +506,15 @@ export default function DirectoryPage() {
                           >
                             New Bill
                           </Link>
+                          {actor.role === "OWNER_ADMIN" && (
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteCustomer(c)}
+                              className="px-2 py-1 text-[11px] font-semibold bg-red-50 hover:bg-red-100 text-red-700 border border-red-300 rounded-xs cursor-pointer"
+                            >
+                              Delete
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))
@@ -631,6 +694,13 @@ export default function DirectoryPage() {
                                 className="px-2 py-1 text-[11px] font-medium bg-white border border-slate-300 rounded-xs hover:bg-slate-50 cursor-pointer"
                               >
                                 {k.isActive ? "Deactivate" : "Activate"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleDeleteKarigar(k)}
+                                className="px-2 py-1 text-[11px] font-semibold bg-red-50 hover:bg-red-100 text-red-700 border border-red-300 rounded-xs cursor-pointer"
+                              >
+                                Delete
                               </button>
                             </>
                           )}

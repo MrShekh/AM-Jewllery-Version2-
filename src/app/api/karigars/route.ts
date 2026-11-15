@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireServerActor } from "@/lib/auth";
 import { handleApiError } from "@/lib/api-response";
-import { erpService, ProcessType } from "@/lib/domain";
+import { ConflictError, erpService, NotFoundError, ProcessType } from "@/lib/domain";
+import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
   try {
@@ -56,6 +57,86 @@ export async function PATCH(req: NextRequest) {
         : undefined,
     });
     return NextResponse.json({ ok: true, karigar });
+  } catch (err) {
+    return handleApiError(err);
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const actor = await requireServerActor(["OWNER_ADMIN"]);
+    const karigarId = req.nextUrl.searchParams.get("karigarId")?.trim() || "";
+    if (!karigarId) {
+      throw new NotFoundError("Karigar ID is required");
+    }
+
+    const existing = await prisma.karigar.findFirst({
+      where: { id: karigarId, organizationId: actor.organizationId },
+      select: {
+        id: true,
+        name: true,
+        karigarCode: true,
+        _count: {
+          select: {
+            orderProcesses: true,
+            processVisits: true,
+            metalMovements: true,
+            processLossRecords: true,
+            journalTransactions: true,
+            journalLines: true,
+            recoveryReceipts: true,
+            lossWriteOffs: true,
+            recoverySettlements: true,
+            makingDeductions: true,
+          },
+        },
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundError("Karigar not found");
+    }
+
+    const linkedCount =
+      existing._count.orderProcesses +
+      existing._count.processVisits +
+      existing._count.metalMovements +
+      existing._count.processLossRecords +
+      existing._count.journalTransactions +
+      existing._count.journalLines +
+      existing._count.recoveryReceipts +
+      existing._count.lossWriteOffs +
+      existing._count.recoverySettlements +
+      existing._count.makingDeductions;
+
+    if (linkedCount > 0) {
+      throw new ConflictError(
+        `Cannot delete karigar "${existing.name}": they have existing order processes, gold movements, or recovery records. Deactivate them instead.`
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.stockAccount.deleteMany({
+        where: { organizationId: actor.organizationId, karigarId: existing.id },
+      });
+      await tx.karigar.delete({ where: { id: existing.id } });
+      await tx.auditEvent.create({
+        data: {
+          organizationId: actor.organizationId,
+          actorId: actor.userId,
+          entityType: "Karigar",
+          entityId: existing.id,
+          action: "KARIGAR_DELETED",
+          summary: `Deleted karigar ${existing.name} (${existing.karigarCode})`,
+        },
+      });
+    });
+
+    return NextResponse.json({
+      ok: true,
+      deletedKarigarId: existing.id,
+      name: existing.name,
+    });
   } catch (err) {
     return handleApiError(err);
   }
