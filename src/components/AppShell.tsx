@@ -190,8 +190,12 @@ export const AppShell: React.FC<{
   // Background Phone-to-Laptop QR Scan Bridge listener (paused when tab is hidden)
   useEffect(() => {
     let active = true;
+    let inFlight = false;
+    router.prefetch("/production-register");
+
     const pollQrBridge = async () => {
-      if (typeof document !== "undefined" && document.hidden) return;
+      if (inFlight || (typeof document !== "undefined" && document.hidden)) return;
+      inFlight = true;
       try {
         const res = await fetch("/api/qr-bridge?client=laptop", {
           cache: "no-store",
@@ -233,14 +237,26 @@ export const AppShell: React.FC<{
         }
       } catch {
         // Ignore network hiccups during polling
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const handleVisibilityOrFocus = () => {
+      if (typeof document === "undefined" || !document.hidden) {
+        void pollQrBridge();
       }
     };
 
     pollQrBridge();
-    const interval = setInterval(pollQrBridge, 2500);
+    const interval = setInterval(pollQrBridge, 900);
+    window.addEventListener("focus", handleVisibilityOrFocus);
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
     return () => {
       active = false;
       clearInterval(interval);
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
     };
   }, [router]);
 
