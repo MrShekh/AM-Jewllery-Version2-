@@ -3,13 +3,30 @@ import { requireServerActor } from "@/lib/auth";
 import { handleApiError } from "@/lib/api-response";
 import { ConflictError, erpService, NotFoundError, ProcessType } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
+import {
+  getKarigarDirectoryStats,
+  getKarigarProfileWorkspace,
+} from "@/lib/directory-stats";
 
 export async function GET(req: NextRequest) {
   try {
     const actor = await requireServerActor();
+    const karigarId = req.nextUrl.searchParams.get("karigarId") || undefined;
+    if (karigarId) {
+      const profile = await getKarigarProfileWorkspace(actor, karigarId);
+      return NextResponse.json({ ok: true, ...profile });
+    }
     const search = req.nextUrl.searchParams.get("search") || undefined;
-    const karigars = await erpService.listKarigars(actor, search);
-    return NextResponse.json({ ok: true, karigars });
+    const [karigars, stats] = await Promise.all([
+      erpService.listKarigars(actor, search),
+      getKarigarDirectoryStats(actor.organizationId),
+    ]);
+    return NextResponse.json({
+      ok: true,
+      karigars,
+      summary: stats.summary,
+      byKarigar: stats.byKarigar,
+    });
   } catch (err) {
     return handleApiError(err);
   }

@@ -3,6 +3,7 @@ import { requireServerActor } from "@/lib/auth";
 import { handleApiError } from "@/lib/api-response";
 import { ConflictError, erpService, NotFoundError } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
+import { getCustomerDirectoryStats } from "@/lib/directory-stats";
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,8 +22,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, ...profile });
     }
     const search = req.nextUrl.searchParams.get("search") || undefined;
-    const customers = await erpService.listCustomers(actor, search);
-    return NextResponse.json({ ok: true, customers });
+    const [customers, stats] = await Promise.all([
+      erpService.listCustomers(actor, search),
+      getCustomerDirectoryStats(actor.organizationId),
+    ]);
+    return NextResponse.json({
+      ok: true,
+      customers,
+      summary: stats.summary,
+      byCustomer: stats.byCustomer,
+    });
   } catch (err) {
     return handleApiError(err);
   }

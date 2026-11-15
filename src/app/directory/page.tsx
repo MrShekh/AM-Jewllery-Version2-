@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppShell, AppShellUser } from "@/components/AppShell";
 import {
   CANONICAL_PROCESS_SEQUENCE,
@@ -15,6 +15,12 @@ import {
   getCachedActor,
   getCachedJson,
 } from "@/lib/client-cache";
+import type {
+  CustomerDirectorySummary,
+  CustomerRowStats,
+  KarigarDirectorySummary,
+  KarigarRowStats,
+} from "@/lib/directory-stats";
 
 interface CustomerRow {
   id: string;
@@ -37,22 +43,64 @@ interface KarigarRow {
   defaultForProcesses?: ProcessType[];
 }
 
-export default function DirectoryPage() {
+interface CustomersApiPayload {
+  ok?: boolean;
+  customers?: CustomerRow[];
+  summary?: CustomerDirectorySummary;
+  byCustomer?: Record<string, CustomerRowStats>;
+}
+
+interface KarigarsApiPayload {
+  ok?: boolean;
+  karigars?: KarigarRow[];
+  summary?: KarigarDirectorySummary;
+  byKarigar?: Record<string, KarigarRowStats>;
+}
+
+function DirectoryContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeTab: "customers" | "karigars" =
+    searchParams.get("tab") === "karigars" ? "karigars" : "customers";
+
   const [actor, setActor] = useState<AppShellUser | null>(() => getCachedActor());
+  const cachedCust = getCachedJson<CustomersApiPayload>("/api/customers");
+  const cachedKar = getCachedJson<KarigarsApiPayload>("/api/karigars");
+
   const [customers, setCustomers] = useState<CustomerRow[]>(
-    () => getCachedJson<{ customers: CustomerRow[] }>("/api/customers")?.customers || []
+    () => cachedCust?.customers || []
   );
+  const [customerSummary, setCustomerSummary] = useState<CustomerDirectorySummary>(
+    () =>
+      cachedCust?.summary || {
+        totalCustomers: 0,
+        totalActiveOrders: 0,
+        totalCompletedReady: 0,
+        totalOrdersAllTime: 0,
+      }
+  );
+  const [byCustomer, setByCustomer] = useState<Record<string, CustomerRowStats>>(
+    () => cachedCust?.byCustomer || {}
+  );
+
   const [karigars, setKarigars] = useState<KarigarRow[]>(
-    () => getCachedJson<{ karigars: KarigarRow[] }>("/api/karigars")?.karigars || []
+    () => cachedKar?.karigars || []
   );
-  const [activeTab, setActiveTab] = useState<"all" | "customers" | "karigars">(() => {
-    if (typeof window !== "undefined") {
-      const t = new URLSearchParams(window.location.search).get("tab");
-      if (t === "customers" || t === "karigars") return t;
-    }
-    return "all";
-  });
+  const [karigarSummary, setKarigarSummary] = useState<KarigarDirectorySummary>(
+    () =>
+      cachedKar?.summary || {
+        totalKarigars: 0,
+        activeKarigars: 0,
+        totalKarigarOrders: 0,
+        totalCustodyWeight: "0.000",
+        totalRawLossWeight: "0.000",
+        totalFineLossWeight: "0.000",
+      }
+  );
+  const [byKarigar, setByKarigar] = useState<Record<string, KarigarRowStats>>(
+    () => cachedKar?.byKarigar || {}
+  );
+
   const [searchCustomer, setSearchCustomer] = useState("");
   const [searchKarigar, setSearchKarigar] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -144,22 +192,30 @@ export default function DirectoryPage() {
     async (force = false) => {
       const [resolvedActor, cData, kData] = await Promise.all([
         fetchActorCached(),
-        fetchCachedJson<{ ok?: boolean; customers?: CustomerRow[] }>(
-          "/api/customers",
-          { force, ttlMs: 120_000 }
-        ),
-        fetchCachedJson<{ ok?: boolean; karigars?: KarigarRow[] }>(
-          "/api/karigars",
-          { force, ttlMs: 120_000 }
-        ),
+        fetchCachedJson<CustomersApiPayload>("/api/customers", {
+          force,
+          ttlMs: 120_000,
+        }),
+        fetchCachedJson<KarigarsApiPayload>("/api/karigars", {
+          force,
+          ttlMs: 120_000,
+        }),
       ]);
       if (!resolvedActor) {
         router.push("/login?redirect=/directory");
         return;
       }
       setActor(resolvedActor);
-      if (cData.ok && cData.customers) setCustomers(cData.customers);
-      if (kData.ok && kData.karigars) setKarigars(kData.karigars);
+      if (cData.ok && cData.customers) {
+        setCustomers(cData.customers);
+        if (cData.summary) setCustomerSummary(cData.summary);
+        if (cData.byCustomer) setByCustomer(cData.byCustomer);
+      }
+      if (kData.ok && kData.karigars) {
+        setKarigars(kData.karigars);
+        if (kData.summary) setKarigarSummary(kData.summary);
+        if (kData.byKarigar) setByKarigar(kData.byKarigar);
+      }
     },
     [router]
   );
@@ -322,16 +378,18 @@ export default function DirectoryPage() {
   return (
     <AppShell actor={actor}>
       <div className="space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
           <div>
             <h1 className="text-base font-bold text-slate-900">
-              Customers & Karigars Master Directory
+              {activeTab === "karigars" ? "Karigars" : "Customers"}
             </h1>
             <p className="text-xs text-slate-600">
-              Stable database IDs and karigar codes prevent accidental name-based merging across workshops.
+              {activeTab === "karigars"
+                ? "Manage workshop karigars, process capabilities, orders, loss breakdown, and recovery profiles."
+                : "Manage jewellery customers, active orders, customer profiles, and billing."}
             </p>
           </div>
-          {actor.role === "OWNER_ADMIN" && (
+          {activeTab === "karigars" && actor.role === "OWNER_ADMIN" && (
             <button
               type="button"
               onClick={() => void handleEnsureDefaults()}
@@ -353,36 +411,109 @@ export default function DirectoryPage() {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2">
-          {(
-            [
-              ["all", "All"],
-              ["customers", `Customers (${customers.length})`],
-              ["karigars", `Karigars (${karigars.length})`],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setActiveTab(id)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-xs border cursor-pointer ${
-                activeTab === id
-                  ? "bg-blue-700 text-white border-blue-700"
-                  : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* Customers KPI Cards */}
+        {activeTab === "customers" && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="bg-white border border-slate-200 rounded-xs p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Total Customers
+              </div>
+              <div className="mt-1 text-xl font-bold font-mono text-slate-900">
+                {customerSummary.totalCustomers || customers.length}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                Registered accounts
+              </div>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-xs p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Total Active Orders
+              </div>
+              <div className="mt-1 text-xl font-bold font-mono text-blue-700">
+                {customerSummary.totalActiveOrders}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                In production / pending delivery
+              </div>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-xs p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Ready for Delivery
+              </div>
+              <div className="mt-1 text-xl font-bold font-mono text-emerald-700">
+                {customerSummary.totalCompletedReady}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                Completed bags awaiting dispatch
+              </div>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-xs p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Total Orders (All Time)
+              </div>
+              <div className="mt-1 text-xl font-bold font-mono text-slate-900">
+                {customerSummary.totalOrdersAllTime}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                Excludes cancelled orders
+              </div>
+            </div>
+          </div>
+        )}
 
-        <div
-          className={`grid grid-cols-1 gap-4 ${
-            activeTab === "all" ? "lg:grid-cols-2" : ""
-          }`}
-        >
+        {/* Karigars KPI Cards */}
+        {activeTab === "karigars" && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="bg-white border border-slate-200 rounded-xs p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Total Karigars
+              </div>
+              <div className="mt-1 text-xl font-bold font-mono text-slate-900">
+                {karigarSummary.totalKarigars || karigars.length}
+              </div>
+              <div className="text-[11px] text-emerald-700 font-medium mt-0.5">
+                {karigarSummary.activeKarigars} active
+              </div>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-xs p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Total Karigar Orders
+              </div>
+              <div className="mt-1 text-xl font-bold font-mono text-blue-700">
+                {karigarSummary.totalKarigarOrders}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                Assigned across all processes
+              </div>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-xs p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Active Custody Gold
+              </div>
+              <div className="mt-1 text-xl font-bold font-mono text-amber-700">
+                {karigarSummary.totalCustodyWeight} g
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                Currently in karigar hands
+              </div>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-xs p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Total Order Loss
+              </div>
+              <div className="mt-1 text-xl font-bold font-mono text-rose-700">
+                {karigarSummary.totalRawLossWeight} g
+              </div>
+              <div className="text-[11px] text-slate-600 font-mono mt-0.5">
+                Fine eq: {karigarSummary.totalFineLossWeight} g
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-4">
           {/* Customers Panel */}
-          {(activeTab === "all" || activeTab === "customers") && (
+          {activeTab === "customers" && (
           <div className="bg-white border border-slate-200 rounded-xs p-4 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-2">
               <h2 className="text-sm font-bold text-slate-900">
@@ -457,6 +588,7 @@ export default function DirectoryPage() {
                     <th className="p-2 text-left font-semibold">Customer Name</th>
                     <th className="p-2 text-left font-semibold">Phone</th>
                     <th className="p-2 text-left font-semibold">Address</th>
+                    <th className="p-2 text-right font-semibold">Active / Total Orders</th>
                     <th className="p-2 text-right font-semibold">Actions</th>
                   </tr>
                 </thead>
@@ -464,14 +596,16 @@ export default function DirectoryPage() {
                   {filteredCustomers.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         className="p-4 text-center text-slate-500"
                       >
                         No customers created yet. Add your first customer above.
                       </td>
                     </tr>
                   ) : (
-                    filteredCustomers.map((c) => (
+                    filteredCustomers.map((c) => {
+                      const stats = byCustomer[c.id];
+                      return (
                       <tr
                         key={c.id}
                         className="border-b border-slate-100 hover:bg-slate-50"
@@ -492,6 +626,13 @@ export default function DirectoryPage() {
                         </td>
                         <td className="p-2 text-slate-600">
                           {c.address || "-"}
+                        </td>
+                        <td className="p-2 text-right font-mono text-slate-800">
+                          <span className="font-bold text-blue-700">
+                            {stats?.activeOrders ?? 0}
+                          </span>
+                          <span className="text-slate-400"> / </span>
+                          <span>{stats?.totalOrders ?? 0}</span>
                         </td>
                         <td className="p-2 text-right space-x-1.5">
                           <Link
@@ -517,7 +658,8 @@ export default function DirectoryPage() {
                           )}
                         </td>
                       </tr>
-                    ))
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -526,7 +668,7 @@ export default function DirectoryPage() {
           )}
 
           {/* Karigars Panel */}
-          {(activeTab === "all" || activeTab === "karigars") && (
+          {activeTab === "karigars" && (
           <div className="bg-white border border-slate-200 rounded-xs p-4 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-2">
               <h2 className="text-sm font-bold text-slate-900">
@@ -625,21 +767,25 @@ export default function DirectoryPage() {
                     <th className="p-2 text-left font-semibold">Karigar Name</th>
                     <th className="p-2 text-left font-semibold">Phone</th>
                     <th className="p-2 text-left font-semibold">Capabilities</th>
-                    <th className="p-2 text-right font-semibold">Recovery</th>
+                    <th className="p-2 text-right font-semibold">Orders (Active / Total)</th>
+                    <th className="p-2 text-right font-semibold">Loss (g)</th>
+                    <th className="p-2 text-right font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredKarigars.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={7}
                         className="p-4 text-center text-slate-500"
                       >
                         No karigars created yet. Add your first karigar above.
                       </td>
                     </tr>
                   ) : (
-                    filteredKarigars.map((k) => (
+                    filteredKarigars.map((k) => {
+                      const stats = byKarigar[k.id];
+                      return (
                       <tr
                         key={k.id}
                         className="border-b border-slate-100 hover:bg-slate-50"
@@ -648,7 +794,12 @@ export default function DirectoryPage() {
                           {k.karigarCode}
                         </td>
                         <td className="p-2 font-semibold text-slate-900">
-                          {k.name}
+                          <Link
+                            href={`/karigars/${k.id}`}
+                            className="text-blue-800 hover:underline"
+                          >
+                            {k.name}
+                          </Link>
                           {!k.isActive && (
                             <span className="ml-1.5 px-1 py-0.5 text-[10px] bg-slate-200 text-slate-600 rounded-xs">
                               Inactive
@@ -678,7 +829,29 @@ export default function DirectoryPage() {
                             })}
                           </div>
                         </td>
-                        <td className="p-2 text-right space-x-1">
+                        <td className="p-2 text-right font-mono text-slate-800">
+                          <span className="font-bold text-blue-700">
+                            {stats?.activeOrders ?? 0}
+                          </span>
+                          <span className="text-slate-400"> / </span>
+                          <span>{stats?.totalOrders ?? 0}</span>
+                        </td>
+                        <td className="p-2 text-right font-mono text-rose-700 font-semibold">
+                          {stats?.totalRawLossWeight ?? "0.000"}
+                        </td>
+                        <td className="p-2 text-right space-x-1 whitespace-nowrap">
+                          <Link
+                            href={`/karigars/${k.id}`}
+                            className="inline-block px-2 py-1 text-[11px] font-semibold bg-blue-700 hover:bg-blue-800 text-white rounded-xs"
+                          >
+                            Karigar Profile
+                          </Link>
+                          <Link
+                            href={`/recovery?karigarId=${k.id}`}
+                            className="inline-block px-2 py-1 text-[11px] font-semibold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xs"
+                          >
+                            Recovery
+                          </Link>
                           {actor.role === "OWNER_ADMIN" && (
                             <>
                               <button
@@ -704,15 +877,10 @@ export default function DirectoryPage() {
                               </button>
                             </>
                           )}
-                          <Link
-                            href={`/recovery?karigarId=${k.id}`}
-                            className="inline-block px-2 py-1 text-[11px] font-semibold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xs"
-                          >
-                            Recovery
-                          </Link>
                         </td>
                       </tr>
-                    ))
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -824,6 +992,14 @@ export default function DirectoryPage() {
         )}
       </div>
     </AppShell>
+  );
+}
+
+export default function DirectoryPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-xs text-slate-600">Loading directory...</div>}>
+      <DirectoryContent />
+    </Suspense>
   );
 }
 
