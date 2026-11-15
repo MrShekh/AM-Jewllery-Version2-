@@ -17,6 +17,17 @@ const globalForQrBridge = globalThis as unknown as {
   lastLaptopPollAt?: number;
 };
 
+function isPrivateLanIpv4(address: string): boolean {
+  if (address.startsWith("192.168.") || address.startsWith("10.")) {
+    return true;
+  }
+  if (address.startsWith("172.")) {
+    const secondOctet = Number(address.split(".")[1]);
+    return secondOctet >= 16 && secondOctet <= 31;
+  }
+  return false;
+}
+
 function getLanIpAddress(): string | null {
   const interfaces = os.networkInterfaces();
   const candidates: { address: string; priority: number }[] = [];
@@ -26,27 +37,33 @@ function getLanIpAddress(): string | null {
     if (!netList) continue;
     const lowerName = name.toLowerCase();
 
-    // Skip virtual adapters like WSL, Hyper-V, Docker, VMware, VirtualBox
+    // Skip virtual, tunnel, and link-local adapters
     if (
       lowerName.includes("vethernet") ||
       lowerName.includes("wsl") ||
       lowerName.includes("docker") ||
       lowerName.includes("vmware") ||
       lowerName.includes("vbox") ||
-      lowerName.includes("virtual")
+      lowerName.includes("virtual") ||
+      lowerName.includes("tailscale") ||
+      lowerName.includes("loopback")
     ) {
       continue;
     }
 
     for (const net of netList) {
       if (net.family === "IPv4" && !net.internal) {
+        // Never return APIPA/link-local (169.254.x.x) or non-LAN IPs
+        if (net.address.startsWith("169.254.") || !isPrivateLanIpv4(net.address)) {
+          continue;
+        }
         let priority = 3;
         if (lowerName.includes("wi-fi") || lowerName.includes("wlan")) {
           priority = 1;
         } else if (lowerName.includes("ethernet") || lowerName.includes("eth")) {
           priority = 2;
         }
-        if (net.address.startsWith("192.168.")) {
+        if (net.address.startsWith("192.168.") || net.address.startsWith("10.")) {
           priority -= 0.5;
         }
         candidates.push({ address: net.address, priority });
@@ -63,16 +80,30 @@ export async function GET(request: NextRequest) {
     globalForQrBridge.lastLaptopPollAt = Date.now();
   }
 
-  const lanIp = getLanIpAddress();
-  const hostHeader = request.headers.get("host") || "localhost:3001";
+  const hostHeader =
+    request.headers.get("x-forwarded-host") ||
+    request.headers.get("host") ||
+    "localhost:3001";
+  const hostnameOnly = hostHeader.split(":")[0].toLowerCase();
+  const isLocalHost =
+    hostnameOnly === "localhost" ||
+    hostnameOnly === "127.0.0.1" ||
+    isPrivateLanIpv4(hostnameOnly);
   const proto =
     request.headers.get("x-forwarded-proto") ||
-    (hostHeader.includes("localhost") || hostHeader.startsWith("192.168.")
-      ? "http"
-      : "https");
-  const lanBaseUrl = lanIp
-    ? `http://${lanIp}:${hostHeader.includes(":") ? hostHeader.split(":")[1] : "3001"}`
-    : `${proto}://${hostHeader}`;
+    (isLocalHost ? "http" : "https");
+
+  let lanBaseUrl = `${proto}://${hostHeader}`;
+  if (
+    !process.env.VERCEL &&
+    (hostnameOnly === "localhost" || hostnameOnly === "127.0.0.1")
+  ) {
+    const lanIp = getLanIpAddress();
+    if (lanIp) {
+      const port = hostHeader.includes(":") ? hostHeader.split(":")[1] : "3001";
+      lanBaseUrl = `http://${lanIp}:${port}`;
+    }
+  }
 
   let latestScan: QrScanBridgeEvent | null =
     globalForQrBridge.latestQrScanEvent &&

@@ -16,10 +16,18 @@ export function buildOrderQrTargetUrl(
   orderIdOrBag: string,
   baseUrl?: string
 ): string {
+  const browserOrigin =
+    typeof window !== "undefined" ? window.location.origin : "";
+  const isRemoteBrowserOrigin =
+    Boolean(browserOrigin) &&
+    !browserOrigin.includes("localhost") &&
+    !browserOrigin.includes("127.0.0.1");
   const root = (
     baseUrl ||
+    (isRemoteBrowserOrigin ? browserOrigin : "") ||
     process.env.NEXT_PUBLIC_APP_BASE_URL ||
-    (typeof window !== "undefined" ? window.location.origin : "http://localhost:3001")
+    browserOrigin ||
+    "http://localhost:3001"
   ).replace(/\/+$/, "");
   return `${root}/scan/${encodeURIComponent(orderIdOrBag)}`;
 }
