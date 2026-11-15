@@ -127,6 +127,19 @@ export async function POST(
           body.nonGoldOutWeight !== undefined && body.nonGoldOutWeight !== ""
             ? String(body.nonGoldOutWeight)
             : undefined,
+        extraMetalReturnedWeight:
+          body.extraMetalReturnedWeight !== undefined &&
+          body.extraMetalReturnedWeight !== ""
+            ? String(body.extraMetalReturnedWeight)
+            : undefined,
+        extraMetalTouchPercent:
+          body.extraMetalTouchPercent !== undefined &&
+          body.extraMetalTouchPercent !== ""
+            ? String(body.extraMetalTouchPercent)
+            : undefined,
+        extraMetalPurityId: body.extraMetalPurityId
+          ? String(body.extraMetalPurityId)
+          : undefined,
         custodyRetainedMetalWeight:
           body.custodyRetainedMetalWeight !== undefined &&
             body.custodyRetainedMetalWeight !== ""
@@ -145,6 +158,8 @@ export async function POST(
         visitId: res.visit.id,
         rawLossWeight: res.visit.rawLossWeight.toFixed(3),
         fineLossWeight: res.visit.fineLossWeight.toFixed(3),
+        extraMetalReturnedWeight: res.visit.extraMetalReturnedWeight.toFixed(3),
+        extraMetalFineWeight: res.visit.extraMetalFineWeight.toFixed(3),
       });
     }
 

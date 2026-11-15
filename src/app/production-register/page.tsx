@@ -43,6 +43,7 @@ interface RegisterProcessItem {
   status: "PENDING" | "IN_PROGRESS" | "PARTIAL_RETURN" | "CLOSED";
   issuedMetalWeight: string;
   returnedMetalWeight: string;
+  extraReturnedMetalWeight: string;
   closedLossWeight: string;
   custodyMetalWeight: string;
   carriedStoneInWeight: string;
@@ -120,6 +121,10 @@ interface RegisterOrderRow {
     grossOutWeight: string;
     nonGoldOutWeight: string;
     metalOutWeight: string;
+    extraMetalReturnedWeight: string;
+    extraMetalTouchPercent: string | null;
+    extraMetalPurityId: string | null;
+    extraMetalFineWeight: string;
     custodyRemainingWeight: string;
     rawLossWeight: string;
     fineLossWeight: string;
@@ -229,6 +234,13 @@ function ProductionRegisterContent() {
   const [quickKarigarName, setQuickKarigarName] = useState<string>("");
   const [grossInWeight, setGrossInWeight] = useState<string>("");
   const [grossOutWeight, setGrossOutWeight] = useState<string>("");
+  const [extraMetalReturnedWeight, setExtraMetalReturnedWeight] =
+    useState<string>("");
+  const [showExtraTouchOverride, setShowExtraTouchOverride] =
+    useState<boolean>(false);
+  const [extraMetalTouchPercent, setExtraMetalTouchPercent] =
+    useState<string>("");
+  const [showReturnHistory, setShowReturnHistory] = useState<boolean>(false);
   const [adWeight, setAdWeight] = useState<string>("");
   const [adPieces, setAdPieces] = useState<string>("");
   const [klWeight, setKlWeight] = useState<string>("");
@@ -412,6 +424,10 @@ function ProductionRegisterContent() {
           : selectedOrderRow.order.targetWeight || "";
       setGrossInWeight(suggestedIn);
       setGrossOutWeight("");
+      setExtraMetalReturnedWeight("");
+      setShowExtraTouchOverride(false);
+      setExtraMetalTouchPercent("");
+      setShowReturnHistory(false);
       setAdWeight("");
       setAdPieces("");
       setKlWeight("");
@@ -479,6 +495,9 @@ function ProductionRegisterContent() {
         : orderRow.order.targetWeight || "";
     setGrossInWeight(suggestedIn);
     setGrossOutWeight("");
+    setExtraMetalReturnedWeight("");
+    setShowExtraTouchOverride(false);
+    setExtraMetalTouchPercent("");
     setCloseProcess(true);
     setShowPartialReturn(false);
   }
@@ -691,6 +710,11 @@ function ProductionRegisterContent() {
             karigarId: selectedKarigarId,
             grossInWeight,
             grossOutWeight,
+            extraMetalReturnedWeight: extraMetalReturnedWeight || undefined,
+            extraMetalTouchPercent:
+              showExtraTouchOverride && extraMetalTouchPercent
+                ? extraMetalTouchPercent
+                : undefined,
             stoneComponents,
             closeProcess,
             custodyRetainedMetalWeight: closeProcess
@@ -1095,7 +1119,7 @@ function ProductionRegisterContent() {
     if (showFilingCols) {
       cols.push({
         id: "filing_group",
-        header: "Filing (Karigar | IN | OUT | Loss)",
+        header: "Filing (Karigar | IN | OUT | Extra Return (g) | Loss)",
         cell: ({ row }) => {
           const p = findProc(row.original, "FILING");
           if (!p) return <span className="text-slate-300">N/A</span>;
@@ -1155,6 +1179,17 @@ function ProductionRegisterContent() {
               <span className="text-slate-300">|</span>
               {renderProcessOutButton(row.original, p)}
               <span className="text-slate-300">|</span>
+              <span
+                className={`font-mono ${
+                  Number(p.extraReturnedMetalWeight || 0) > 0
+                    ? "text-emerald-700 font-semibold"
+                    : "text-slate-400"
+                }`}
+                title="Extra Metal Returned to Admin (g)"
+              >
+                {fmtCellWeight(p.extraReturnedMetalWeight)}
+              </span>
+              <span className="text-slate-300">|</span>
               <span className="font-mono font-semibold text-slate-800">
                 {p.status === "CLOSED"
                   ? fmtCellWeight(p.closedLossWeight)
@@ -1171,7 +1206,7 @@ function ProductionRegisterContent() {
     if (showFreePolishCols) {
       cols.push({
         id: "fp_group",
-        header: "Free Polish (Karigar | IN | OUT | Loss)",
+        header: "Free Polish (Karigar | IN | OUT | Extra Return (g) | Loss)",
         cell: ({ row }) => {
           const p = findProc(row.original, "FREE_POLISH");
           if (!p) return <span className="text-slate-300">N/A</span>;
@@ -1184,6 +1219,17 @@ function ProductionRegisterContent() {
               {renderProcessInButton(row.original, p, p.latestGrossInWeight)}
               <span className="text-slate-300">|</span>
               {renderProcessOutButton(row.original, p)}
+              <span className="text-slate-300">|</span>
+              <span
+                className={`font-mono ${
+                  Number(p.extraReturnedMetalWeight || 0) > 0
+                    ? "text-emerald-700 font-semibold"
+                    : "text-slate-400"
+                }`}
+                title="Extra Metal Returned to Admin (g)"
+              >
+                {fmtCellWeight(p.extraReturnedMetalWeight)}
+              </span>
               <span className="text-slate-300">|</span>
               <span className="font-mono font-semibold text-slate-800">
                 {p.status === "CLOSED"
@@ -1201,7 +1247,7 @@ function ProductionRegisterContent() {
     if (showSettingCols) {
       cols.push({
         id: "setting_group",
-        header: "Setting (Karigar | IN | AD | KL | Total IN | OUT | Loss)",
+        header: "Setting (Karigar | IN | AD | KL | Total IN | OUT | Extra Return (g) | Loss)",
         cell: ({ row }) => {
           const p = findProc(row.original, "SETTING");
           if (!p) return <span className="text-slate-300">N/A</span>;
@@ -1238,6 +1284,17 @@ function ProductionRegisterContent() {
               <span className="text-slate-300">|</span>
               {renderProcessOutButton(row.original, p)}
               <span className="text-slate-300">|</span>
+              <span
+                className={`font-mono ${
+                  Number(p.extraReturnedMetalWeight || 0) > 0
+                    ? "text-emerald-700 font-semibold"
+                    : "text-slate-400"
+                }`}
+                title="Extra Metal Returned to Admin (g)"
+              >
+                {fmtCellWeight(p.extraReturnedMetalWeight)}
+              </span>
+              <span className="text-slate-300">|</span>
               <span className="font-mono font-semibold text-slate-800">
                 {p.status === "CLOSED"
                   ? fmtCellWeight(p.closedLossWeight)
@@ -1254,7 +1311,7 @@ function ProductionRegisterContent() {
     if (showFinalPolishCols) {
       cols.push({
         id: "final_group",
-        header: "Final Polish (Karigar | IN | OUT | Loss)",
+        header: "Final Polish (Karigar | IN | OUT | Extra Return (g) | Loss)",
         cell: ({ row }) => {
           const p = findProc(row.original, "FINAL_POLISH");
           if (!p) return <span className="text-slate-300">N/A</span>;
@@ -1267,6 +1324,17 @@ function ProductionRegisterContent() {
               {renderProcessInButton(row.original, p, p.latestGrossInWeight)}
               <span className="text-slate-300">|</span>
               {renderProcessOutButton(row.original, p)}
+              <span className="text-slate-300">|</span>
+              <span
+                className={`font-mono ${
+                  Number(p.extraReturnedMetalWeight || 0) > 0
+                    ? "text-emerald-700 font-semibold"
+                    : "text-slate-400"
+                }`}
+                title="Extra Metal Returned to Admin (g)"
+              >
+                {fmtCellWeight(p.extraReturnedMetalWeight)}
+              </span>
               <span className="text-slate-300">|</span>
               <span className="font-mono font-semibold text-slate-800">
                 {p.status === "CLOSED"
@@ -1391,14 +1459,31 @@ function ProductionRegisterContent() {
   );
   const liveMetalIn = Math.max(0, Number(grossInWeight || 0) - liveStoneIn);
   const liveMetalOut = Math.max(0, Number(grossOutWeight || 0) - liveStoneOut);
-  const liveCustodyRetained = closeProcess
-    ? 0
-    : Number(custodyRetainedWeight || 0);
-  const liveRawLoss = liveMetalIn - liveMetalOut - liveCustodyRetained;
+  const liveExtraMetal = Math.max(0, Number(extraMetalReturnedWeight || 0));
   const liveTouch = selectedOrderRow
     ? Number(selectedOrderRow.order.touchSnapshot || 0)
     : 0;
-  const liveFineLoss = (liveRawLoss * liveTouch) / 100;
+  const liveExtraTouch =
+    showExtraTouchOverride && Number(extraMetalTouchPercent || 0) > 0
+      ? Number(extraMetalTouchPercent)
+      : liveTouch;
+  const liveExtraFine = (liveExtraMetal * liveExtraTouch) / 100;
+  const liveCustodyRetained = closeProcess
+    ? 0
+    : Number(custodyRetainedWeight || 0);
+  const liveFineLoss =
+    liveExtraTouch === liveTouch
+      ? ((liveMetalIn - liveMetalOut - liveExtraMetal - liveCustodyRetained) *
+          liveTouch) /
+        100
+      : ((liveMetalIn - liveMetalOut - liveCustodyRetained) * liveTouch) / 100 -
+        liveExtraFine;
+  const liveRawLoss =
+    liveExtraTouch === liveTouch
+      ? liveMetalIn - liveMetalOut - liveExtraMetal - liveCustodyRetained
+      : liveTouch > 0
+      ? liveFineLoss / (liveTouch / 100)
+      : 0;
 
   const allSelectedProcessesClosed =
     selectedOrderRow &&
@@ -1947,23 +2032,66 @@ function ProductionRegisterContent() {
                           />
                         </div>
                         {entryStep === "RECEIVE_WORK" ? (
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">
-                              {activeProcessObj.processType === "SETTING"
-                                ? "Setting OUT (g) *"
-                                : `${PROCESS_DISPLAY_LABELS[activeProcessObj.processType]} OUT (g) *`}
-                            </label>
-                            <input
-                              type="number"
-                              step="0.001"
-                              min="0"
-                              required
-                              value={grossOutWeight}
-                              onChange={(e) => setGrossOutWeight(e.target.value)}
-                              placeholder="19.600"
-                              className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-xs font-mono tabular-nums"
-                            />
-                          </div>
+                          <>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                {activeProcessObj.processType === "SETTING"
+                                  ? "Setting OUT (g) *"
+                                  : `${PROCESS_DISPLAY_LABELS[activeProcessObj.processType]} OUT (g) *`}
+                              </label>
+                              <input
+                                type="number"
+                                step="0.001"
+                                min="0"
+                                required
+                                value={grossOutWeight}
+                                onChange={(e) => setGrossOutWeight(e.target.value)}
+                                placeholder="19.600"
+                                className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-xs font-mono tabular-nums"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                Extra Metal Returned (g)
+                              </label>
+                              <input
+                                type="number"
+                                step="0.001"
+                                min="0"
+                                value={extraMetalReturnedWeight}
+                                onChange={(e) =>
+                                  setExtraMetalReturnedWeight(e.target.value)
+                                }
+                                placeholder="0.000"
+                                className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-xs font-mono tabular-nums"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setShowExtraTouchOverride((prev) => !prev)
+                                }
+                                className="mt-1 text-[10px] text-blue-700 underline cursor-pointer"
+                              >
+                                {showExtraTouchOverride
+                                  ? "Use order touch"
+                                  : "Different touch? (Advanced)"}
+                              </button>
+                              {showExtraTouchOverride && (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0.01"
+                                  max="100"
+                                  value={extraMetalTouchPercent}
+                                  onChange={(e) =>
+                                    setExtraMetalTouchPercent(e.target.value)
+                                  }
+                                  placeholder={`Touch % (${liveTouch}%)`}
+                                  className="mt-1 w-full px-2 py-1 text-[11px] bg-white border border-blue-300 rounded-xs font-mono tabular-nums"
+                                />
+                              )}
+                            </div>
+                          </>
                         ) : (
                           <div>
                             <label className="block text-xs font-semibold text-slate-500 mb-1">
@@ -2398,51 +2526,122 @@ function ProductionRegisterContent() {
                       )}
 
                       {/* Pre-Post Calculation Summary Box */}
-                      <div className="p-2.5 bg-white border border-slate-300 rounded-xs grid grid-cols-4 gap-2 text-xs font-mono tabular-nums">
-                        <div>
-                          <div className="text-[10px] text-slate-500">
-                            Net Metal IN
+                      <div className="p-2.5 bg-white border border-slate-300 rounded-xs space-y-2 text-xs font-mono tabular-nums">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <div>
+                            <div className="text-[10px] text-slate-500">
+                              Net Metal IN
+                            </div>
+                            <div className="font-bold">
+                              {liveMetalIn.toFixed(3)} g
+                            </div>
                           </div>
-                          <div className="font-bold">
-                            {liveMetalIn.toFixed(3)} g
+                          <div>
+                            <div className="text-[10px] text-slate-500">
+                              Stone / Non-Gold OUT
+                            </div>
+                            <div className="font-bold text-blue-800">
+                              {liveStoneOut.toFixed(3)} g
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-slate-500">
+                              Net Metal OUT
+                            </div>
+                            <div className="font-bold">
+                              {entryStep === "GIVE_WORK"
+                                ? "—"
+                                : `${liveMetalOut.toFixed(3)} g`}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-slate-500">
+                              {entryStep === "GIVE_WORK"
+                                ? "Loss Status"
+                                : "Process Gold Loss"}
+                            </div>
+                            <div
+                              className={`font-bold ${
+                                entryStep === "RECEIVE_WORK" && liveRawLoss < 0
+                                  ? "text-red-700"
+                                  : "text-slate-900"
+                              }`}
+                            >
+                              {entryStep === "GIVE_WORK"
+                                ? "Pending"
+                                : `${liveRawLoss.toFixed(3)} g (${liveFineLoss.toFixed(3)} g fine)`}
+                            </div>
                           </div>
                         </div>
-                        <div>
-                          <div className="text-[10px] text-slate-500">
-                            Stone / Non-Gold OUT
+                        {entryStep === "RECEIVE_WORK" && (
+                          <div className="pt-1.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11px] font-sans text-slate-700">
+                            <span>
+                              Jewellery returned:{" "}
+                              <strong className="font-mono">
+                                {liveMetalOut.toFixed(3)}g
+                              </strong>
+                            </span>
+                            <span>
+                              Gold back to admin:{" "}
+                              <strong className="font-mono text-emerald-800">
+                                {liveExtraMetal.toFixed(3)}g at {liveExtraTouch}%
+                              </strong>
+                            </span>
+                            <span>
+                              Process loss:{" "}
+                              <strong
+                                className={`font-mono ${
+                                  liveRawLoss < 0 ? "text-red-700" : "text-slate-900"
+                                }`}
+                              >
+                                {liveRawLoss.toFixed(3)}g
+                              </strong>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setShowReturnHistory((prev) => !prev)
+                              }
+                              className="text-blue-700 underline font-semibold cursor-pointer"
+                            >
+                              {showReturnHistory ? "Hide History" : "View History"}
+                            </button>
                           </div>
-                          <div className="font-bold text-blue-800">
-                            {liveStoneOut.toFixed(3)} g
+                        )}
+                        {entryStep === "RECEIVE_WORK" && showReturnHistory && (
+                          <div className="pt-1.5 border-t border-slate-200 space-y-1 text-[11px] font-sans">
+                            {(selectedOrderRow.visits || []).filter(
+                              (v) => v.orderProcessId === activeProcessObj.id
+                            ).length === 0 ? (
+                              <div className="text-slate-500">
+                                No returns recorded yet for{" "}
+                                {PROCESS_DISPLAY_LABELS[activeProcessObj.processType]}.
+                              </div>
+                            ) : (
+                              (selectedOrderRow.visits || [])
+                                .filter(
+                                  (v) => v.orderProcessId === activeProcessObj.id
+                                )
+                                .map((v) => (
+                                  <div
+                                    key={v.id}
+                                    className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-2 py-1 rounded-xs border border-slate-200"
+                                  >
+                                    <span>
+                                      #{v.visitNumber} •{" "}
+                                      {formatKolkataDateDDMMYYYY(v.businessDate)} •{" "}
+                                      {v.karigar?.name || "—"} ({v.status})
+                                    </span>
+                                    <span className="font-mono">
+                                      IN {v.metalInWeight}g | OUT {v.metalOutWeight}g |
+                                      Extra {v.extraMetalReturnedWeight}g | Loss{" "}
+                                      {v.rawLossWeight}g
+                                    </span>
+                                  </div>
+                                ))
+                            )}
                           </div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] text-slate-500">
-                            Net Metal OUT
-                          </div>
-                          <div className="font-bold">
-                            {entryStep === "GIVE_WORK"
-                              ? "—"
-                              : `${liveMetalOut.toFixed(3)} g`}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] text-slate-500">
-                            {entryStep === "GIVE_WORK"
-                              ? "Loss Status"
-                              : "Process Gold Loss"}
-                          </div>
-                          <div
-                            className={`font-bold ${
-                              entryStep === "RECEIVE_WORK" && liveRawLoss < 0
-                                ? "text-red-700"
-                                : "text-slate-900"
-                            }`}
-                          >
-                            {entryStep === "GIVE_WORK"
-                              ? "Pending"
-                              : `${liveRawLoss.toFixed(3)} g (${liveFineLoss.toFixed(3)} g fine)`}
-                          </div>
-                        </div>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2">

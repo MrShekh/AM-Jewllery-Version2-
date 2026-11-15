@@ -146,6 +146,7 @@ function mapOrderProcess(row: {
   status: OrderProcessEntity["status"];
   issuedMetalWeight: Prisma.Decimal;
   returnedMetalWeight: Prisma.Decimal;
+  extraReturnedMetalWeight: Prisma.Decimal;
   closedLossWeight: Prisma.Decimal;
   custodyMetalWeight: Prisma.Decimal;
   carriedStoneInWeight: Prisma.Decimal;
@@ -163,6 +164,7 @@ function mapOrderProcess(row: {
     ...row,
     issuedMetalWeight: toDecimal(row.issuedMetalWeight.toString()),
     returnedMetalWeight: toDecimal(row.returnedMetalWeight.toString()),
+    extraReturnedMetalWeight: toDecimal(row.extraReturnedMetalWeight.toString()),
     closedLossWeight: toDecimal(row.closedLossWeight.toString()),
     custodyMetalWeight: toDecimal(row.custodyMetalWeight.toString()),
     carriedStoneInWeight: toDecimal(row.carriedStoneInWeight.toString()),
@@ -189,6 +191,10 @@ function mapProcessVisit(row: {
   grossOutWeight: Prisma.Decimal;
   nonGoldOutWeight: Prisma.Decimal;
   metalOutWeight: Prisma.Decimal;
+  extraMetalReturnedWeight: Prisma.Decimal;
+  extraMetalTouchPercent: Prisma.Decimal | null;
+  extraMetalPurityId: string | null;
+  extraMetalFineWeight: Prisma.Decimal;
   custodyRemainingWeight: Prisma.Decimal;
   rawLossWeight: Prisma.Decimal;
   touchSnapshot: Prisma.Decimal;
@@ -207,6 +213,12 @@ function mapProcessVisit(row: {
     grossOutWeight: toDecimal(row.grossOutWeight.toString()),
     nonGoldOutWeight: toDecimal(row.nonGoldOutWeight.toString()),
     metalOutWeight: toDecimal(row.metalOutWeight.toString()),
+    extraMetalReturnedWeight: toDecimal(row.extraMetalReturnedWeight.toString()),
+    extraMetalTouchPercent: row.extraMetalTouchPercent
+      ? toDecimal(row.extraMetalTouchPercent.toString())
+      : null,
+    extraMetalPurityId: row.extraMetalPurityId,
+    extraMetalFineWeight: toDecimal(row.extraMetalFineWeight.toString()),
     custodyRemainingWeight: toDecimal(row.custodyRemainingWeight.toString()),
     rawLossWeight: toDecimal(row.rawLossWeight.toString()),
     touchSnapshot: toDecimal(row.touchSnapshot.toString()),
@@ -801,6 +813,7 @@ export class PrismaErpRepository implements ErpRepository {
             status: proc.status,
             issuedMetalWeight: proc.issuedMetalWeight.toFixed(6),
             returnedMetalWeight: proc.returnedMetalWeight.toFixed(6),
+            extraReturnedMetalWeight: proc.extraReturnedMetalWeight.toFixed(6),
             closedLossWeight: proc.closedLossWeight.toFixed(6),
             custodyMetalWeight: proc.custodyMetalWeight.toFixed(6),
             carriedStoneInWeight: proc.carriedStoneInWeight.toFixed(6),
@@ -821,6 +834,7 @@ export class PrismaErpRepository implements ErpRepository {
             status: proc.status,
             issuedMetalWeight: proc.issuedMetalWeight.toFixed(6),
             returnedMetalWeight: proc.returnedMetalWeight.toFixed(6),
+            extraReturnedMetalWeight: proc.extraReturnedMetalWeight.toFixed(6),
             closedLossWeight: proc.closedLossWeight.toFixed(6),
             custodyMetalWeight: proc.custodyMetalWeight.toFixed(6),
             carriedStoneInWeight: proc.carriedStoneInWeight.toFixed(6),
@@ -866,6 +880,12 @@ export class PrismaErpRepository implements ErpRepository {
             grossOutWeight: visit.grossOutWeight.toFixed(6),
             nonGoldOutWeight: visit.nonGoldOutWeight.toFixed(6),
             metalOutWeight: visit.metalOutWeight.toFixed(6),
+            extraMetalReturnedWeight: visit.extraMetalReturnedWeight.toFixed(6),
+            extraMetalTouchPercent: visit.extraMetalTouchPercent
+              ? visit.extraMetalTouchPercent.toFixed(4)
+              : null,
+            extraMetalPurityId: visit.extraMetalPurityId,
+            extraMetalFineWeight: visit.extraMetalFineWeight.toFixed(6),
             custodyRemainingWeight: visit.custodyRemainingWeight.toFixed(6),
             rawLossWeight: visit.rawLossWeight.toFixed(6),
             touchSnapshot: visit.touchSnapshot.toFixed(4),

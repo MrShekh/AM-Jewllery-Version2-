@@ -88,6 +88,7 @@ enum JournalTransactionType {
   FILING_UNUSED_RETURN
   FILING_CORRECTION
   CUSTOMER_CASH_RECEIPT_REVERSAL
+  EXTRA_METAL_RETURN
 }
 
 enum RecoveryReceiptStatus {
@@ -123,6 +124,7 @@ enum MetalMovementType {
   REVERSAL
   FILING_UNUSED_RETURN
   FILING_CORRECTION
+  EXTRA_METAL_RETURN
 }
 
 enum OrderDeliveryStatus {
@@ -458,9 +460,10 @@ model OrderProcess {
   assignedKarigarId     String?
   assignedKarigar       Karigar?           @relation(fields: [assignedKarigarId], references: [id])
   status                OrderProcessStatus @default(PENDING)
-  issuedMetalWeight     Decimal            @default(0) @db.Decimal(18, 6)
-  returnedMetalWeight   Decimal            @default(0) @db.Decimal(18, 6)
-  closedLossWeight      Decimal            @default(0) @db.Decimal(18, 6)
+  issuedMetalWeight        Decimal            @default(0) @db.Decimal(18, 6)
+  returnedMetalWeight      Decimal            @default(0) @db.Decimal(18, 6)
+  extraReturnedMetalWeight Decimal            @default(0) @db.Decimal(18, 6)
+  closedLossWeight         Decimal            @default(0) @db.Decimal(18, 6)
   custodyMetalWeight    Decimal            @default(0) @db.Decimal(18, 6)
   carriedStoneInWeight  Decimal            @default(0) @db.Decimal(18, 6)
   addedStoneWeight      Decimal            @default(0) @db.Decimal(18, 6)
@@ -502,8 +505,12 @@ model ProcessVisit {
   metalInWeight          Decimal            @default(0) @db.Decimal(18, 6)
   grossOutWeight         Decimal            @default(0) @db.Decimal(18, 6)
   nonGoldOutWeight       Decimal            @default(0) @db.Decimal(18, 6)
-  metalOutWeight         Decimal            @default(0) @db.Decimal(18, 6)
-  custodyRemainingWeight Decimal            @default(0) @db.Decimal(18, 6)
+  metalOutWeight           Decimal            @default(0) @db.Decimal(18, 6)
+  extraMetalReturnedWeight Decimal            @default(0) @db.Decimal(18, 6)
+  extraMetalTouchPercent   Decimal?           @db.Decimal(8, 4)
+  extraMetalPurityId       String?
+  extraMetalFineWeight     Decimal            @default(0) @db.Decimal(18, 6)
+  custodyRemainingWeight   Decimal            @default(0) @db.Decimal(18, 6)
   rawLossWeight          Decimal            @default(0) @db.Decimal(18, 6)
   touchSnapshot          Decimal            @db.Decimal(8, 4)
   fineLossWeight         Decimal            @default(0) @db.Decimal(18, 6)

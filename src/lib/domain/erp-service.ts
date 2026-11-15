@@ -158,6 +158,9 @@ export interface PostProcessEntryInput {
   nonGoldInWeight?: DecimalInput;
   grossOutWeight: DecimalInput;
   nonGoldOutWeight?: DecimalInput;
+  extraMetalReturnedWeight?: DecimalInput;
+  extraMetalTouchPercent?: DecimalInput;
+  extraMetalPurityId?: string;
   custodyRetainedMetalWeight?: DecimalInput;
   stoneComponents?: StoneComponentInput[];
   closeProcess?: boolean;
@@ -1222,6 +1225,7 @@ export class ErpDomainService {
           status: "PENDING",
           issuedMetalWeight: ZERO,
           returnedMetalWeight: ZERO,
+          extraReturnedMetalWeight: ZERO,
           closedLossWeight: ZERO,
           custodyMetalWeight: ZERO,
           carriedStoneInWeight: ZERO,
@@ -2321,54 +2325,178 @@ export class ErpDomainService {
         );
       }
 
+      const extraMetal =
+        input.extraMetalReturnedWeight !== undefined &&
+        input.extraMetalReturnedWeight !== ""
+          ? roundInternal(input.extraMetalReturnedWeight)
+          : ZERO;
+      if (extraMetal.lt(ZERO)) {
+        throw new ValidationError(
+          "Extra metal returned weight cannot be negative"
+        );
+      }
+
+      let extraTargetPurity = purity;
+      let extraTouch = roundTouch(activeOrder.touchSnapshot);
+      if (extraMetal.gt(ZERO)) {
+        if (input.extraMetalPurityId) {
+          const found = await tx.getPurityById(
+            validActor.organizationId,
+            input.extraMetalPurityId
+          );
+          if (!found) {
+            throw new NotFoundError(
+              `Extra metal purity ${input.extraMetalPurityId} not found`
+            );
+          }
+          extraTargetPurity = found;
+          extraTouch =
+            input.extraMetalTouchPercent !== undefined &&
+            input.extraMetalTouchPercent !== ""
+              ? roundTouch(input.extraMetalTouchPercent)
+              : roundTouch(found.touchPercent);
+        } else if (
+          input.extraMetalTouchPercent !== undefined &&
+          input.extraMetalTouchPercent !== ""
+        ) {
+          extraTouch = roundTouch(input.extraMetalTouchPercent);
+          if (!extraTouch.eq(roundTouch(purity.touchPercent))) {
+            const allPurities = await tx.listPurities(
+              validActor.organizationId
+            );
+            const matched = allPurities.find(
+              (p) => p.isActive && roundTouch(p.touchPercent).eq(extraTouch)
+            );
+            if (!matched) {
+              throw new ValidationError(
+                `No active purity category matches touch ${extraTouch.toFixed(
+                  2
+                )}%. Please select a target purity category.`
+              );
+            }
+            extraTargetPurity = matched;
+          }
+        }
+        if (extraTouch.lte(ZERO) || extraTouch.gt(new Decimal(100))) {
+          throw new ValidationError(
+            "Extra metal touch % must be greater than 0 and at most 100"
+          );
+        }
+      }
+
+      const extraFine = extraMetal.gt(ZERO)
+        ? calculateFineEquivalent(extraMetal, extraTouch)
+        : ZERO;
+      const isSameTouch =
+        extraMetal.isZero() ||
+        (extraTouch.eq(roundTouch(activeOrder.touchSnapshot)) &&
+          extraTargetPurity.id === purity.id);
+      const orderTouchRatio = roundTouch(activeOrder.touchSnapshot).div(100);
+      const extraOrderEquiv = isSameTouch
+        ? extraMetal
+        : roundInternal(extraFine.div(orderTouchRatio));
+
       const custodyRetained = closeProcess
         ? ZERO
         : input.custodyRetainedMetalWeight !== undefined
         ? roundInternal(input.custodyRetainedMetalWeight)
-        : roundInternal(metalIn.sub(metalOut));
+        : roundInternal(metalIn.sub(metalOut).sub(extraOrderEquiv));
 
       if (custodyRetained.lt(ZERO)) {
         throw new ValidationError("Custody retained metal weight cannot be negative");
       }
 
-      // Rule 8: Standard process calculation:
-      // processLoss = metalIn - metalOut - custodyRetained
-      const rawLoss = roundInternal(metalIn.sub(metalOut).sub(custodyRetained));
-
-      // Rule 8: Block unexplained negative loss (metalOut > metalIn). Never clamp to zero!
-      if (rawLoss.lt(ZERO)) {
-        throw new ValidationError(
-          `Unexplained weight gain / negative process loss (${rawLoss.toFixed(
-            3
-          )}g) is blocked: metalOut (${metalOut.toFixed(
-            3
-          )}g) + custodyRetained (${custodyRetained.toFixed(
-            3
-          )}g) exceeds metalIn (${metalIn.toFixed(3)}g)`
+      // Standard process calculation:
+      // Same touch: processLoss = metalIn - metalOut - extraMetal - custodyRetained
+      // Different touch: fineLoss = fine(metalIn) - fine(metalOut) - fine(extraMetal) - fine(custodyRetained)
+      let rawLoss: Decimal;
+      let fineLoss: Decimal;
+      if (isSameTouch) {
+        rawLoss = roundInternal(
+          metalIn.sub(metalOut).sub(extraMetal).sub(custodyRetained)
         );
+        if (rawLoss.lt(ZERO)) {
+          throw new ValidationError(
+            `Unexplained weight gain / negative process loss (${rawLoss.toFixed(
+              3
+            )}g) is blocked: metalOut (${metalOut.toFixed(
+              3
+            )}g) + extraMetalReturned (${extraMetal.toFixed(
+              3
+            )}g) + custodyRetained (${custodyRetained.toFixed(
+              3
+            )}g) exceeds metalIn (${metalIn.toFixed(3)}g)`
+          );
+        }
+        fineLoss = calculateFineEquivalent(rawLoss, activeOrder.touchSnapshot);
+      } else {
+        const metalInFine = calculateFineEquivalent(
+          metalIn,
+          activeOrder.touchSnapshot
+        );
+        const metalOutFine = calculateFineEquivalent(
+          metalOut,
+          activeOrder.touchSnapshot
+        );
+        const custodyRetainedFine = calculateFineEquivalent(
+          custodyRetained,
+          activeOrder.touchSnapshot
+        );
+        fineLoss = roundInternal(
+          metalInFine.sub(metalOutFine).sub(extraFine).sub(custodyRetainedFine)
+        );
+        if (fineLoss.lt(ZERO)) {
+          throw new ValidationError(
+            `Unexplained fine weight gain / negative process loss (${fineLoss.toFixed(
+              3
+            )}g fine) is blocked: returned fine + extra fine + custody fine exceeds metalIn fine (${metalInFine.toFixed(
+              3
+            )}g)`
+          );
+        }
+        rawLoss = roundInternal(fineLoss.div(orderTouchRatio));
       }
 
-      // Rule 8 Reconciliation check:
-      // issuedMetal = returnedMetal + closedProcessLoss + metalStillInCustody
+      // Reconciliation check:
+      // issuedMetal = returnedMetal + extraReturnedMetal + closedProcessLoss + metalStillInCustody
       const cumulativeReturned = roundInternal(
         currentProc.returnedMetalWeight.add(metalOut)
+      );
+      const cumulativeExtraReturned = roundInternal(
+        currentProc.extraReturnedMetalWeight.add(extraMetal)
       );
       const cumulativeLoss = roundInternal(
         currentProc.closedLossWeight.add(rawLoss)
       );
-      const reconciledSum = roundInternal(
-        cumulativeReturned.add(cumulativeLoss).add(custodyRetained)
-      );
-      if (!reconciledSum.eq(currentProc.issuedMetalWeight)) {
-        throw new ValidationError(
-          `Process reconciliation failed for ${currentProc.processType}: issuedMetal (${currentProc.issuedMetalWeight.toFixed(
-            3
-          )}g) != returnedMetal (${cumulativeReturned.toFixed(
-            3
-          )}g) + closedProcessLoss (${cumulativeLoss.toFixed(
-            3
-          )}g) + metalStillInCustody (${custodyRetained.toFixed(3)}g)`
+      if (isSameTouch && currentProc.extraReturnedMetalWeight.isZero()) {
+        const reconciledSum = roundInternal(
+          cumulativeReturned
+            .add(cumulativeExtraReturned)
+            .add(cumulativeLoss)
+            .add(custodyRetained)
         );
+        if (!reconciledSum.eq(currentProc.issuedMetalWeight)) {
+          throw new ValidationError(
+            `Process reconciliation failed for ${currentProc.processType}: issuedMetal (${currentProc.issuedMetalWeight.toFixed(
+              3
+            )}g) != returnedMetal (${cumulativeReturned.toFixed(
+              3
+            )}g) + extraReturned (${cumulativeExtraReturned.toFixed(
+              3
+            )}g) + closedProcessLoss (${cumulativeLoss.toFixed(
+              3
+            )}g) + metalStillInCustody (${custodyRetained.toFixed(3)}g)`
+          );
+        }
+      } else {
+        const expectedTotal = roundInternal(
+          metalOut.add(extraOrderEquiv).add(rawLoss).add(custodyRetained)
+        );
+        if (expectedTotal.sub(metalIn).abs().gt(new Decimal("0.002"))) {
+          throw new ValidationError(
+            `Process fine-equivalent reconciliation failed for ${currentProc.processType}`
+          );
+        }
       }
 
       if (closeProcess && !custodyRetained.isZero()) {
@@ -2378,8 +2506,6 @@ export class ErpDomainService {
           )}g remains in karigar custody`
         );
       }
-
-      const fineLoss = calculateFineEquivalent(rawLoss, activeOrder.touchSnapshot);
       const existingVisits = await tx.listProcessVisits(
         validActor.organizationId,
         activeOrder.id
@@ -2404,6 +2530,10 @@ export class ErpDomainService {
         grossOutWeight: grossOut,
         nonGoldOutWeight: nonGoldOut,
         metalOutWeight: metalOut,
+        extraMetalReturnedWeight: extraMetal,
+        extraMetalTouchPercent: extraMetal.gt(ZERO) ? extraTouch : null,
+        extraMetalPurityId: extraMetal.gt(ZERO) ? extraTargetPurity.id : null,
+        extraMetalFineWeight: extraFine,
         custodyRemainingWeight: custodyRetained,
         rawLossWeight: rawLoss,
         touchSnapshot: activeOrder.touchSnapshot,
@@ -2484,6 +2614,144 @@ export class ErpDomainService {
         });
       }
 
+      if (extraMetal.gt(ZERO)) {
+        const adminExtraPoolAcct = await this.ensureSystemAccount(
+          tx,
+          validActor.organizationId,
+          `ADMIN_POOL_${extraTargetPurity.code}`,
+          `Admin Stock Pool - ${extraTargetPurity.displayLabel}`,
+          "ADMIN_KARAT_POOL",
+          extraTargetPurity.id,
+          null
+        );
+        const freshKarigarCustody = (await tx.getStockAccountById(
+          validActor.organizationId,
+          karigarCustodyAcct.id
+        ))!;
+        let extraJtx: JournalTransactionEntity;
+        if (isSameTouch) {
+          extraJtx = await this.postBalancedJournalEntry(tx, {
+            organizationId: validActor.organizationId,
+            actorId: validActor.userId,
+            transactionType: "EXTRA_METAL_RETURN",
+            businessDate,
+            purity: extraTargetPurity,
+            physicalWeight: extraMetal,
+            fineEquivalentWeight: extraFine,
+            sourceAccount: freshKarigarCustody,
+            destinationAccount: adminExtraPoolAcct,
+            sourceReference: `BAG-${activeOrder.bagNumber}-${currentProc.processType}-EXTRA`,
+            reason: `Extra metal returned (${extraMetal.toFixed(3)}g @ ${extraTouch.toFixed(2)}%) from ${currentProc.processType} of Bag #${activeOrder.bagNumber}`,
+            orderId: activeOrder.id,
+            orderProcessId: currentProc.id,
+            processVisitId: visit.id,
+            karigarId: karigar.id,
+            idempotencyKey: `extra_ret_jnl_${input.idempotencyKey}`,
+          });
+        } else {
+          const existingExtraJtx =
+            await tx.getJournalTransactionByIdempotencyKey(
+              `extra_ret_jnl_${input.idempotencyKey}`
+            );
+          if (existingExtraJtx) {
+            extraJtx = existingExtraJtx;
+          } else {
+            const jtxId = newId("jtx");
+            extraJtx = await tx.createJournalTransaction({
+              id: jtxId,
+              organizationId: validActor.organizationId,
+              transactionNumber: `JNL-${now.getTime().toString().slice(-6)}-${jtxId.slice(-4).toUpperCase()}`,
+              transactionType: "EXTRA_METAL_RETURN",
+              businessDate,
+              purityId: extraTargetPurity.id,
+              touchSnapshot: extraTouch,
+              physicalWeight: extraMetal,
+              fineEquivalentWeight: extraFine,
+              sourceReference: `BAG-${activeOrder.bagNumber}-${currentProc.processType}-EXTRA`,
+              reason: `Extra metal returned (${extraMetal.toFixed(3)}g @ ${extraTouch.toFixed(2)}%, order touch ${activeOrder.touchSnapshot.toFixed(2)}%) from ${currentProc.processType} of Bag #${activeOrder.bagNumber}`,
+              orderId: activeOrder.id,
+              orderProcessId: currentProc.id,
+              processVisitId: visit.id,
+              karigarId: karigar.id,
+              idempotencyKey: `extra_ret_jnl_${input.idempotencyKey}`,
+              reversalOfTransactionId: null,
+              isReversed: false,
+              actorId: validActor.userId,
+              createdAt: now,
+            });
+            await tx.createJournalLine({
+              id: newId("jln"),
+              organizationId: validActor.organizationId,
+              journalTransactionId: extraJtx.id,
+              accountId: freshKarigarCustody.id,
+              direction: "CREDIT_OUT" as JournalLineDirection,
+              signedPhysicalDelta: extraOrderEquiv.negated(),
+              touchSnapshot: activeOrder.touchSnapshot,
+              signedFineDelta: extraFine.negated(),
+              orderId: activeOrder.id,
+              orderProcessId: currentProc.id,
+              karigarId: karigar.id,
+              description: `Extra metal return out from ${freshKarigarCustody.accountCode} (${extraFine.toFixed(3)}g fine)`,
+              createdAt: now,
+            });
+            await tx.updateStockAccountBalances(
+              freshKarigarCustody.id,
+              roundInternal(
+                freshKarigarCustody.cachedPhysicalBalance.sub(extraOrderEquiv)
+              ),
+              roundInternal(
+                freshKarigarCustody.cachedFineBalance.sub(extraFine)
+              )
+            );
+            await tx.createJournalLine({
+              id: newId("jln"),
+              organizationId: validActor.organizationId,
+              journalTransactionId: extraJtx.id,
+              accountId: adminExtraPoolAcct.id,
+              direction: "DEBIT_IN" as JournalLineDirection,
+              signedPhysicalDelta: extraMetal,
+              touchSnapshot: extraTouch,
+              signedFineDelta: extraFine,
+              orderId: activeOrder.id,
+              orderProcessId: currentProc.id,
+              karigarId: karigar.id,
+              description: `Extra metal return to ${adminExtraPoolAcct.accountCode} (${extraMetal.toFixed(3)}g @ ${extraTouch.toFixed(2)}%)`,
+              createdAt: now,
+            });
+            await tx.updateStockAccountBalances(
+              adminExtraPoolAcct.id,
+              roundInternal(
+                adminExtraPoolAcct.cachedPhysicalBalance.add(extraMetal)
+              ),
+              roundInternal(adminExtraPoolAcct.cachedFineBalance.add(extraFine))
+            );
+          }
+        }
+
+        await tx.createMetalMovement({
+          id: newId("mmov"),
+          organizationId: validActor.organizationId,
+          orderId: activeOrder.id,
+          orderProcessId: currentProc.id,
+          processVisitId: visit.id,
+          movementType: "EXTRA_METAL_RETURN",
+          fromProcessType: currentProc.processType,
+          toProcessType: null,
+          karigarId: karigar.id,
+          businessDate,
+          grossWeight: extraMetal,
+          nonGoldWeight: ZERO,
+          netMetalWeight: extraMetal,
+          touchSnapshot: extraTouch,
+          fineEquivalentWeight: extraFine,
+          journalTransactionId: extraJtx.id,
+          idempotencyKey: `mmov_extra_ret_${input.idempotencyKey}`,
+          notes: input.notes ?? `Extra metal returned (${extraTargetPurity.displayLabel})`,
+          createdById: validActor.userId,
+          createdAt: now,
+        });
+      }
+
       // Post Process Loss Record if rawLoss > 0 (or even 0 when closing a process so per-visit loss history is explicit)
       let lossRecord: ProcessLossRecordEntity | null = null;
       if (closeProcess || rawLoss.gt(ZERO)) {
@@ -2548,6 +2816,7 @@ export class ErpDomainService {
         assignedKarigarId: karigar.id,
         status: closeProcess ? "CLOSED" : "PARTIAL_RETURN",
         returnedMetalWeight: cumulativeReturned,
+        extraReturnedMetalWeight: cumulativeExtraReturned,
         closedLossWeight: cumulativeLoss,
         custodyMetalWeight: custodyRetained,
         carriedStoneInWeight: nonGoldIn,
@@ -2698,6 +2967,356 @@ export class ErpDomainService {
         lossRecord,
         order: updatedOrder,
       };
+    });
+  }
+
+  public async reverseProcessVisit(
+    actor: ActorContext,
+    input: {
+      orderId: string;
+      visitId: string;
+      reason: string;
+      businessDate?: string | Date;
+      idempotencyKey: string;
+    }
+  ): Promise<{
+    visit: ProcessVisitEntity;
+    process: OrderProcessEntity;
+    order: OrderEntity;
+  }> {
+    const validActor = this.assertRole(actor, ["OWNER_ADMIN"]);
+    const reason = input.reason?.trim();
+    if (!reason) {
+      throw new ValidationError("Reason is required to reverse a process visit");
+    }
+    const businessDate = parseBusinessDate(input.businessDate);
+
+    return this.repo.runInTransaction(async (tx) => {
+      const order = await tx.getOrderById(
+        validActor.organizationId,
+        input.orderId
+      );
+      if (!order) {
+        throw new NotFoundError(`Order ${input.orderId} not found`);
+      }
+      if (order.status === "COMPLETED" || order.status === "CANCELLED") {
+        throw new ConflictError(
+          `Cannot reverse a process visit on ${order.status} order Bag #${order.bagNumber}`
+        );
+      }
+
+      const visits = await tx.listProcessVisits(
+        validActor.organizationId,
+        order.id
+      );
+      const visit = visits.find((v) => v.id === input.visitId);
+      if (!visit) {
+        throw new NotFoundError(`Process visit ${input.visitId} not found`);
+      }
+
+      const processes = await tx.listOrderProcesses(
+        validActor.organizationId,
+        order.id
+      );
+      const currentProc = processes.find((p) => p.id === visit.orderProcessId);
+      if (!currentProc) {
+        throw new NotFoundError(`Order process ${visit.orderProcessId} not found`);
+      }
+
+      if (visit.status === "REVERSED") {
+        return { visit, process: currentProc, order };
+      }
+
+      const downstreamStarted = processes.some(
+        (p) =>
+          p.sequenceOrder > currentProc.sequenceOrder && p.status !== "PENDING"
+      );
+      if (downstreamStarted) {
+        throw new ConflictError(
+          `Cannot reverse ${currentProc.processType} visit: downstream process has already started`
+        );
+      }
+
+      const activeProcVisits = visits.filter(
+        (v) => v.orderProcessId === currentProc.id && v.status !== "REVERSED"
+      );
+      const latestActiveVisit = activeProcVisits[activeProcVisits.length - 1];
+      if (!latestActiveVisit || latestActiveVisit.id !== visit.id) {
+        throw new ConflictError(
+          "Only the latest active visit on a process can be reversed"
+        );
+      }
+
+      const lossRecords = await tx.listProcessLossRecords(
+        validActor.organizationId,
+        order.id
+      );
+      const visitLoss = lossRecords.find(
+        (lr) => lr.processVisitId === visit.id && lr.eligibilityStatus !== "VOIDED"
+      );
+      if (visitLoss) {
+        const allocations = await tx.listRecoveryAllocations(
+          validActor.organizationId,
+          { processLossRecordId: visitLoss.id }
+        );
+        if (allocations.some((a) => a.status === "ACTIVE")) {
+          throw new ConflictError(
+            "Loss has already been recovered; reverse those recovery settlements explicitly before reversing this process visit"
+          );
+        }
+        const writeOffs = await tx.listLossWriteOffs(
+          validActor.organizationId,
+          { processLossRecordId: visitLoss.id }
+        );
+        if (writeOffs.some((w) => w.status === "ACTIVE")) {
+          throw new ConflictError(
+            "Loss has already been written off; reverse those write-offs explicitly before reversing this process visit"
+          );
+        }
+      }
+
+      const purity = await tx.getPurityById(
+        validActor.organizationId,
+        order.purityId
+      );
+      if (!purity) {
+        throw new NotFoundError(`Purity ${order.purityId} not found`);
+      }
+
+      const karigarCustodyAcct = await this.ensureSystemAccount(
+        tx,
+        validActor.organizationId,
+        `KARIGAR_CUSTODY_${visit.karigarId}`,
+        `Karigar Custody - ${visit.karigarId}`,
+        "KARIGAR_CUSTODY",
+        null,
+        visit.karigarId
+      );
+
+      const now = new Date();
+      // 1. Reverse extra metal return if posted
+      if (visit.extraMetalReturnedWeight.gt(ZERO)) {
+        const extraPurity = visit.extraMetalPurityId
+          ? (await tx.getPurityById(
+              validActor.organizationId,
+              visit.extraMetalPurityId
+            )) ?? purity
+          : purity;
+        const adminExtraPoolAcct = await this.ensureSystemAccount(
+          tx,
+          validActor.organizationId,
+          `ADMIN_POOL_${extraPurity.code}`,
+          `Admin Stock Pool - ${extraPurity.displayLabel}`,
+          "ADMIN_KARAT_POOL",
+          extraPurity.id,
+          null
+        );
+        if (
+          adminExtraPoolAcct.cachedPhysicalBalance.lt(
+            visit.extraMetalReturnedWeight
+          )
+        ) {
+          throw new ValidationError(
+            `Insufficient downstream stock in ${extraPurity.displayLabel} (${adminExtraPoolAcct.cachedPhysicalBalance.toFixed(
+              3
+            )}g) to reverse extra metal return (${visit.extraMetalReturnedWeight.toFixed(
+              3
+            )}g)`
+          );
+        }
+        const extraTouch = visit.extraMetalTouchPercent ?? order.touchSnapshot;
+        const extraFine = visit.extraMetalFineWeight;
+        const orderTouchRatio = roundTouch(order.touchSnapshot).div(100);
+        const extraOrderEquiv =
+          extraPurity.id === purity.id &&
+          roundTouch(extraTouch).eq(roundTouch(order.touchSnapshot))
+            ? visit.extraMetalReturnedWeight
+            : roundInternal(extraFine.div(orderTouchRatio));
+
+        const revJtxId = newId("jtx");
+        const revJtx = await tx.createJournalTransaction({
+          id: revJtxId,
+          organizationId: validActor.organizationId,
+          transactionNumber: `JNL-${now.getTime().toString().slice(-6)}-${revJtxId.slice(-4).toUpperCase()}`,
+          transactionType: "CONTROLLED_REVERSAL",
+          businessDate,
+          purityId: extraPurity.id,
+          touchSnapshot: extraTouch,
+          physicalWeight: visit.extraMetalReturnedWeight,
+          fineEquivalentWeight: extraFine,
+          sourceReference: `REV-BAG-${order.bagNumber}-${currentProc.processType}-EXTRA`,
+          reason: `Reverse extra metal return (${visit.extraMetalReturnedWeight.toFixed(3)}g): ${reason}`,
+          orderId: order.id,
+          orderProcessId: currentProc.id,
+          processVisitId: visit.id,
+          karigarId: visit.karigarId,
+          idempotencyKey: `rev_extra_${input.idempotencyKey}`,
+          reversalOfTransactionId: null,
+          isReversed: false,
+          actorId: validActor.userId,
+          createdAt: now,
+        });
+        await tx.createJournalLine({
+          id: newId("jln"),
+          organizationId: validActor.organizationId,
+          journalTransactionId: revJtx.id,
+          accountId: adminExtraPoolAcct.id,
+          direction: "CREDIT_OUT" as JournalLineDirection,
+          signedPhysicalDelta: visit.extraMetalReturnedWeight.negated(),
+          touchSnapshot: extraTouch,
+          signedFineDelta: extraFine.negated(),
+          orderId: order.id,
+          orderProcessId: currentProc.id,
+          karigarId: visit.karigarId,
+          description: `Reverse extra metal return out from ${adminExtraPoolAcct.accountCode}`,
+          createdAt: now,
+        });
+        await tx.updateStockAccountBalances(
+          adminExtraPoolAcct.id,
+          roundInternal(
+            adminExtraPoolAcct.cachedPhysicalBalance.sub(
+              visit.extraMetalReturnedWeight
+            )
+          ),
+          roundInternal(adminExtraPoolAcct.cachedFineBalance.sub(extraFine))
+        );
+        const freshKarigar = (await tx.getStockAccountById(
+          validActor.organizationId,
+          karigarCustodyAcct.id
+        ))!;
+        await tx.createJournalLine({
+          id: newId("jln"),
+          organizationId: validActor.organizationId,
+          journalTransactionId: revJtx.id,
+          accountId: freshKarigar.id,
+          direction: "DEBIT_IN" as JournalLineDirection,
+          signedPhysicalDelta: extraOrderEquiv,
+          touchSnapshot: order.touchSnapshot,
+          signedFineDelta: extraFine,
+          orderId: order.id,
+          orderProcessId: currentProc.id,
+          karigarId: visit.karigarId,
+          description: `Restore karigar custody on extra return reversal`,
+          createdAt: now,
+        });
+        await tx.updateStockAccountBalances(
+          freshKarigar.id,
+          roundInternal(freshKarigar.cachedPhysicalBalance.add(extraOrderEquiv)),
+          roundInternal(freshKarigar.cachedFineBalance.add(extraFine))
+        );
+      }
+
+      // 2. Reverse process loss if posted
+      if (visitLoss) {
+        if (visit.rawLossWeight.gt(ZERO)) {
+          const lossPoolAcct = await this.ensureSystemAccount(
+            tx,
+            validActor.organizationId,
+            `PROCESS_LOSS_${purity.code}`,
+            `Process Loss Account - ${purity.displayLabel}`,
+            "PROCESS_LOSS",
+            purity.id,
+            null
+          );
+          const freshKarigar = (await tx.getStockAccountById(
+            validActor.organizationId,
+            karigarCustodyAcct.id
+          ))!;
+          await this.postBalancedJournalEntry(tx, {
+            organizationId: validActor.organizationId,
+            actorId: validActor.userId,
+            transactionType: "CONTROLLED_REVERSAL",
+            businessDate,
+            purity,
+            physicalWeight: visit.rawLossWeight,
+            fineEquivalentWeight: visit.fineLossWeight,
+            sourceAccount: lossPoolAcct,
+            destinationAccount: freshKarigar,
+            sourceReference: `REV-BAG-${order.bagNumber}-${currentProc.processType}-LOSS`,
+            reason: `Reverse process loss (${visit.rawLossWeight.toFixed(3)}g): ${reason}`,
+            orderId: order.id,
+            orderProcessId: currentProc.id,
+            processVisitId: visit.id,
+            karigarId: visit.karigarId,
+            idempotencyKey: `rev_loss_${input.idempotencyKey}`,
+          });
+        }
+        await tx.updateProcessLossRecord({
+          ...visitLoss,
+          eligibilityStatus: "VOIDED",
+          updatedAt: now,
+        });
+      }
+
+      const reversedVisit = await tx.updateProcessVisit({
+        ...visit,
+        status: "REVERSED",
+        updatedAt: now,
+      });
+
+      const restoredReturned = roundInternal(
+        currentProc.returnedMetalWeight.sub(visit.metalOutWeight)
+      );
+      const restoredExtra = roundInternal(
+        currentProc.extraReturnedMetalWeight.sub(visit.extraMetalReturnedWeight)
+      );
+      const restoredLoss = roundInternal(
+        currentProc.closedLossWeight.sub(visit.rawLossWeight)
+      );
+      const restoredCustody = roundInternal(
+        currentProc.issuedMetalWeight
+          .sub(restoredReturned)
+          .sub(restoredExtra)
+          .sub(restoredLoss)
+      );
+      const remainingActiveVisits = activeProcVisits.filter(
+        (v) => v.id !== visit.id
+      );
+
+      const updatedProc = await tx.updateOrderProcess({
+        ...currentProc,
+        status:
+          remainingActiveVisits.length > 0 ? "PARTIAL_RETURN" : "IN_PROGRESS",
+        returnedMetalWeight: restoredReturned,
+        extraReturnedMetalWeight: restoredExtra,
+        closedLossWeight: restoredLoss,
+        custodyMetalWeight: restoredCustody,
+        closedAt: null,
+        closedById: null,
+        updatedAt: now,
+      });
+
+      const updatedOrder = await tx.updateOrder({
+        ...order,
+        totalRawLossWeight: roundInternal(
+          order.totalRawLossWeight.sub(visit.rawLossWeight)
+        ),
+        totalFineLossWeight: roundInternal(
+          order.totalFineLossWeight.sub(visit.fineLossWeight)
+        ),
+        updatedAt: now,
+      });
+
+      await tx.createAuditEvent({
+        id: newId("aud"),
+        organizationId: validActor.organizationId,
+        actorId: validActor.userId,
+        entityType: "ProcessVisit",
+        entityId: visit.id,
+        action: "PROCESS_VISIT_REVERSED",
+        summary: `Reversed ${currentProc.processType} visit #${visit.visitNumber} for Bag #${order.bagNumber}: ${reason}`,
+        metadataJson: JSON.stringify({
+          orderId: order.id,
+          visitId: visit.id,
+          metalOutWeight: visit.metalOutWeight.toFixed(3),
+          extraMetalReturnedWeight: visit.extraMetalReturnedWeight.toFixed(3),
+          rawLossWeight: visit.rawLossWeight.toFixed(3),
+          reason,
+        }),
+        createdAt: now,
+      });
+
+      return { visit: reversedVisit, process: updatedProc, order: updatedOrder };
     });
   }
 

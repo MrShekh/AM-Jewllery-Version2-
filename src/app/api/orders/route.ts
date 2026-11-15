@@ -38,6 +38,7 @@ function serializeOrderRow(r: Awaited<ReturnType<typeof erpService.listRegisterO
       ...p,
       issuedMetalWeight: p.issuedMetalWeight.toFixed(3),
       returnedMetalWeight: p.returnedMetalWeight.toFixed(3),
+      extraReturnedMetalWeight: p.extraReturnedMetalWeight.toFixed(3),
       closedLossWeight: p.closedLossWeight.toFixed(3),
       custodyMetalWeight: p.custodyMetalWeight.toFixed(3),
       carriedStoneInWeight: p.carriedStoneInWeight.toFixed(3),
@@ -55,6 +56,12 @@ function serializeOrderRow(r: Awaited<ReturnType<typeof erpService.listRegisterO
       grossOutWeight: v.grossOutWeight.toFixed(3),
       nonGoldOutWeight: v.nonGoldOutWeight.toFixed(3),
       metalOutWeight: v.metalOutWeight.toFixed(3),
+      extraMetalReturnedWeight: v.extraMetalReturnedWeight.toFixed(3),
+      extraMetalTouchPercent: v.extraMetalTouchPercent
+        ? v.extraMetalTouchPercent.toFixed(4).replace(/\.?0+$/, "")
+        : null,
+      extraMetalPurityId: v.extraMetalPurityId,
+      extraMetalFineWeight: v.extraMetalFineWeight.toFixed(3),
       custodyRemainingWeight: v.custodyRemainingWeight.toFixed(3),
       rawLossWeight: v.rawLossWeight.toFixed(3),
       touchSnapshot: v.touchSnapshot.toFixed(4).replace(/\.?0+$/, ""),

@@ -491,6 +491,7 @@ export default function StockPage() {
     "KARIGAR_RECOVERY_RECEIPT",
     "CUSTOMER_GOLD_RECEIPT",
     "FILING_UNUSED_RETURN",
+    "EXTRA_METAL_RETURN",
     "STOCK_SALE_REVERSAL",
   ]);
 

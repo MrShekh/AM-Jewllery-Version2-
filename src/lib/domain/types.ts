@@ -77,7 +77,8 @@ export type JournalTransactionType =
   | "REFINING_BATCH"
   | "FILING_UNUSED_RETURN"
   | "FILING_CORRECTION"
-  | "CUSTOMER_CASH_RECEIPT_REVERSAL";
+  | "CUSTOMER_CASH_RECEIPT_REVERSAL"
+  | "EXTRA_METAL_RETURN";
 
 export type RecoveryReceiptStatus = "POSTED" | "REVERSED";
 export type RecoveryAllocationStatus = "ACTIVE" | "UNDONE" | "REVERSED_WITH_RECEIPT";
@@ -116,7 +117,8 @@ export type MetalMovementType =
   | "CUSTOMER_DELIVERY"
   | "REVERSAL"
   | "FILING_UNUSED_RETURN"
-  | "FILING_CORRECTION";
+  | "FILING_CORRECTION"
+  | "EXTRA_METAL_RETURN";
 
 export interface ActorContext {
   userId: string;
@@ -238,6 +240,7 @@ export interface OrderProcessEntity {
   status: OrderProcessStatus;
   issuedMetalWeight: Decimal;
   returnedMetalWeight: Decimal;
+  extraReturnedMetalWeight: Decimal;
   closedLossWeight: Decimal;
   custodyMetalWeight: Decimal;
   carriedStoneInWeight: Decimal;
@@ -267,6 +270,10 @@ export interface ProcessVisitEntity {
   grossOutWeight: Decimal;
   nonGoldOutWeight: Decimal;
   metalOutWeight: Decimal;
+  extraMetalReturnedWeight: Decimal;
+  extraMetalTouchPercent: Decimal | null;
+  extraMetalPurityId: string | null;
+  extraMetalFineWeight: Decimal;
   custodyRemainingWeight: Decimal;
   rawLossWeight: Decimal;
   touchSnapshot: Decimal;
