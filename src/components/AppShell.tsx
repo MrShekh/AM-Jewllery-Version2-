@@ -65,6 +65,54 @@ export const AppShell: React.FC<{
     installMutationCacheInvalidator();
   }, []);
 
+  // Global USB / Bluetooth 2D QR Scanner (keyboard-wedge) listener — works from any screen
+  useEffect(() => {
+    let buffer = "";
+    let lastKeyTime = 0;
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (
+        tag === "input" ||
+        tag === "textarea" ||
+        tag === "select" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastKeyTime > 120) {
+        buffer = "";
+      }
+      lastKeyTime = now;
+
+      if (e.key === "Enter") {
+        const scanned = buffer.trim();
+        buffer = "";
+        if (
+          scanned.length >= 3 &&
+          (/\/scan\//i.test(scanned) ||
+            /^bag-/i.test(scanned) ||
+            /[?&]order=/i.test(scanned))
+        ) {
+          e.preventDefault();
+          void handleResolveQrOrBagInput(scanned);
+        }
+        return;
+      }
+
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        buffer += e.key;
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
@@ -189,7 +237,7 @@ export const AppShell: React.FC<{
     };
 
     pollQrBridge();
-    const interval = setInterval(pollQrBridge, 4000);
+    const interval = setInterval(pollQrBridge, 2500);
     return () => {
       active = false;
       clearInterval(interval);
@@ -248,23 +296,28 @@ export const AppShell: React.FC<{
         };
         requestAnimationFrame(scanLoop);
       } else {
-        // Cross-browser fallback (Firefox / Safari) using jsQR + offscreen canvas
+        // Cross-browser fallback (Firefox / Safari) using downscaled canvas + jsQR (~8 fps)
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        const scanCanvasLoop = async () => {
+        let lastScanAt = 0;
+        const scanCanvasLoop = async (ts: number) => {
           if (!streamRef.current || !videoRef.current || !ctx) return;
-          const video = videoRef.current;
-          if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height, {
-              inversionAttempts: "dontInvert",
-            });
-            if (code?.data) {
-              await handleResolveQrOrBagInput(code.data);
-              return;
+          if (ts - lastScanAt >= 120) {
+            lastScanAt = ts;
+            const video = videoRef.current;
+            if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0) {
+              const scale = Math.min(1, 640 / video.videoWidth);
+              canvas.width = Math.round(video.videoWidth * scale);
+              canvas.height = Math.round(video.videoHeight * scale);
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: "dontInvert",
+              });
+              if (code?.data) {
+                await handleResolveQrOrBagInput(code.data);
+                return;
+              }
             }
           }
           if (streamRef.current) {

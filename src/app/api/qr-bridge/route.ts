@@ -65,15 +65,43 @@ export async function GET(request: NextRequest) {
 
   const lanIp = getLanIpAddress();
   const hostHeader = request.headers.get("host") || "localhost:3001";
-  const port = hostHeader.includes(":") ? hostHeader.split(":")[1] : "3001";
+  const proto =
+    request.headers.get("x-forwarded-proto") ||
+    (hostHeader.includes("localhost") || hostHeader.startsWith("192.168.")
+      ? "http"
+      : "https");
   const lanBaseUrl = lanIp
-    ? `http://${lanIp}:${port}`
-    : `http://${hostHeader}`;
+    ? `http://${lanIp}:${hostHeader.includes(":") ? hostHeader.split(":")[1] : "3001"}`
+    : `${proto}://${hostHeader}`;
+
+  let latestScan: QrScanBridgeEvent | null =
+    globalForQrBridge.latestQrScanEvent &&
+    Date.now() - globalForQrBridge.latestQrScanEvent.scannedAt < 30_000
+      ? globalForQrBridge.latestQrScanEvent
+      : null;
+
+  if (!latestScan) {
+    try {
+      const recentEvent = await prisma.auditEvent.findFirst({
+        where: {
+          entityType: "QR_SCAN_BRIDGE",
+          action: "QR_SCAN_RELAY",
+          createdAt: { gte: new Date(Date.now() - 30_000) },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      if (recentEvent?.metadataJson) {
+        latestScan = JSON.parse(recentEvent.metadataJson) as QrScanBridgeEvent;
+      }
+    } catch {
+      // ignore transient DB read error on poll
+    }
+  }
 
   return NextResponse.json({
     ok: true,
     lanBaseUrl,
-    latestScan: globalForQrBridge.latestQrScanEvent || null,
+    latestScan,
   });
 }
 
@@ -126,6 +154,18 @@ export async function POST(request: NextRequest) {
     };
 
     globalForQrBridge.latestQrScanEvent = event;
+
+    // Persist to Neon PostgreSQL so Vercel serverless instances share phone-to-laptop scans
+    await prisma.auditEvent.create({
+      data: {
+        organizationId: order.organizationId,
+        entityType: "QR_SCAN_BRIDGE",
+        entityId: order.id,
+        action: "QR_SCAN_RELAY",
+        summary: `QR scan relay for Bag #${order.bagNumber}`,
+        metadataJson: JSON.stringify(event),
+      },
+    });
 
     const hasActiveLaptopTab = Boolean(
       globalForQrBridge.lastLaptopPollAt &&
