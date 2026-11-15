@@ -2,6 +2,7 @@
 
 import React, { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Eye, EyeOff, Lock, Mail, ShieldCheck, Sparkles } from "lucide-react";
 import { sanitizeRedirectPath } from "@/lib/auth-redirect";
 import { invalidateClientCache, setCachedActor } from "@/lib/client-cache";
 
@@ -12,6 +13,7 @@ function LoginFormContent() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -48,91 +50,212 @@ function LoginFormContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-md bg-white border border-slate-200 rounded-sm shadow-xs p-6">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-5">
-          <div className="flex items-center gap-3">
+    <div className="min-h-screen flex flex-col lg:flex-row bg-[#FAF8F4] text-stone-900">
+      {/* Left Branded Atelier Panel */}
+      <div className="hidden lg:flex lg:w-[48%] relative overflow-hidden bg-[#121316] text-stone-100 flex-col justify-between p-12">
+        {/* Subtle gold radial aura & fine grid */}
+        <div
+          className="pointer-events-none absolute -top-28 -left-24 h-96 w-96 rounded-full opacity-25 blur-3xl"
+          style={{
+            background:
+              "radial-gradient(circle, #D4AF37 0%, rgba(212,175,55,0) 70%)",
+          }}
+        />
+        <div
+          className="pointer-events-none absolute -bottom-32 -right-24 h-[28rem] w-[28rem] rounded-full opacity-20 blur-3xl"
+          style={{
+            background:
+              "radial-gradient(circle, #B8860B 0%, rgba(184,134,11,0) 70%)",
+          }}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.05]"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, #D4AF37 1px, transparent 1px), linear-gradient(to bottom, #D4AF37 1px, transparent 1px)",
+            backgroundSize: "48px 48px",
+          }}
+        />
+
+        {/* Top Emblem */}
+        <div className="relative z-10 flex items-center gap-3.5">
+          <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-amber-200/20 to-amber-500/10 border border-amber-400/30 flex items-center justify-center p-2 shadow-inner">
             <img
               src="/am-logo-icon.png"
               alt="AM Jewellery"
-              className="w-10 h-12 object-contain shrink-0"
+              className="h-full w-full object-contain"
             />
-            <div>
-              <h1 className="text-base font-bold text-slate-900">
-                AM Jewellery ERP
-              </h1>
-              <p className="text-xs text-slate-600 mt-0.5">
-                Production Register, Bullion Journal &amp; Billing
-              </p>
+          </div>
+          <div>
+            <div className="text-sm font-semibold tracking-[0.2em] uppercase text-amber-300">
+              AM Jewellery
+            </div>
+            <div className="text-xs text-stone-400">
+              Workshop &amp; Bullion Ledger
             </div>
           </div>
-          <span className="text-[11px] font-mono px-2 py-0.5 bg-amber-50 border border-amber-300 rounded-xs text-amber-900 font-semibold">
-            V2
-          </span>
         </div>
 
-        {searchParams.get("redirect") && (
-          <div className="mb-4 p-2.5 bg-blue-50 border border-blue-200 rounded-xs text-xs text-blue-900">
-            Sign in to continue directly to:{" "}
-            <span className="font-mono font-semibold">{redirectTarget}</span>
-          </div>
-        )}
-
-        {error && (
-          <div className="mb-4 p-2.5 bg-red-50 border border-red-300 rounded-xs text-xs font-medium text-red-800">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-800 mb-1">
-              Email Address
-            </label>
-            <input
-              type="email"
-              required
-              autoFocus
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@amjewellers.local"
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xs focus:outline-none focus:ring-2 focus:ring-blue-600"
-            />
+        {/* Center Hero Copy */}
+        <div className="relative z-10 max-w-md space-y-6">
+          <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-[11px] font-medium text-amber-200">
+            <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+            <span>Precision Gold Manufacturing ERP</span>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-800 mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••••••"
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xs focus:outline-none focus:ring-2 focus:ring-blue-600"
-            />
+          <h2 className="text-3xl font-semibold tracking-tight text-white leading-snug">
+            Every gram accounted,{" "}
+            <span className="text-amber-300">from karigar bench to final bill.</span>
+          </h2>
+
+          <p className="text-sm text-stone-400 leading-relaxed">
+            Manage Filing, Polish, and Setting orders, track fine-gold equivalents,
+            recover karigar loss, and send PDF invoices directly to customers.
+          </p>
+
+          <div className="grid grid-cols-3 gap-3 pt-2">
+            <div className="rounded-lg border border-stone-800 bg-stone-900/70 p-3">
+              <div className="text-xs font-semibold text-amber-300">Orders</div>
+              <div className="mt-1 text-[11px] text-stone-400">
+                Bag QR &amp; live stage tracking
+              </div>
+            </div>
+            <div className="rounded-lg border border-stone-800 bg-stone-900/70 p-3">
+              <div className="text-xs font-semibold text-amber-300">Bullion</div>
+              <div className="mt-1 text-[11px] text-stone-400">
+                Touch-wise &amp; fine gold stock
+              </div>
+            </div>
+            <div className="rounded-lg border border-stone-800 bg-stone-900/70 p-3">
+              <div className="text-xs font-semibold text-amber-300">Billing</div>
+              <div className="mt-1 text-[11px] text-stone-400">
+                Customer dues &amp; PDF share
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="relative z-10 flex items-center justify-between text-[11px] text-stone-500 border-t border-stone-800/80 pt-5">
+          <span>AM Jewellers • Asia/Kolkata</span>
+          <span className="inline-flex items-center gap-1.5 text-stone-400">
+            <ShieldCheck className="h-3.5 w-3.5 text-amber-400" />
+            Encrypted Session Access
+          </span>
+        </div>
+      </div>
+
+      {/* Right Sign-In Panel */}
+      <div className="flex-1 flex items-center justify-center p-6 sm:p-10">
+        <div className="w-full max-w-md space-y-6">
+          {/* Mobile Brand Header */}
+          <div className="flex lg:hidden items-center justify-center gap-3 pb-2">
+            <div className="h-11 w-11 rounded-xl bg-[#121316] border border-amber-400/40 flex items-center justify-center p-2">
+              <img
+                src="/am-logo-icon.png"
+                alt="AM Jewellery"
+                className="h-full w-full object-contain"
+              />
+            </div>
+            <div>
+              <div className="text-base font-bold tracking-wide text-stone-900">
+                AM Jewellery
+              </div>
+              <div className="text-xs text-stone-500">
+                Workshop &amp; Bullion ERP
+              </div>
+            </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2 px-4 bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white text-xs font-semibold rounded-xs cursor-pointer"
-          >
-            {loading ? "Signing in..." : "Sign In to V2 Workspace"}
-          </button>
-        </form>
+          <div className="bg-white border border-stone-200/90 rounded-2xl shadow-[0_12px_40px_-12px_rgba(28,25,23,0.12)] p-7 sm:p-8 space-y-6">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <h1 className="text-xl font-bold tracking-tight text-stone-900">
+                  Welcome back
+                </h1>
+                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                  V2
+                </span>
+              </div>
+              <p className="text-xs text-stone-500">
+                Sign in with your workshop account to continue.
+              </p>
+            </div>
 
-        <div className="mt-5 pt-4 border-t border-slate-200 text-[11px] text-slate-600 space-y-1">
-          <div className="font-semibold text-slate-700">
-            Development Bootstrap Accounts (from .env / npm run db:seed):
+            {searchParams.get("redirect") && (
+              <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg text-xs text-amber-900">
+                Continue to:{" "}
+                <span className="font-mono font-semibold">{redirectTarget}</span>
+              </div>
+            )}
+
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-medium text-red-700">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <Mail className="h-4 w-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="email"
+                    required
+                    autoFocus
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@amjewellers.local"
+                    className="w-full pl-9 pr-3 py-2.5 text-sm bg-stone-50/60 border border-stone-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-600 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="h-4 w-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    className="w-full pl-9 pr-10 py-2.5 text-sm bg-stone-50/60 border border-stone-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-600 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-700 cursor-pointer"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-[#121316] hover:bg-stone-800 disabled:opacity-50 shadow-sm transition-all cursor-pointer flex items-center justify-center gap-2 border border-amber-500/30"
+              >
+                <span>{loading ? "Signing in..." : "Sign In"}</span>
+              </button>
+            </form>
           </div>
-          <div className="font-mono">
-            Admin: admin@amjewellers.local / ChangeMeAdmin!2026
-          </div>
-          <div className="font-mono">
-            Operator: operator@amjewellers.local / ChangeMeOperator!2026
-          </div>
+
+          <p className="text-center text-[11px] text-stone-400">
+            AM Jewellery ERP • Authorized Workshop Staff Only
+          </p>
         </div>
       </div>
     </div>
@@ -141,9 +264,14 @@ function LoginFormContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-xs">Loading login...</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-[#FAF8F4] text-xs text-stone-500">
+          Loading sign-in...
+        </div>
+      }
+    >
       <LoginFormContent />
     </Suspense>
   );
 }
-
