@@ -21,6 +21,7 @@ import {
   Camera,
   CheckCircle2,
 } from "lucide-react";
+import jsQR from "jsqr";
 import {
   clearAllClientCache,
   installMutationCacheInvalidator,
@@ -247,9 +248,30 @@ export const AppShell: React.FC<{
         };
         requestAnimationFrame(scanLoop);
       } else {
-        setScannerError(
-          "Your browser does not support live webcam QR detection. Scan the QR code using your phone camera or enter/scan the Bag Number below."
-        );
+        // Cross-browser fallback (Firefox / Safari) using jsQR + offscreen canvas
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        const scanCanvasLoop = async () => {
+          if (!streamRef.current || !videoRef.current || !ctx) return;
+          const video = videoRef.current;
+          if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: "dontInvert",
+            });
+            if (code?.data) {
+              await handleResolveQrOrBagInput(code.data);
+              return;
+            }
+          }
+          if (streamRef.current) {
+            requestAnimationFrame(scanCanvasLoop);
+          }
+        };
+        requestAnimationFrame(scanCanvasLoop);
       }
     } catch {
       setScannerError(
