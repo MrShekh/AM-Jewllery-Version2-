@@ -356,6 +356,8 @@ function BillingWorkspaceInner() {
     return null;
   }, []);
 
+  const hasAutoSelectedCustomerRef = React.useRef(false);
+
   useEffect(() => {
     void refreshWaStatus();
   }, [refreshWaStatus]);
@@ -420,8 +422,16 @@ function BillingWorkspaceInner() {
           setFineReceiptConvention(data.fineReceiptConvention);
         }
 
-        if (!customerId && data.customerSummaries && data.customerSummaries.length > 0) {
+        if (
+          !hasAutoSelectedCustomerRef.current &&
+          !customerId &&
+          data.customerSummaries &&
+          data.customerSummaries.length > 0
+        ) {
+          hasAutoSelectedCustomerRef.current = true;
           setCustomerId(data.customerSummaries[0].customerId);
+        } else {
+          hasAutoSelectedCustomerRef.current = true;
         }
         if (data.purities && data.purities.length > 0 && goldLines[0]?.purityId === "") {
           setGoldLines([
