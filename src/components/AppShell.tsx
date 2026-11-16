@@ -166,6 +166,11 @@ export const AppShell: React.FC<{
 
   const secondaryItems = [
     {
+      href: "/loss-checker",
+      label: "QR Loss Checker",
+      icon: QrCode,
+    },
+    {
       href: "/orders/new",
       label: "New Order",
       icon: PlusCircle,
@@ -457,7 +462,8 @@ export const AppShell: React.FC<{
                   className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xs text-xs font-medium transition-colors cursor-pointer ${
                     pathname.startsWith("/recovery") ||
                     pathname.startsWith("/reconciliation") ||
-                    pathname.startsWith("/orders/new")
+                    pathname.startsWith("/orders/new") ||
+                    pathname.startsWith("/loss-checker")
                       ? "bg-blue-50 text-blue-800 border border-blue-200"
                       : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                   }`}

@@ -485,6 +485,12 @@ export default function StockPage() {
     }
   }
 
+  const internalTransferTypes = new Set([
+    "PROCESS_CUSTODY_TRANSFER",
+    "PROCESS_LOSS_RECOGNITION",
+    "ORDER_COMPLETION_FINISHED_GOODS",
+    "BILL_POST_AND_DELIVER",
+  ]);
   const inTypes = new Set([
     "OPENING_BALANCE",
     "STOCK_RECEIPT",
@@ -1322,8 +1328,10 @@ export default function StockPage() {
               <div className="space-y-3 mt-4">
                 {history.map((entry) => {
                   const isPositive = inTypes.has(entry.transactionType);
+                  const isInternal = internalTransferTypes.has(entry.transactionType);
                   const weight = Number(entry.physicalWeight || 0);
                   const fine = Number(entry.fineEquivalentWeight || 0);
+                  const signPrefix = isInternal ? "" : isPositive ? "+" : "-";
                   return (
                     <div
                       key={entry.id}
@@ -1336,17 +1344,19 @@ export default function StockPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span
                           className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
-                            isPositive
+                            isInternal
+                              ? "bg-slate-200 text-slate-800"
+                              : isPositive
                               ? "bg-green-100 text-green-800"
                               : "bg-red-100 text-red-800"
                           }`}
                         >
-                          {isPositive ? "+" : "-"}
+                          {isInternal ? "Moved " : signPrefix}
                           {weight.toFixed(2)}g @ {entry.purityLabel}
                         </span>
                         <span className="text-xs text-gray-500">
-                          (Fine: {isPositive ? "+" : "-"}
-                          {fine.toFixed(2)}g)
+                          (Fine: {signPrefix}
+                          {fine.toFixed(2)}g{isInternal ? " • internal" : ""})
                         </span>
                         {showTechDetails && (
                           <span className="text-xs font-mono text-gray-400">
