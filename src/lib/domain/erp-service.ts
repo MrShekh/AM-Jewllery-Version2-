@@ -1111,10 +1111,7 @@ export class ErpDomainService {
     if (!bagNumber) {
       throw new ValidationError("Bag / Order Number is required");
     }
-    const orderName = input.orderName?.trim();
-    if (!orderName) {
-      throw new ValidationError("Order name / item description is required");
-    }
+    const orderName = input.orderName?.trim() || "Pending Item";
     if (!input.selectedProcesses || input.selectedProcesses.length === 0) {
       throw new ValidationError(
         "At least one manufacturing process must be selected for the order"
@@ -1257,6 +1254,121 @@ export class ErpDomainService {
       });
 
       return { order, processes: createdProcesses };
+    });
+  }
+
+  public async updateOrderDetails(
+    actor: ActorContext,
+    input: {
+      orderId: string;
+      customerId?: string;
+      orderName?: string;
+      purityId?: string;
+      targetWeight?: DecimalInput | null;
+      size?: string | null;
+      orderDate?: string | Date;
+      dueDate?: string | Date | null;
+      notes?: string | null;
+      photoUrl?: string | null;
+      adDetailsJson?: string | null;
+    }
+  ): Promise<OrderEntity> {
+    const validActor = this.assertRole(actor, ["OWNER_ADMIN", "OPERATOR"]);
+    return this.repo.runInTransaction(async (tx) => {
+      const order = await tx.getOrderById(
+        validActor.organizationId,
+        input.orderId
+      );
+      if (!order) {
+        throw new NotFoundError(`Order ${input.orderId} not found`);
+      }
+      if (order.status === "CANCELLED") {
+        throw new ConflictError("Cannot edit a cancelled order");
+      }
+
+      let nextCustomerId = order.customerId;
+      if (input.customerId && input.customerId !== order.customerId) {
+        const cust = await tx.getCustomerById(
+          validActor.organizationId,
+          input.customerId
+        );
+        if (!cust) {
+          throw new NotFoundError(`Customer ${input.customerId} not found`);
+        }
+        nextCustomerId = cust.id;
+      }
+
+      let nextPurityId = order.purityId;
+      let nextTouch = order.touchSnapshot;
+      if (input.purityId && input.purityId !== order.purityId) {
+        if (order.initialIssuedMetalWeight.gt(ZERO)) {
+          throw new ConflictError(
+            "Cannot change order purity after metal has already been issued"
+          );
+        }
+        const purity = await tx.getPurityById(
+          validActor.organizationId,
+          input.purityId
+        );
+        if (!purity) {
+          throw new NotFoundError(`Purity ${input.purityId} not found`);
+        }
+        nextPurityId = purity.id;
+        nextTouch = purity.touchPercent;
+      }
+
+      const nextTargetWeight =
+        input.targetWeight === undefined
+          ? order.targetWeight
+          : input.targetWeight === null || input.targetWeight === ""
+          ? null
+          : roundInternal(input.targetWeight);
+
+      const updated = await tx.updateOrder({
+        ...order,
+        customerId: nextCustomerId,
+        orderName:
+          input.orderName !== undefined
+            ? input.orderName.trim() || "Pending Item"
+            : order.orderName,
+        purityId: nextPurityId,
+        touchSnapshot: nextTouch,
+        targetWeight: nextTargetWeight,
+        size: input.size !== undefined ? input.size?.trim() || null : order.size,
+        orderDate:
+          input.orderDate !== undefined
+            ? parseBusinessDate(input.orderDate)
+            : order.orderDate,
+        dueDate:
+          input.dueDate === undefined
+            ? order.dueDate
+            : input.dueDate
+            ? parseBusinessDate(input.dueDate)
+            : null,
+        notes:
+          input.notes !== undefined ? input.notes?.trim() || null : order.notes,
+        photoUrl:
+          input.photoUrl !== undefined ? input.photoUrl || null : order.photoUrl,
+        adDetailsJson:
+          input.adDetailsJson !== undefined
+            ? input.adDetailsJson || null
+            : order.adDetailsJson,
+        updatedAt: new Date(),
+      });
+
+      await tx.createAuditEvent({
+        id: newId("aud"),
+        organizationId: validActor.organizationId,
+        actorId: validActor.userId,
+        entityType: "Order",
+        entityId: order.id,
+        action: "ORDER_DETAILS_UPDATED",
+        summary: `Updated details for Bag #${order.bagNumber} (${updated.orderName})`,
+        metadataJson: null,
+        createdAt: new Date(),
+      });
+
+      return updated;
     });
   }
 
@@ -4449,12 +4561,17 @@ export class ErpDomainService {
           if (!hasProc) return false;
         }
         if (filters?.search && filters.search.trim()) {
-          const q = filters.search.trim().toLowerCase();
-          const matchBag = r.order.bagNumber.toLowerCase().includes(q);
-          const matchOrder = r.order.orderName.toLowerCase().includes(q);
-          const matchCustomer = r.customer.name.toLowerCase().includes(q);
+          const rawQ = filters.search.trim().toLowerCase();
+          const q = rawQ.replace(/^bag\s*#?/i, "").replace(/^#/, "").trim();
+          const matchBag =
+            r.order.bagNumber.toLowerCase().includes(rawQ) ||
+            (q.length > 0 && r.order.bagNumber.toLowerCase().includes(q));
+          const matchOrder = r.order.orderName.toLowerCase().includes(rawQ);
+          const matchCustomer =
+            r.customer.name.toLowerCase().includes(rawQ) ||
+            r.customer.customerCode.toLowerCase().includes(rawQ);
           const matchKarigar = r.processes.some(
-            (p) => p.karigar && p.karigar.name.toLowerCase().includes(q)
+            (p) => p.karigar && p.karigar.name.toLowerCase().includes(rawQ)
           );
           if (!matchBag && !matchOrder && !matchCustomer && !matchKarigar) {
             return false;
@@ -11447,7 +11564,10 @@ export class ErpDomainService {
       const updated = await tx.updateKarigar({
         ...existing,
         name: input.name !== undefined ? input.name.trim() : existing.name,
-        phone: input.phone !== undefined ? input.phone : existing.phone,
+        phone:
+          input.phone !== undefined
+            ? input.phone?.trim() || null
+            : existing.phone,
         specializationNotes:
           input.specializationNotes !== undefined
             ? input.specializationNotes

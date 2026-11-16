@@ -118,11 +118,11 @@ export const ManufacturingWorksheetPreview: React.FC<
 
   return (
     <div
-      className="bg-white p-2 rounded-lg shadow-lg border border-gray-300 relative text-black"
+      className="bg-white p-2 rounded-lg shadow-lg border border-gray-300 relative text-black break-inside-avoid"
       style={{
         fontFamily: "Arial, sans-serif",
         fontSize: "10px",
-        width: "400px",
+        width: "345px",
       }}
     >
       {/* Top Header */}
@@ -191,21 +191,21 @@ export const ManufacturingWorksheetPreview: React.FC<
           <div className="p-1 border-r border-black font-bold text-xs">
             FAILING
           </div>
+          <div className="p-1 border-r border-black h-10"></div>
+          <div className="p-1 border-r border-black h-10"></div>
+          <div className="p-1 border-r border-black h-10"></div>
+          <div className="p-1 border-r border-black h-10"></div>
+          <div className="p-1 h-10"></div>
+        </div>
+
+        {/* Empty Row after FAILING */}
+        <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
+          <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 h-8"></div>
-        </div>
-
-        {/* Empty Row after FAILING */}
-        <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
-          <div className="p-1 border-r border-black h-6"></div>
-          <div className="p-1 border-r border-black h-6"></div>
-          <div className="p-1 border-r border-black h-6"></div>
-          <div className="p-1 border-r border-black h-6"></div>
-          <div className="p-1 border-r border-black h-6"></div>
-          <div className="p-1 h-6"></div>
         </div>
 
         {/* F PALISH */}
@@ -213,21 +213,21 @@ export const ManufacturingWorksheetPreview: React.FC<
           <div className="p-1 border-r border-black font-bold text-xs">
             F PALISH
           </div>
+          <div className="p-1 border-r border-black h-10"></div>
+          <div className="p-1 border-r border-black h-10"></div>
+          <div className="p-1 border-r border-black h-10"></div>
+          <div className="p-1 border-r border-black h-10"></div>
+          <div className="p-1 h-10"></div>
+        </div>
+
+        {/* Empty Row after F PALISH */}
+        <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
+          <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 border-r border-black h-8"></div>
           <div className="p-1 h-8"></div>
-        </div>
-
-        {/* Empty Row after F PALISH */}
-        <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
-          <div className="p-1 border-r border-black h-6"></div>
-          <div className="p-1 border-r border-black h-6"></div>
-          <div className="p-1 border-r border-black h-6"></div>
-          <div className="p-1 border-r border-black h-6"></div>
-          <div className="p-1 border-r border-black h-6"></div>
-          <div className="p-1 h-6"></div>
         </div>
 
         {/* QR Code placed directly above the product image in the right column */}
@@ -243,7 +243,7 @@ export const ManufacturingWorksheetPreview: React.FC<
             <img
               src={qrDataUrl}
               alt={`QR Code for Bag ${qrCodeBagNumber || orderNumber}`}
-              className="w-[70px] h-[70px] object-contain block"
+              className="w-[62px] h-[62px] object-contain block"
             />
           </div>
         )}
@@ -256,11 +256,11 @@ export const ManufacturingWorksheetPreview: React.FC<
           <div className="p-1 border-r border-black font-bold text-xs">
             SETTING
           </div>
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 h-8"></div>
+          <div className="p-1 border-r border-black h-10"></div>
+          <div className="p-1 border-r border-black h-10"></div>
+          <div className="p-1 border-r border-black h-10"></div>
+          <div className="p-1 border-r border-black h-10"></div>
+          <div className="p-1 h-10"></div>
         </div>
 
         {/* AD Row - Blue Background */}
@@ -268,11 +268,11 @@ export const ManufacturingWorksheetPreview: React.FC<
           <div className="p-1 border-r border-black font-bold text-center text-xs">
             AD
           </div>
-          <div className="p-1 border-r border-black h-6"></div>
-          <div className="p-1 border-r border-black h-6"></div>
-          <div className="p-1 border-r border-black h-6"></div>
-          <div className="p-1 border-r border-black h-6"></div>
-          <div className="p-1 h-6 bg-white"></div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 border-r border-black h-8"></div>
+          <div className="p-1 h-8 bg-white"></div>
         </div>
 
         {/* Product Image spanning SETTING and AD rows */}
@@ -281,7 +281,7 @@ export const ManufacturingWorksheetPreview: React.FC<
             className="absolute top-0 right-0 flex items-center justify-center border-l border-black bg-white"
             style={{
               width: "20%",
-              height: "56px",
+              height: "72px",
               padding: "2px",
             }}
           >
@@ -300,15 +300,15 @@ export const ManufacturingWorksheetPreview: React.FC<
         <div className="p-1 border-r border-black font-bold text-center text-xs">
           KL
         </div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 h-6 flex items-center justify-center bg-white">
-          <div className="text-center">
-            <div className="text-xs font-bold text-red-600">WT-</div>
+        <div className="p-1 border-r border-black h-8"></div>
+        <div className="p-1 border-r border-black h-8"></div>
+        <div className="p-1 border-r border-black h-8"></div>
+        <div className="p-1 border-r border-black h-8"></div>
+        <div className="p-1 h-8 flex items-center justify-center bg-white">
+          <div className="text-center leading-tight">
+            <div className="text-[11px] font-bold text-red-600">WT-</div>
             {weightInGrams > 0 && (
-              <div className="text-xs font-bold text-blue-600">
+              <div className="text-[11px] font-bold text-blue-600">
                 {weightInGrams}g
               </div>
             )}
@@ -321,21 +321,21 @@ export const ManufacturingWorksheetPreview: React.FC<
         <div className="p-1 border-r border-black font-bold text-center text-xs">
           TOTAL
         </div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 h-6 bg-white"></div>
+        <div className="p-1 border-r border-black h-7"></div>
+        <div className="p-1 border-r border-black h-7"></div>
+        <div className="p-1 border-r border-black h-7"></div>
+        <div className="p-1 border-r border-black h-7"></div>
+        <div className="p-1 h-7 bg-white"></div>
       </div>
 
       {/* Empty Row after TOTAL */}
       <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 border-r border-black h-6"></div>
-        <div className="p-1 h-6 text-center font-bold text-xs flex items-center justify-center">
+        <div className="p-1 border-r border-black h-7"></div>
+        <div className="p-1 border-r border-black h-7"></div>
+        <div className="p-1 border-r border-black h-7"></div>
+        <div className="p-1 border-r border-black h-7"></div>
+        <div className="p-1 border-r border-black h-7"></div>
+        <div className="p-1 h-7 text-center font-bold text-[11px] flex items-center justify-center">
           FENESH WT
         </div>
       </div>
@@ -345,11 +345,11 @@ export const ManufacturingWorksheetPreview: React.FC<
         <div className="p-1 border-r border-black font-bold text-center text-xs">
           PALISH
         </div>
-        <div className="p-1 border-r border-black h-8"></div>
-        <div className="p-1 border-r border-black h-8"></div>
-        <div className="p-1 border-r border-black h-8"></div>
-        <div className="p-1 border-r border-black h-8"></div>
-        <div className="p-1 h-8 bg-white"></div>
+        <div className="p-1 border-r border-black h-10"></div>
+        <div className="p-1 border-r border-black h-10"></div>
+        <div className="p-1 border-r border-black h-10"></div>
+        <div className="p-1 border-r border-black h-10"></div>
+        <div className="p-1 h-10 bg-white"></div>
       </div>
 
       {/* AD Details Header */}

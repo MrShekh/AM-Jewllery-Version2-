@@ -154,28 +154,37 @@ function DirectoryContent() {
     }
   }
 
+  const [savingKarigarEdit, setSavingKarigarEdit] = useState(false);
+
   async function handleSaveKarigarEdit(e: React.FormEvent) {
     e.preventDefault();
-    if (!editingKarigar) return;
+    if (!editingKarigar || savingKarigarEdit) return;
     setError(null);
-    const res = await fetch("/api/karigars", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        karigarId: editingKarigar.id,
-        name: editingKarigar.name,
-        phone: editingKarigar.phone,
-        capabilities: editingKarigar.capabilities,
-        defaultForProcesses: editingKarigar.defaultForProcesses ?? [],
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      setError(data.error || "Failed to save karigar");
-    } else {
-      setEditingKarigar(null);
-      setMessage(`Updated ${data.karigar.name}`);
-      await loadData();
+    setSavingKarigarEdit(true);
+    try {
+      const res = await fetch("/api/karigars", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          karigarId: editingKarigar.id,
+          name: editingKarigar.name,
+          phone: editingKarigar.phone?.trim() || null,
+          capabilities: editingKarigar.capabilities,
+          defaultForProcesses: editingKarigar.defaultForProcesses ?? [],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setError(data.error || "Failed to save karigar");
+      } else {
+        setEditingKarigar(null);
+        setMessage(`Updated ${data.karigar.name}`);
+        await loadData(true);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save karigar");
+    } finally {
+      setSavingKarigarEdit(false);
     }
   }
   const [karCode, setKarCode] = useState("");
@@ -982,9 +991,10 @@ function DirectoryContent() {
                 </button>
                 <button
                   type="submit"
-                  className="px-3 py-1.5 bg-blue-700 text-white font-semibold rounded-xs"
+                  disabled={savingKarigarEdit}
+                  className="px-3 py-1.5 bg-blue-700 text-white font-semibold rounded-xs cursor-pointer disabled:opacity-60"
                 >
-                  Save Changes
+                  {savingKarigarEdit ? "Saving..." : "Save Changes"}
                 </button>
               </div>
             </form>

@@ -2,6 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireServerActor } from "@/lib/auth";
 import { handleApiError } from "@/lib/api-response";
 import { erpService, ProcessType } from "@/lib/domain";
+import { prisma } from "@/lib/prisma";
+
+function computeNextBagNumber(bagNumbers: string[]): string {
+  let maxNum = 100;
+  for (const bn of bagNumbers) {
+    const trimmed = bn.trim();
+    if (/^\d+$/.test(trimmed)) {
+      const n = Number.parseInt(trimmed, 10);
+      if (Number.isFinite(n) && n > maxNum) {
+        maxNum = n;
+      }
+    }
+  }
+  return String(maxNum + 1);
+}
 
 function serializeOrderRow(r: Awaited<ReturnType<typeof erpService.listRegisterOrders>>["rows"][number]) {
   return {
@@ -95,6 +110,16 @@ export async function GET(req: NextRequest) {
   try {
     const actor = await requireServerActor();
     const sp = req.nextUrl.searchParams;
+    if (sp.get("meta") === "next_bag") {
+      const existing = await prisma.order.findMany({
+        where: { organizationId: actor.organizationId },
+        select: { bagNumber: true },
+      });
+      return NextResponse.json({
+        ok: true,
+        nextBagNumber: computeNextBagNumber(existing.map((o) => o.bagNumber)),
+      });
+    }
     const monthKey = sp.get("monthKey") || undefined;
     const search = sp.get("search") || undefined;
     const status = sp.get("status") || undefined;
@@ -150,6 +175,35 @@ export async function POST(req: NextRequest) {
       ok: true,
       orderId: created.order.id,
       bagNumber: created.order.bagNumber,
+    });
+  } catch (err) {
+    return handleApiError(err);
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const actor = await requireServerActor(["OWNER_ADMIN", "OPERATOR"]);
+    const body = await req.json();
+    const updated = await erpService.updateOrderDetails(actor, {
+      orderId: String(body.orderId || ""),
+      customerId: body.customerId ? String(body.customerId) : undefined,
+      orderName: body.orderName !== undefined ? String(body.orderName) : undefined,
+      purityId: body.purityId ? String(body.purityId) : undefined,
+      targetWeight: body.targetWeight,
+      size: body.size,
+      orderDate: body.orderDate,
+      dueDate: body.dueDate,
+      notes: body.notes,
+      photoUrl: body.photoUrl,
+      adDetailsJson: body.adDetails
+        ? JSON.stringify(body.adDetails)
+        : body.adDetailsJson,
+    });
+    return NextResponse.json({
+      ok: true,
+      orderId: updated.id,
+      orderName: updated.orderName,
     });
   } catch (err) {
     return handleApiError(err);

@@ -50,6 +50,7 @@ export default function NewOrderPage() {
   );
 
   const [bagNumber, setBagNumber] = useState("");
+  const [suggestedBagNumber, setSuggestedBagNumber] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [quickCustomerName, setQuickCustomerName] = useState("");
   const [orderName, setOrderName] = useState("");
@@ -78,7 +79,7 @@ export default function NewOrderPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const loadInitial = useCallback(async () => {
-    const [resolvedActor, cData, pData] = await Promise.all([
+    const [resolvedActor, cData, pData, bagData] = await Promise.all([
       fetchActorCached(),
       fetchCachedJson<{ ok?: boolean; customers?: CustomerOption[] }>(
         "/api/customers",
@@ -88,12 +89,20 @@ export default function NewOrderPage() {
         "/api/purities",
         { ttlMs: 300_000 }
       ),
+      fetch("/api/orders?meta=next_bag", { cache: "no-store" })
+        .then((r) => r.json())
+        .catch(() => ({ ok: false })),
     ]);
     if (!resolvedActor) {
       router.push("/login?redirect=/orders/new");
       return;
     }
     setActor(resolvedActor);
+
+    if (bagData?.ok && bagData.nextBagNumber) {
+      setSuggestedBagNumber(bagData.nextBagNumber);
+      setBagNumber((prev) => (prev ? prev : bagData.nextBagNumber));
+    }
 
     if (cData.ok && cData.customers) {
       setCustomers(cData.customers);
@@ -277,29 +286,39 @@ export default function NewOrderPage() {
           >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Bag / Order Number *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Bag / Order Number *
+                  </label>
+                  {suggestedBagNumber && bagNumber !== suggestedBagNumber && (
+                    <button
+                      type="button"
+                      onClick={() => setBagNumber(suggestedBagNumber)}
+                      className="text-[10px] font-semibold text-blue-700 underline cursor-pointer"
+                    >
+                      Auto ({suggestedBagNumber})
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
                   value={bagNumber}
                   onChange={(e) => setBagNumber(e.target.value)}
-                  placeholder="e.g. 4360"
+                  placeholder="e.g. 114 (auto or manual)"
                   className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-xs font-mono font-bold"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Order / Item Name *
+                  Order / Item Name (Optional)
                 </label>
                 <input
                   type="text"
-                  required
                   value={orderName}
                   onChange={(e) => setOrderName(e.target.value)}
-                  placeholder="e.g. LR RING"
+                  placeholder="e.g. LR RING (can edit later)"
                   className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-xs"
                 />
               </div>

@@ -203,7 +203,9 @@ export const AppShell: React.FC<{
         if (!res.ok || !active) return;
         const data = await res.json();
         if (data.lanBaseUrl) {
-          setLanBaseUrl(data.lanBaseUrl);
+          setLanBaseUrl((prev) =>
+            prev === data.lanBaseUrl ? prev : data.lanBaseUrl
+          );
         }
         const latest = data.latestScan;
         if (!latest || !latest.scanId) return;
@@ -249,7 +251,7 @@ export const AppShell: React.FC<{
     };
 
     pollQrBridge();
-    const interval = setInterval(pollQrBridge, 900);
+    const interval = setInterval(pollQrBridge, 2500);
     window.addEventListener("focus", handleVisibilityOrFocus);
     document.addEventListener("visibilitychange", handleVisibilityOrFocus);
     return () => {

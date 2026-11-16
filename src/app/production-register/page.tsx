@@ -209,9 +209,15 @@ function ProductionRegisterContent() {
   // Register filters
   const [monthKey, setMonthKey] = useState<string>("ALL");
   const [search, setSearch] = useState<string>("");
+  const [debouncedSearch, setDebouncedSearch] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("ACTIVE");
   const [purityFilter, setPurityFilter] = useState<string>("ALL");
   const [processFilter, setProcessFilter] = useState<string>("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 220);
+    return () => clearTimeout(t);
+  }, [search]);
 
   // Column group visibility
   const [showFilingCols, setShowFilingCols] = useState(true);
@@ -224,8 +230,14 @@ function ProductionRegisterContent() {
     orderIdFromUrl
   );
   const [drawerTab, setDrawerTab] = useState<
-    "PROCESS_ENTRY" | "RECONCILIATION" | "JOB_CARD_QR"
+    "PROCESS_ENTRY" | "RECONCILIATION" | "JOB_CARD_QR" | "EDIT_ORDER"
   >("PROCESS_ENTRY");
+  const [editOrderName, setEditOrderName] = useState("");
+  const [editTargetWeight, setEditTargetWeight] = useState("");
+  const [editSize, setEditSize] = useState("");
+  const [editDueDate, setEditDueDate] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [savingOrderEdit, setSavingOrderEdit] = useState(false);
 
   // Process Entry Form state
   const [activeProcessType, setActiveProcessType] =
@@ -286,7 +298,7 @@ function ProductionRegisterContent() {
     async (force = false) => {
       const qs = new URLSearchParams();
       if (monthKey && monthKey !== "ALL") qs.set("monthKey", monthKey);
-      if (search.trim()) qs.set("search", search.trim());
+      if (debouncedSearch.trim()) qs.set("search", debouncedSearch.trim());
       if (statusFilter && statusFilter !== "ALL") qs.set("status", statusFilter);
       if (purityFilter && purityFilter !== "ALL")
         qs.set("purityId", purityFilter);
@@ -330,8 +342,8 @@ function ProductionRegisterContent() {
       }
       if (karData.ok && karData.karigars) {
         setKarigars(karData.karigars);
-        if (karData.karigars.length > 0 && !selectedKarigarId) {
-          setSelectedKarigarId(karData.karigars[0].id);
+        if (karData.karigars.length > 0) {
+          setSelectedKarigarId((prev) => prev || karData.karigars![0].id);
         }
       }
       if (purData.ok && purData.purities) {
@@ -342,11 +354,10 @@ function ProductionRegisterContent() {
       router,
       orderIdFromUrl,
       monthKey,
-      search,
+      debouncedSearch,
       statusFilter,
       purityFilter,
       processFilter,
-      selectedKarigarId,
     ]
   );
 
@@ -1550,6 +1561,21 @@ function ProductionRegisterContent() {
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const cleanQ = search
+                      .trim()
+                      .toLowerCase()
+                      .replace(/^bag\s*#?/i, "")
+                      .replace(/^#/, "");
+                    const exact = rows.find(
+                      (r) => r.order.bagNumber.toLowerCase() === cleanQ
+                    );
+                    if (exact) {
+                      selectOrder(exact.order.id);
+                    }
+                  }
+                }}
                 placeholder="Search bag #, customer, order, karigar..."
                 className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-xs w-64"
               />
@@ -1703,7 +1729,29 @@ function ProductionRegisterContent() {
                       : "bg-slate-100 text-slate-700"
                   }`}
                 >
-                  3. V1 Job Card & QR Code
+                  3. Job Card &amp; QR Code
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditOrderName(selectedOrderRow.order.orderName || "");
+                    setEditTargetWeight(selectedOrderRow.order.targetWeight || "");
+                    setEditSize(selectedOrderRow.order.size || "");
+                    setEditDueDate(
+                      selectedOrderRow.order.dueDate
+                        ? selectedOrderRow.order.dueDate.slice(0, 10)
+                        : ""
+                    );
+                    setEditNotes(selectedOrderRow.order.notes || "");
+                    setDrawerTab("EDIT_ORDER");
+                  }}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-xs cursor-pointer ${
+                    drawerTab === "EDIT_ORDER"
+                      ? "bg-blue-700 text-white"
+                      : "bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  4. Edit Details
                 </button>
                 <button
                   type="button"
@@ -2898,6 +2946,134 @@ function ProductionRegisterContent() {
                   </button>
                 </div>
               </div>
+            )}
+
+            {drawerTab === "EDIT_ORDER" && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (savingOrderEdit) return;
+                  setActionError(null);
+                  setActionSuccess(null);
+                  setSavingOrderEdit(true);
+                  try {
+                    const res = await fetch("/api/orders", {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        orderId: selectedOrderRow.order.id,
+                        orderName: editOrderName,
+                        targetWeight: editTargetWeight || null,
+                        size: editSize || null,
+                        dueDate: editDueDate || null,
+                        notes: editNotes || null,
+                      }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok || !data.ok) {
+                      setActionError(data.error || "Failed to update order details");
+                    } else {
+                      setActionSuccess(
+                        `Updated details for Bag #${selectedOrderRow.order.bagNumber}`
+                      );
+                      await loadRegister(true);
+                      setDrawerTab("JOB_CARD_QR");
+                    }
+                  } catch (err) {
+                    setActionError(
+                      err instanceof Error
+                        ? err.message
+                        : "Failed to update order details"
+                    );
+                  } finally {
+                    setSavingOrderEdit(false);
+                  }
+                }}
+                className="bg-slate-50 border border-slate-200 rounded-xs p-4 space-y-3 max-w-2xl"
+              >
+                <div className="text-xs font-bold text-slate-900">
+                  Edit Order Details — Bag #{selectedOrderRow.order.bagNumber}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Order / Item Name
+                    </label>
+                    <input
+                      type="text"
+                      value={editOrderName}
+                      onChange={(e) => setEditOrderName(e.target.value)}
+                      placeholder="e.g. LR RING"
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Target Weight (g)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      value={editTargetWeight}
+                      onChange={(e) => setEditTargetWeight(e.target.value)}
+                      placeholder="15.000"
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Size
+                    </label>
+                    <input
+                      type="text"
+                      value={editSize}
+                      onChange={(e) => setEditSize(e.target.value)}
+                      placeholder="e.g. 2.4"
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Due Date
+                    </label>
+                    <input
+                      type="date"
+                      value={editDueDate}
+                      onChange={(e) => setEditDueDate(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xs"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Notes
+                    </label>
+                    <input
+                      type="text"
+                      value={editNotes}
+                      onChange={(e) => setEditNotes(e.target.value)}
+                      placeholder="Optional order notes..."
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xs"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="submit"
+                    disabled={savingOrderEdit}
+                    className="px-4 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded-xs cursor-pointer disabled:opacity-60"
+                  >
+                    {savingOrderEdit ? "Saving..." : "Save & Open Job Card"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDrawerTab("JOB_CARD_QR")}
+                    className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-xs font-semibold rounded-xs cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
             )}
           </div>
         )}
