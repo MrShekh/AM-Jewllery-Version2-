@@ -233,6 +233,15 @@ function ProductionRegisterContent() {
     "PROCESS_ENTRY" | "RECONCILIATION" | "JOB_CARD_QR" | "EDIT_ORDER"
   >("PROCESS_ENTRY");
   const [editOrderName, setEditOrderName] = useState("");
+  const [editCustomerId, setEditCustomerId] = useState("");
+  const [customers, setCustomers] = useState<
+    Array<{ id: string; customerCode: string; name: string }>
+  >(
+    () =>
+      getCachedJson<{
+        customers: Array<{ id: string; customerCode: string; name: string }>;
+      }>("/api/customers")?.customers || []
+  );
   const [editTargetWeight, setEditTargetWeight] = useState("");
   const [editSize, setEditSize] = useState("");
   const [editDueDate, setEditDueDate] = useState("");
@@ -306,7 +315,7 @@ function ProductionRegisterContent() {
 
       const ordersUrl = `/api/orders?${qs.toString()}`;
 
-      const [resolvedActor, ordData, karData, purData] = await Promise.all([
+      const [resolvedActor, ordData, karData, purData, custData] = await Promise.all([
         fetchActorCached(),
         fetchCachedJson<{
           ok?: boolean;
@@ -325,6 +334,10 @@ function ProductionRegisterContent() {
             touchPercent: string;
           }>;
         }>("/api/purities", { ttlMs: 300_000 }),
+        fetchCachedJson<{
+          ok?: boolean;
+          customers?: Array<{ id: string; customerCode: string; name: string }>;
+        }>("/api/customers", { ttlMs: 120_000 }),
       ]);
 
       if (!resolvedActor) {
@@ -348,6 +361,9 @@ function ProductionRegisterContent() {
       }
       if (purData.ok && purData.purities) {
         setPurities(purData.purities);
+      }
+      if (custData.ok && custData.customers) {
+        setCustomers(custData.customers);
       }
     },
     [
@@ -1735,6 +1751,7 @@ function ProductionRegisterContent() {
                   type="button"
                   onClick={() => {
                     setEditOrderName(selectedOrderRow.order.orderName || "");
+                    setEditCustomerId(selectedOrderRow.customer.id || "");
                     setEditTargetWeight(selectedOrderRow.order.targetWeight || "");
                     setEditSize(selectedOrderRow.order.size || "");
                     setEditDueDate(
@@ -2962,6 +2979,7 @@ function ProductionRegisterContent() {
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
                         orderId: selectedOrderRow.order.id,
+                        customerId: editCustomerId || undefined,
                         orderName: editOrderName,
                         targetWeight: editTargetWeight || null,
                         size: editSize || null,
@@ -2995,6 +3013,22 @@ function ProductionRegisterContent() {
                   Edit Order Details — Bag #{selectedOrderRow.order.bagNumber}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Customer
+                    </label>
+                    <select
+                      value={editCustomerId}
+                      onChange={(e) => setEditCustomerId(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xs"
+                    >
+                      {customers.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.customerCode})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">
                       Order / Item Name

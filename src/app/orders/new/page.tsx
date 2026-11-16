@@ -179,19 +179,27 @@ export default function NewOrderPage() {
     setSubmitting(true);
     try {
       let activeCustomerId = customerId;
-      if (!activeCustomerId && quickCustomerName.trim()) {
-        const cRes = await fetch("/api/customers", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: quickCustomerName.trim() }),
-        });
-        const cData = await cRes.json();
-        if (!cRes.ok || !cData.ok) {
-          setError(cData.error || "Please select or create a customer");
-          setSubmitting(false);
-          return;
+      if (!activeCustomerId) {
+        const targetName = quickCustomerName.trim() || "Pending Customer";
+        const existingPending = customers.find(
+          (c) => c.name.toLowerCase() === targetName.toLowerCase()
+        );
+        if (existingPending) {
+          activeCustomerId = existingPending.id;
+        } else {
+          const cRes = await fetch("/api/customers", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: targetName }),
+          });
+          const cData = await cRes.json();
+          if (!cRes.ok || !cData.ok) {
+            setError(cData.error || "Please select or create a customer");
+            setSubmitting(false);
+            return;
+          }
+          activeCustomerId = cData.customer.id;
         }
-        activeCustomerId = cData.customer.id;
       }
 
       const res = await fetch("/api/orders", {
@@ -353,7 +361,7 @@ export default function NewOrderPage() {
                   onChange={(e) => setCustomerId(e.target.value)}
                   className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-xs bg-white"
                 >
-                  <option value="">-- Choose Existing Customer --</option>
+                  <option value="">-- Unknown / Assign Later --</option>
                   {customers.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name} ({c.customerCode})

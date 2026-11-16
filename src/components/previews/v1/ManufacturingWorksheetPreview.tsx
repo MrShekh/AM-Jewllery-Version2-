@@ -116,298 +116,196 @@ export const ManufacturingWorksheetPreview: React.FC<
     0
   );
 
+  const procGridClass = "grid grid-cols-[1.2fr_1fr_1fr_1fr_0.9fr]";
+
+  const renderBlankRow = (key: string) => (
+    <div key={key} className={`${procGridClass} border-b border-black`}>
+      <div className="px-1 border-r border-black h-6" />
+      <div className="border-r border-black h-6" />
+      <div className="border-r border-black h-6" />
+      <div className="border-r border-black h-6" />
+      <div className="h-6" />
+    </div>
+  );
+
+  const renderProcessSection = (label: string, keyPrefix: string) => (
+    <React.Fragment key={keyPrefix}>
+      <div className={`${procGridClass} border-b border-black`}>
+        <div className="px-1 border-r border-black font-bold text-[10px] h-7 flex items-center">
+          {label}
+        </div>
+        <div className="border-r border-black h-7" />
+        <div className="border-r border-black h-7" />
+        <div className="border-r border-black h-7" />
+        <div className="h-7" />
+      </div>
+      {renderBlankRow(`${keyPrefix}-r2`)}
+      {renderBlankRow(`${keyPrefix}-r3`)}
+    </React.Fragment>
+  );
+
   return (
     <div
-      className="bg-white p-2 rounded-lg shadow-lg border border-gray-300 relative text-black break-inside-avoid"
+      className="bg-white p-1.5 rounded-lg shadow-lg border border-gray-300 relative text-black break-inside-avoid"
       style={{
         fontFamily: "Arial, sans-serif",
         fontSize: "10px",
         width: "345px",
       }}
     >
-      {/* Top Header */}
-      <div className="grid grid-cols-6 border border-black">
-        <div className="bg-yellow-200 p-1 border-r border-black font-bold text-center text-xs">
-          {orderNumber || "BAG NO-"}
-        </div>
-        <div className="col-span-4 bg-yellow-200 p-1 border-r border-black font-bold text-center text-sm">
-          AM JEWELLARS
-        </div>
-        <div className="bg-yellow-200 p-1 text-center text-xs"></div>
-      </div>
-
-      {/* Second Row */}
-      <div className="grid grid-cols-6 border-l border-r border-b border-black">
-        <div className="p-1 border-r border-black font-bold text-xs">DATE-</div>
-        <div className="p-1 border-r border-black font-bold text-xs col-span-2">
-          Customer Name
-        </div>
-        <div className="p-1 border-r border-black font-bold text-xs">ORDER</div>
-        <div className="p-1 border-r border-black font-bold text-center text-xs">
-          {getKaratDisplay(selectedKarat)}
-        </div>
-        <div className="p-1 text-center text-xs"></div>
-      </div>
-
-      {/* Third Row - Values */}
-      <div className="grid grid-cols-6 border-l border-r border-b border-black">
-        <div className="p-1 border-r border-black text-center text-xs">
-          {formatDate(date)}
-        </div>
-        <div className="p-1 border-r border-black text-center font-bold text-xs col-span-2">
-          {customerName}
-        </div>
-        <div className="p-1 border-r border-black text-center text-xs">
-          {orderName}
-        </div>
-        <div className="p-1 border-r border-black text-center font-bold text-xs">
-          {size ? `Size - ${size}` : ""}
-        </div>
-        <div className="p-1 text-center font-bold text-xs">D DATE -</div>
-      </div>
-
-      {/* Fourth Row - Process Header */}
-      <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
-        <div className="p-1 border-r border-black"></div>
-        <div className="p-1 border-r border-black text-center font-bold text-xs">
-          IN
-        </div>
-        <div className="p-1 border-r border-black text-center font-bold text-xs">
-          OUT
-        </div>
-        <div className="p-1 border-r border-black text-center font-bold text-[10px] leading-tight flex items-center justify-center">
-          EXTRA
-        </div>
-        <div className="p-1 border-r border-black text-center font-bold text-xs">
-          LOSS
-        </div>
-        <div className="p-1 text-center text-xs">{formatDate(deliveryDate)}</div>
-      </div>
-
-      {/* Process Rows: FAILING through F PALISH with optional QR code above the image */}
-      <div className="relative">
-        {/* FAILING */}
-        <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
-          <div className="p-1 border-r border-black font-bold text-xs">
-            FAILING
-          </div>
-          <div className="p-1 border-r border-black h-10"></div>
-          <div className="p-1 border-r border-black h-10"></div>
-          <div className="p-1 border-r border-black h-10"></div>
-          <div className="p-1 border-r border-black h-10"></div>
-          <div className="p-1 h-10"></div>
-        </div>
-
-        {/* Empty Row after FAILING */}
-        <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 h-8"></div>
-        </div>
-
-        {/* F PALISH */}
-        <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
-          <div className="p-1 border-r border-black font-bold text-xs">
-            F PALISH
-          </div>
-          <div className="p-1 border-r border-black h-10"></div>
-          <div className="p-1 border-r border-black h-10"></div>
-          <div className="p-1 border-r border-black h-10"></div>
-          <div className="p-1 border-r border-black h-10"></div>
-          <div className="p-1 h-10"></div>
-        </div>
-
-        {/* Empty Row after F PALISH */}
-        <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 h-8"></div>
-        </div>
-
-        {/* QR Code placed directly above the product image in the right column */}
-        {showQr && qrDataUrl && (
-          <div
-            className="absolute top-0 bottom-0 right-0 flex items-center justify-center border-l border-r border-b border-black bg-white"
-            style={{
-              width: "20%",
-              padding: "2px",
-            }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={qrDataUrl}
-              alt={`QR Code for Bag ${qrCodeBagNumber || orderNumber}`}
-              className="w-[62px] h-[62px] object-contain block"
-            />
-          </div>
-        )}
-      </div>
-
-      {/* SETTING and AD with merged image space */}
-      <div className="relative">
-        {/* SETTING Row */}
-        <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
-          <div className="p-1 border-r border-black font-bold text-xs">
-            SETTING
-          </div>
-          <div className="p-1 border-r border-black h-10"></div>
-          <div className="p-1 border-r border-black h-10"></div>
-          <div className="p-1 border-r border-black h-10"></div>
-          <div className="p-1 border-r border-black h-10"></div>
-          <div className="p-1 h-10"></div>
-        </div>
-
-        {/* AD Row - Blue Background */}
-        <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black bg-blue-200">
-          <div className="p-1 border-r border-black font-bold text-center text-xs">
-            AD
-          </div>
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 border-r border-black h-8"></div>
-          <div className="p-1 h-8 bg-white"></div>
-        </div>
-
-        {/* Product Image spanning SETTING and AD rows */}
-        {productImage && (
-          <div
-            className="absolute top-0 right-0 flex items-center justify-center border-l border-black bg-white"
-            style={{
-              width: "20%",
-              height: "72px",
-              padding: "2px",
-            }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={productImage}
-              alt="Product"
-              className="max-w-full max-h-full object-contain"
-            />
-          </div>
-        )}
-      </div>
-
-      {/* KL Row - Blue Background */}
-      <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black bg-blue-200">
-        <div className="p-1 border-r border-black font-bold text-center text-xs">
-          KL
-        </div>
-        <div className="p-1 border-r border-black h-8"></div>
-        <div className="p-1 border-r border-black h-8"></div>
-        <div className="p-1 border-r border-black h-8"></div>
-        <div className="p-1 border-r border-black h-8"></div>
-        <div className="p-1 h-8 flex items-center justify-center bg-white">
-          <div className="text-center leading-tight">
-            <div className="text-[11px] font-bold text-red-600">WT-</div>
-            {weightInGrams > 0 && (
-              <div className="text-[11px] font-bold text-blue-600">
-                {weightInGrams}g
+      <div className="border border-black">
+        {/* Top Media Strip: Order Info (Left) + QR & Product Image Side-by-Side (Right) */}
+        <div className="grid grid-cols-[1fr_auto] border-b border-black">
+          <div className="min-w-0">
+            <div className="bg-yellow-200 px-1.5 py-1 border-b border-black flex items-center justify-between gap-1 font-bold">
+              <span className="text-xs font-mono">
+                {orderNumber ? `#${orderNumber}` : "BAG #"}
+              </span>
+              <span className="text-xs tracking-tight truncate">
+                AM JEWELLARS
+              </span>
+              <span className="text-[10px] bg-white px-1 border border-black rounded-xs shrink-0">
+                {getKaratDisplay(selectedKarat)}
+              </span>
+            </div>
+            <div className="p-1.5 space-y-0.5 text-[10px] leading-tight">
+              <div className="flex items-center justify-between gap-1">
+                <span className="truncate">
+                  Customer: <strong>{customerName}</strong>
+                </span>
+                <span className="shrink-0">
+                  Wt:{" "}
+                  <strong className="text-blue-700">
+                    {weightInGrams > 0 ? `${weightInGrams}g` : "—"}
+                  </strong>
+                </span>
               </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* TOTAL Row */}
-      <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black bg-gray-200">
-        <div className="p-1 border-r border-black font-bold text-center text-xs">
-          TOTAL
-        </div>
-        <div className="p-1 border-r border-black h-7"></div>
-        <div className="p-1 border-r border-black h-7"></div>
-        <div className="p-1 border-r border-black h-7"></div>
-        <div className="p-1 border-r border-black h-7"></div>
-        <div className="p-1 h-7 bg-white"></div>
-      </div>
-
-      {/* Empty Row after TOTAL */}
-      <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black">
-        <div className="p-1 border-r border-black h-7"></div>
-        <div className="p-1 border-r border-black h-7"></div>
-        <div className="p-1 border-r border-black h-7"></div>
-        <div className="p-1 border-r border-black h-7"></div>
-        <div className="p-1 border-r border-black h-7"></div>
-        <div className="p-1 h-7 text-center font-bold text-[11px] flex items-center justify-center">
-          FENESH WT
-        </div>
-      </div>
-
-      {/* PALISH Row */}
-      <div className="grid grid-cols-[1.1fr_0.7fr_0.7fr_0.85fr_0.65fr_1fr] border-l border-r border-b border-black bg-gray-200">
-        <div className="p-1 border-r border-black font-bold text-center text-xs">
-          PALISH
-        </div>
-        <div className="p-1 border-r border-black h-10"></div>
-        <div className="p-1 border-r border-black h-10"></div>
-        <div className="p-1 border-r border-black h-10"></div>
-        <div className="p-1 border-r border-black h-10"></div>
-        <div className="p-1 h-10 bg-white"></div>
-      </div>
-
-      {/* AD Details Header */}
-      <div className="grid grid-cols-5 border-l border-r border-b border-black bg-gray-100">
-        <div className="p-1 border-r border-black font-bold text-center text-xs">
-          AD SIZE
-        </div>
-        <div className="p-1 border-r border-black font-bold text-center text-xs">
-          AD PIS
-        </div>
-        <div className="p-1 border-r border-black font-bold text-center text-xs">
-          AD SIZ
-        </div>
-        <div className="p-1 border-r border-black font-bold text-center text-xs">
-          AD PIS
-        </div>
-        <div className="p-1 font-bold text-center text-xs">TOTAL</div>
-      </div>
-
-      {/* AD Details Rows */}
-      {Array.from(
-        { length: Math.max(2, Math.ceil(adDetails.length / 2)) },
-        (_, rowIndex) => {
-          const leftAd = adDetails[rowIndex * 2];
-          const rightAd = adDetails[rowIndex * 2 + 1];
-
-          return (
-            <div
-              key={rowIndex}
-              className="grid grid-cols-5 border-l border-r border-b border-black"
-            >
-              <div className="p-1 border-r border-black text-center text-xs h-5">
-                {leftAd?.adSize || ""}
+              <div className="flex items-center justify-between gap-1">
+                <span className="truncate">
+                  Order: <strong>{orderName}</strong>
+                </span>
+                <span className="shrink-0">
+                  Size: <strong>{size || "—"}</strong>
+                </span>
               </div>
-              <div className="p-1 border-r border-black text-center text-xs h-5">
-                {leftAd?.adPieces || ""}
-              </div>
-              <div className="p-1 border-r border-black text-center text-xs h-5">
-                {rightAd?.adSize || ""}
-              </div>
-              <div className="p-1 border-r border-black text-center text-xs h-5">
-                {rightAd?.adPieces || ""}
-              </div>
-              <div className="p-1 text-center font-bold text-xs h-5">
-                {rowIndex === 0 && totalAdPieces > 0 ? totalAdPieces : ""}
+              <div className="flex items-center justify-between gap-1 text-[9.5px] text-gray-800">
+                <span>In: {formatDate(date) || "—"}</span>
+                <span>Due: {formatDate(deliveryDate) || "—"}</span>
               </div>
             </div>
-          );
-        }
-      )}
+          </div>
 
-      {/* TOTAL LOSS Footer */}
-      <div className="border-l border-r border-b border-black bg-yellow-300 p-2 text-center font-bold text-xs">
-        TOTAL LOSS
+          {(showQr || productImage) && (
+            <div className="border-l border-black p-1 flex items-center gap-1 bg-white shrink-0">
+              {showQr && qrDataUrl && (
+                <div className="border border-gray-300 p-0.5 bg-white">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={qrDataUrl}
+                    alt={`QR Code for Bag ${qrCodeBagNumber || orderNumber}`}
+                    className="w-[54px] h-[54px] object-contain block"
+                  />
+                </div>
+              )}
+              {productImage && (
+                <div className="border border-gray-300 p-0.5 bg-white w-[54px] h-[54px] flex items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={productImage}
+                    alt="Product"
+                    className="max-w-full max-h-full object-contain block"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Full-Width Process Table */}
+        <div
+          className={`${procGridClass} border-b border-black bg-gray-100 font-bold text-center text-[9.5px]`}
+        >
+          <div className="p-1 border-r border-black">PROCESS</div>
+          <div className="p-1 border-r border-black">IN (g)</div>
+          <div className="p-1 border-r border-black">OUT (g)</div>
+          <div className="p-1 border-r border-black">EXTRA (g)</div>
+          <div className="p-1">LOSS (g)</div>
+        </div>
+
+        {renderProcessSection("FILING", "filing")}
+        {renderProcessSection("F. POLISH", "fpolish")}
+        {renderProcessSection("SETTING", "setting")}
+
+        {/* AD & KL Blue Rows */}
+        <div className={`${procGridClass} border-b border-black bg-blue-100`}>
+          <div className="px-1 border-r border-black font-bold text-[10px] h-6 flex items-center">
+            AD
+          </div>
+          <div className="border-r border-black h-6" />
+          <div className="border-r border-black h-6" />
+          <div className="border-r border-black h-6" />
+          <div className="h-6" />
+        </div>
+        <div className={`${procGridClass} border-b border-black bg-blue-100`}>
+          <div className="px-1 border-r border-black font-bold text-[10px] h-6 flex items-center">
+            KL
+          </div>
+          <div className="border-r border-black h-6" />
+          <div className="border-r border-black h-6" />
+          <div className="border-r border-black h-6" />
+          <div className="h-6" />
+        </div>
+
+        {renderProcessSection("FINAL POLISH", "finalpolish")}
+
+        {/* AD Details Header */}
+        <div className="grid grid-cols-5 border-b border-black bg-gray-100 text-[9px] font-bold text-center">
+          <div className="p-0.5 border-r border-black">AD SIZE</div>
+          <div className="p-0.5 border-r border-black">AD PIS</div>
+          <div className="p-0.5 border-r border-black">AD SIZ</div>
+          <div className="p-0.5 border-r border-black">AD PIS</div>
+          <div className="p-0.5">TOTAL</div>
+        </div>
+
+        {/* AD Details Rows */}
+        {Array.from(
+          { length: Math.max(2, Math.ceil(adDetails.length / 2)) },
+          (_, rowIndex) => {
+            const leftAd = adDetails[rowIndex * 2];
+            const rightAd = adDetails[rowIndex * 2 + 1];
+
+            return (
+              <div
+                key={rowIndex}
+                className="grid grid-cols-5 border-b border-black text-center text-[10px]"
+              >
+                <div className="p-0.5 border-r border-black h-5">
+                  {leftAd?.adSize || ""}
+                </div>
+                <div className="p-0.5 border-r border-black h-5">
+                  {leftAd?.adPieces || ""}
+                </div>
+                <div className="p-0.5 border-r border-black h-5">
+                  {rightAd?.adSize || ""}
+                </div>
+                <div className="p-0.5 border-r border-black h-5">
+                  {rightAd?.adPieces || ""}
+                </div>
+                <div className="p-0.5 font-bold h-5">
+                  {rowIndex === 0 && totalAdPieces > 0 ? totalAdPieces : ""}
+                </div>
+              </div>
+            );
+          }
+        )}
+
+        {/* Summary Footer */}
+        <div className="grid grid-cols-3 bg-yellow-200 font-bold text-[10px]">
+          <div className="p-1.5 border-r border-black">FINISH WT:</div>
+          <div className="p-1.5 border-r border-black">AD / KL TOTAL:</div>
+          <div className="p-1.5">TOTAL LOSS:</div>
+        </div>
       </div>
-
-      {/* Additional space below TOTAL LOSS */}
-      <div className="border-l border-r border-b border-black h-6 bg-white"></div>
     </div>
   );
 };
