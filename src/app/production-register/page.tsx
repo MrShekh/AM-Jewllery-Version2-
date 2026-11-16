@@ -213,6 +213,19 @@ function ProductionRegisterContent() {
   const [statusFilter, setStatusFilter] = useState<string>("ACTIVE");
   const [purityFilter, setPurityFilter] = useState<string>("ALL");
   const [processFilter, setProcessFilter] = useState<string>("");
+  const [activeSheetId, setActiveSheetId] = useState<string>("ACTIVE");
+  const [savedSheets, setSavedSheets] = useState<
+    Array<{
+      id: string;
+      sheetNumber: number;
+      title: string;
+      orderCount: number;
+      totalIssuedWeight: string;
+      totalLossWeight: string;
+      closedAt: string;
+    }>
+  >([]);
+  const [savingSheet, setSavingSheet] = useState<boolean>(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 220);
@@ -312,10 +325,11 @@ function ProductionRegisterContent() {
       if (purityFilter && purityFilter !== "ALL")
         qs.set("purityId", purityFilter);
       if (processFilter) qs.set("processType", processFilter);
+      if (activeSheetId) qs.set("sheetId", activeSheetId);
 
       const ordersUrl = `/api/orders?${qs.toString()}`;
 
-      const [resolvedActor, ordData, karData, purData, custData] = await Promise.all([
+      const [resolvedActor, ordData, karData, purData, custData, sheetsData] = await Promise.all([
         fetchActorCached(),
         fetchCachedJson<{
           ok?: boolean;
@@ -338,6 +352,18 @@ function ProductionRegisterContent() {
           ok?: boolean;
           customers?: Array<{ id: string; customerCode: string; name: string }>;
         }>("/api/customers", { ttlMs: 120_000 }),
+        fetchCachedJson<{
+          ok?: boolean;
+          sheets?: Array<{
+            id: string;
+            sheetNumber: number;
+            title: string;
+            orderCount: number;
+            totalIssuedWeight: string;
+            totalLossWeight: string;
+            closedAt: string;
+          }>;
+        }>("/api/orders/sheets", { force }),
       ]);
 
       if (!resolvedActor) {
@@ -365,6 +391,9 @@ function ProductionRegisterContent() {
       if (custData.ok && custData.customers) {
         setCustomers(custData.customers);
       }
+      if (sheetsData.ok && sheetsData.sheets) {
+        setSavedSheets(sheetsData.sheets);
+      }
     },
     [
       router,
@@ -374,6 +403,7 @@ function ProductionRegisterContent() {
       statusFilter,
       purityFilter,
       processFilter,
+      activeSheetId,
     ]
   );
 
@@ -1630,14 +1660,113 @@ function ProductionRegisterContent() {
                 ))}
               </select>
               <a
-                href={`/api/reconciliation?format=csv_register&monthKey=${encodeURIComponent(
-                  monthKey
-                )}`}
+                href={(() => {
+                  const csvQs = new URLSearchParams();
+                  csvQs.set("format", "csv_register");
+                  if (monthKey && monthKey !== "ALL") csvQs.set("monthKey", monthKey);
+                  if (debouncedSearch.trim()) csvQs.set("search", debouncedSearch.trim());
+                  if (statusFilter && statusFilter !== "ALL") csvQs.set("status", statusFilter);
+                  if (purityFilter && purityFilter !== "ALL") csvQs.set("purityId", purityFilter);
+                  if (processFilter) csvQs.set("processType", processFilter);
+                  if (activeSheetId) csvQs.set("sheetId", activeSheetId);
+                  const stages: string[] = [];
+                  if (showFilingCols) stages.push("FILING");
+                  if (showFreePolishCols) stages.push("FREE_POLISH");
+                  if (showSettingCols) stages.push("SETTING");
+                  if (showFinalPolishCols) stages.push("FINAL_POLISH");
+                  csvQs.set("stages", stages.join(","));
+                  return `/api/reconciliation?${csvQs.toString()}`;
+                })()}
                 className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xs"
               >
                 Export Safe CSV
               </a>
+              {activeSheetId === "ACTIVE" && (
+                <button
+                  type="button"
+                  disabled={savingSheet}
+                  onClick={async () => {
+                    if (
+                      !window.confirm(
+                        "Complete & Save Sheet? All COMPLETED orders in the active sheet will be saved into a new sheet folder, and in-process orders will stay on your active sheet."
+                      )
+                    ) {
+                      return;
+                    }
+                    setActionError(null);
+                    setActionSuccess(null);
+                    setSavingSheet(true);
+                    try {
+                      const res = await fetch("/api/orders/sheets", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({}),
+                      });
+                      const data = await res.json();
+                      if (!res.ok || !data.ok) {
+                        setActionError(data.error || "Failed to save sheet");
+                      } else {
+                        setActionSuccess(
+                          `Saved ${data.sheet.title} (${data.sheet.orderCount} completed orders). Active sheet is ready for new work!`
+                        );
+                        await loadRegister(true);
+                      }
+                    } finally {
+                      setSavingSheet(false);
+                    }
+                  }}
+                  className="px-2.5 py-1.5 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white rounded-xs cursor-pointer disabled:opacity-60"
+                >
+                  {savingSheet ? "Saving Sheet..." : "Complete & Save Sheet"}
+                </button>
+              )}
             </div>
+          </div>
+
+          {/* Excel-like Saved Sheet Tabs */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100 text-xs">
+            <span className="font-semibold text-[11px] text-slate-500 uppercase mr-1">
+              Register Sheets:
+            </span>
+            <button
+              type="button"
+              onClick={() => setActiveSheetId("ACTIVE")}
+              className={`px-2.5 py-1 rounded-xs font-semibold cursor-pointer ${
+                activeSheetId === "ACTIVE"
+                  ? "bg-blue-700 text-white"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+            >
+              Active Sheet
+            </button>
+            {savedSheets.map((sh) => (
+              <button
+                key={sh.id}
+                type="button"
+                onClick={() => setActiveSheetId(sh.id)}
+                className={`px-2.5 py-1 rounded-xs font-semibold cursor-pointer ${
+                  activeSheetId === sh.id
+                    ? "bg-emerald-700 text-white"
+                    : "bg-emerald-50 text-emerald-900 border border-emerald-200 hover:bg-emerald-100"
+                }`}
+                title={`${sh.orderCount} orders • Issued ${sh.totalIssuedWeight}g • Loss ${sh.totalLossWeight}g`}
+              >
+                {sh.title} ({sh.orderCount})
+              </button>
+            ))}
+            {savedSheets.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setActiveSheetId("ALL")}
+                className={`px-2.5 py-1 rounded-xs font-semibold cursor-pointer ${
+                  activeSheetId === "ALL"
+                    ? "bg-slate-800 text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                All Orders
+              </button>
+            )}
           </div>
 
           {/* Column Visibility Toggles */}

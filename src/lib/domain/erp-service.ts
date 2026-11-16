@@ -6883,6 +6883,7 @@ export class ErpDomainService {
             recoveryReceiptId: st.recoveryReceiptId,
             receiptNumber: linkedReceipt?.receiptNumber ?? null,
             receiptLines: linkedReceipt?.lines ?? [],
+            allocations: linkedReceipt?.allocations ?? [],
             notes: st.notes,
             status: st.status,
             reversedAt: st.reversedAt ? st.reversedAt.toISOString() : null,

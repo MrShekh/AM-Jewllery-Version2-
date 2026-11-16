@@ -125,19 +125,36 @@ export async function GET(req: NextRequest) {
     const status = sp.get("status") || undefined;
     const purityId = sp.get("purityId") || undefined;
     const processType = (sp.get("processType") as ProcessType) || undefined;
+    const sheetId = sp.get("sheetId") || "ACTIVE";
 
-    const result = await erpService.listRegisterOrders(actor, {
-      monthKey,
-      search,
-      status,
-      purityId,
-      processType,
+    const [result, sheetOrders] = await Promise.all([
+      erpService.listRegisterOrders(actor, {
+        monthKey,
+        search,
+        status,
+        purityId,
+        processType,
+      }),
+      prisma.order.findMany({
+        where: { organizationId: actor.organizationId },
+        select: { id: true, registerSheetId: true },
+      }),
+    ]);
+
+    const sheetMap = new Map(
+      sheetOrders.map((o) => [o.id, o.registerSheetId])
+    );
+    const sheetFilteredRows = result.rows.filter((r) => {
+      const orderSheet = sheetMap.get(r.order.id) ?? null;
+      if (sheetId === "ALL") return true;
+      if (sheetId === "ACTIVE") return orderSheet === null;
+      return orderSheet === sheetId;
     });
 
     return NextResponse.json({
       ok: true,
       availableMonths: result.availableMonths,
-      rows: result.rows.map(serializeOrderRow),
+      rows: sheetFilteredRows.map(serializeOrderRow),
     });
   } catch (err) {
     return handleApiError(err);

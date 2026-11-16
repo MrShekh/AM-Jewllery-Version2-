@@ -98,6 +98,15 @@ interface RecoverySettlementRow {
     touchPercent: string;
     fineWeight: string;
   }>;
+  allocations?: Array<{
+    id: string;
+    processLossRecordId: string;
+    bagNumber: string;
+    processType: ProcessType;
+    allocatedFineWeight: string;
+    status: string;
+    businessDate: string;
+  }>;
   notes: string | null;
   status: "POSTED" | "REVERSED";
   reversedAt: string | null;
@@ -164,7 +173,9 @@ function RecoveryContent() {
 
   // Expandable sections (collapsed by default)
   const [showOrders, setShowOrders] = useState<boolean>(false);
-  const [showHistory, setShowHistory] = useState<boolean>(false);
+  const [showHistory, setShowHistory] = useState<boolean>(true);
+  const [printableSettlement, setPrintableSettlement] =
+    useState<RecoverySettlementRow | null>(null);
   const [expandedSettlementId, setExpandedSettlementId] = useState<
     string | null
   >(null);
@@ -1357,7 +1368,7 @@ function RecoveryContent() {
           </div>
         )}
 
-        {/* Collapsed Recovery History */}
+        {/* Saved Recovery Sheets / Folders */}
         <div className="bg-white border border-slate-300 rounded-xs p-3 space-y-2">
           <button
             type="button"
@@ -1366,7 +1377,7 @@ function RecoveryContent() {
             className="flex items-center gap-2 text-xs font-bold text-slate-800 hover:text-blue-700 cursor-pointer"
           >
             <span>{showHistory ? "▼" : "▶"}</span>
-            <span>Recovery History ({settlements.length})</span>
+            <span>Recovery History — Saved Sheets ({settlements.length})</span>
           </button>
 
           {showHistory && (
@@ -1428,6 +1439,13 @@ function RecoveryContent() {
                           <td className="p-2 text-right font-sans">
                             <button
                               type="button"
+                              onClick={() => setPrintableSettlement(st)}
+                              className="text-emerald-700 font-semibold underline cursor-pointer mr-2"
+                            >
+                              Open / Print Sheet
+                            </button>
+                            <button
+                              type="button"
                               onClick={() =>
                                 setExpandedSettlementId((prev) =>
                                   prev === st.id ? null : st.id
@@ -1435,7 +1453,7 @@ function RecoveryContent() {
                               }
                               className="text-blue-700 underline cursor-pointer mr-2"
                             >
-                              {expandedSettlementId === st.id ? "Hide" : "View"}
+                              {expandedSettlementId === st.id ? "Hide" : "Quick View"}
                             </button>
                             {st.status === "POSTED" &&
                               actor.role === "OWNER_ADMIN" && (
@@ -1492,6 +1510,138 @@ function RecoveryContent() {
             </div>
           )}
         </div>
+
+        {/* Printable Saved Recovery Sheet Modal */}
+        {printableSettlement && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white border border-slate-300 rounded-xs max-w-2xl w-full max-h-[90vh] overflow-y-auto p-5 space-y-4 text-xs">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">
+                    Karigar Recovery Sheet — {printableSettlement.settlementNumber}
+                  </h2>
+                  <p className="text-slate-600">
+                    {printableSettlement.karigarName} • Date:{" "}
+                    {formatKolkataDateDDMMYYYY(printableSettlement.businessDate)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 no-print">
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white font-semibold rounded-xs cursor-pointer"
+                  >
+                    Print Sheet
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPrintableSettlement(null)}
+                    className="px-3 py-1.5 border border-slate-300 text-slate-700 font-semibold rounded-xs cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-slate-50 p-3 border border-slate-200 rounded-xs font-mono tabular-nums">
+                <div>
+                  <div className="text-[10px] font-sans text-slate-500">Total Loss</div>
+                  <div className="font-bold">
+                    {Number(printableSettlement.grossSelectedFine).toFixed(4)}g
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-sans text-slate-500">Making Allowed</div>
+                  <div className="font-bold text-amber-800">
+                    {Number(printableSettlement.makingDeductionFine).toFixed(4)}g
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-sans text-slate-500">Gold Recovered</div>
+                  <div className="font-bold text-emerald-700">
+                    {Number(printableSettlement.receivedFine).toFixed(4)}g
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-sans text-slate-500">Accepted Shortage</div>
+                  <div className="font-bold">
+                    {Number(printableSettlement.acceptedShortageFine).toFixed(4)}g
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-sans text-slate-500">Carried Balance</div>
+                  <div className="font-bold text-blue-800">
+                    {Number(printableSettlement.carriedShortageFine).toFixed(4)}g
+                  </div>
+                </div>
+              </div>
+
+              {printableSettlement.receiptLines.length > 0 && (
+                <div className="space-y-1">
+                  <div className="font-bold text-slate-800">
+                    Metal Received ({printableSettlement.receiptNumber})
+                  </div>
+                  <table className="w-full border border-slate-200 border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100 border-b border-slate-200 text-left">
+                        <th className="p-1.5">Purity</th>
+                        <th className="p-1.5 text-right">Gross (g)</th>
+                        <th className="p-1.5 text-right">Touch (%)</th>
+                        <th className="p-1.5 text-right">Fine (g)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {printableSettlement.receiptLines.map((rl) => (
+                        <tr key={rl.id} className="border-b border-slate-100 font-mono">
+                          <td className="p-1.5 font-sans">{rl.purityLabel}</td>
+                          <td className="p-1.5 text-right">{rl.grossWeight}</td>
+                          <td className="p-1.5 text-right">{rl.touchPercent}%</td>
+                          <td className="p-1.5 text-right font-bold">{rl.fineWeight}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <div className="font-bold text-slate-800">
+                  Orders Included in This Recovery
+                </div>
+                <table className="w-full border border-slate-200 border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 border-b border-slate-200 text-left">
+                      <th className="p-1.5">Bag #</th>
+                      <th className="p-1.5">Process</th>
+                      <th className="p-1.5 text-right">Settled Fine (g)</th>
+                      <th className="p-1.5 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(printableSettlement.allocations ?? []).length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="p-2 text-center text-slate-500">
+                          Settled via making allowance / write-off (no physical receipt lines).
+                        </td>
+                      </tr>
+                    ) : (
+                      (printableSettlement.allocations ?? []).map((al) => (
+                        <tr key={al.id} className="border-b border-slate-100 font-mono">
+                          <td className="p-1.5 font-bold">#{al.bagNumber}</td>
+                          <td className="p-1.5 font-sans">
+                            {PROCESS_DISPLAY_LABELS[al.processType]}
+                          </td>
+                          <td className="p-1.5 text-right">{al.allocatedFineWeight}g</td>
+                          <td className="p-1.5 text-right font-sans">{al.status}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* More Options (Period Reconciliation) */}
         <div className="bg-white border border-slate-300 rounded-xs p-3 space-y-3">
