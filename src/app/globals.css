@@ -20,7 +20,7 @@
 @media print {
   @page {
     size: A4 portrait;
-    margin: 8mm;
+    margin: 5mm;
   }
 
   .no-print,
@@ -43,7 +43,7 @@
     justify-content: flex-start;
     width: 100%;
     background: #ffffff !important;
-    padding-top: 4mm;
+    padding-top: 0;
   }
 
   .print-only-worksheet * {
@@ -52,14 +52,19 @@
 
   .print-batch-page {
     display: grid;
-    grid-template-columns: repeat(2, 345px);
-    justify-content: space-between;
-    align-content: start;
-    row-gap: 6mm;
-    column-gap: 6mm;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 5mm;
+    row-gap: 4mm;
     width: 100%;
+    max-width: 198mm;
     page-break-after: always;
     break-after: page;
+  }
+
+  .print-batch-page .job-card-root {
+    width: 100% !important;
+    padding: 3px !important;
+    border-radius: 0 !important;
   }
 
   .print-batch-page:last-child {

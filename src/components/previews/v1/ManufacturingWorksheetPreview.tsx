@@ -120,24 +120,24 @@ export const ManufacturingWorksheetPreview: React.FC<
 
   const renderBlankRow = (key: string) => (
     <div key={key} className={`${procGridClass} border-b border-black`}>
-      <div className="px-1 border-r border-black h-6" />
-      <div className="border-r border-black h-6" />
-      <div className="border-r border-black h-6" />
-      <div className="border-r border-black h-6" />
-      <div className="h-6" />
+      <div className="px-1 border-r border-black h-5" />
+      <div className="border-r border-black h-5" />
+      <div className="border-r border-black h-5" />
+      <div className="border-r border-black h-5" />
+      <div className="h-5" />
     </div>
   );
 
   const renderProcessSection = (label: string, keyPrefix: string) => (
     <React.Fragment key={keyPrefix}>
       <div className={`${procGridClass} border-b border-black`}>
-        <div className="px-1 border-r border-black font-bold text-[10px] h-7 flex items-center">
+        <div className="px-1 border-r border-black font-bold text-[10px] h-6 flex items-center">
           {label}
         </div>
-        <div className="border-r border-black h-7" />
-        <div className="border-r border-black h-7" />
-        <div className="border-r border-black h-7" />
-        <div className="h-7" />
+        <div className="border-r border-black h-6" />
+        <div className="border-r border-black h-6" />
+        <div className="border-r border-black h-6" />
+        <div className="h-6" />
       </div>
       {renderBlankRow(`${keyPrefix}-r2`)}
       {renderBlankRow(`${keyPrefix}-r3`)}
@@ -146,11 +146,11 @@ export const ManufacturingWorksheetPreview: React.FC<
 
   return (
     <div
-      className="bg-white p-1.5 rounded-lg shadow-lg border border-gray-300 relative text-black break-inside-avoid"
+      className="job-card-root bg-white p-1.5 rounded-lg shadow-lg border border-gray-300 relative text-black break-inside-avoid"
       style={{
         fontFamily: "Arial, sans-serif",
         fontSize: "10px",
-        width: "345px",
+        width: "365px",
       }}
     >
       <div className="border border-black">
