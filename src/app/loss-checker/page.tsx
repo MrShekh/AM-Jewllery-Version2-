@@ -81,6 +81,15 @@ export default function QrLossCheckerPage() {
 
   useEffect(() => stopCamera, [stopCamera]);
 
+  // Attach MediaStream after <video> mounts on screen (fixes blank video in Firefox/Chrome)
+  useEffect(() => {
+    if (cameraActive && videoRef.current && streamRef.current) {
+      const video = videoRef.current;
+      video.srcObject = streamRef.current;
+      void video.play().catch(() => {});
+    }
+  }, [cameraActive]);
+
   const handleScanLookup = useCallback(
     async (rawValue: string) => {
       const q = rawValue.trim();
@@ -130,15 +139,16 @@ export default function QrLossCheckerPage() {
   async function startCameraScanner() {
     setErrorMsg(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
       streamRef.current = stream;
       setCameraActive(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
 
       const BarcodeDetectorCtor = (
         window as unknown as {
@@ -429,7 +439,7 @@ export default function QrLossCheckerPage() {
 
         {cameraActive && (
           <div className="bg-black rounded-xs p-2 flex justify-center">
-            <video ref={videoRef} className="max-h-56 rounded-xs" muted playsInline />
+            <video ref={videoRef} className="max-h-56 rounded-xs" autoPlay muted playsInline />
           </div>
         )}
 

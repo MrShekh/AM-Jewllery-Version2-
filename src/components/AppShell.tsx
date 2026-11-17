@@ -276,18 +276,28 @@ export const AppShell: React.FC<{
     }
   }, [scannerModalOpen]);
 
+  // Attach MediaStream after <video> mounts on screen (fixes blank video in Firefox/Chrome)
+  useEffect(() => {
+    if (cameraActive && videoRef.current && streamRef.current) {
+      const video = videoRef.current;
+      video.srcObject = streamRef.current;
+      void video.play().catch(() => {});
+    }
+  }, [cameraActive]);
+
   async function startLaptopCameraScan() {
     setScannerError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
       streamRef.current = stream;
       setCameraActive(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
 
       // Use native BarcodeDetector if supported by Chrome/Edge on Windows
       const BarcodeDetectorCtor = (
@@ -606,6 +616,7 @@ export const AppShell: React.FC<{
                   <video
                     ref={videoRef}
                     className="w-full h-48 bg-black rounded-xs object-cover border border-slate-300"
+                    autoPlay
                     muted
                     playsInline
                   />
