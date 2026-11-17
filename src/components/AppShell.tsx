@@ -291,7 +291,11 @@ export const AppShell: React.FC<{
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" },
+          video: {
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
         });
       } catch {
         stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -329,23 +333,33 @@ export const AppShell: React.FC<{
         };
         requestAnimationFrame(scanLoop);
       } else {
-        // Cross-browser fallback (Firefox / Safari) using downscaled canvas + jsQR (~8 fps)
+        // Cross-browser fallback (Firefox / Safari) using HD center-ROI + full-frame jsQR (~16 fps)
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d", { willReadFrequently: true });
         let lastScanAt = 0;
+        let frameIdx = 0;
         const scanCanvasLoop = async (ts: number) => {
           if (!streamRef.current || !videoRef.current || !ctx) return;
-          if (ts - lastScanAt >= 120) {
+          if (ts - lastScanAt >= 60) {
             lastScanAt = ts;
+            frameIdx += 1;
             const video = videoRef.current;
             if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0) {
-              const scale = Math.min(1, 640 / video.videoWidth);
-              canvas.width = Math.round(video.videoWidth * scale);
-              canvas.height = Math.round(video.videoHeight * scale);
-              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              const vw = video.videoWidth;
+              const vh = video.videoHeight;
+              // Alternate between crisp center crop (60%) and full frame
+              const useCrop = frameIdx % 2 === 0;
+              const sx = useCrop ? Math.round(vw * 0.2) : 0;
+              const sy = useCrop ? Math.round(vh * 0.2) : 0;
+              const sw = useCrop ? Math.round(vw * 0.6) : vw;
+              const sh = useCrop ? Math.round(vh * 0.6) : vh;
+              const scale = Math.min(1, 640 / sw);
+              canvas.width = Math.round(sw * scale);
+              canvas.height = Math.round(sh * scale);
+              ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
               const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
               const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                inversionAttempts: "dontInvert",
+                inversionAttempts: frameIdx % 4 === 0 ? "attemptBoth" : "dontInvert",
               });
               if (code?.data) {
                 await handleResolveQrOrBagInput(code.data);

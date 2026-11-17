@@ -142,7 +142,11 @@ export default function QrLossCheckerPage() {
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" },
+          video: {
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
         });
       } catch {
         stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -185,19 +189,28 @@ export default function QrLossCheckerPage() {
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d", { willReadFrequently: true });
         let lastFrameAt = 0;
+        let frameIdx = 0;
         const loop = async (ts: number) => {
           if (!streamRef.current || !videoRef.current || !ctx) return;
-          if (ts - lastFrameAt >= 150) {
+          if (ts - lastFrameAt >= 60) {
             lastFrameAt = ts;
+            frameIdx += 1;
             const v = videoRef.current;
             if (v.readyState >= v.HAVE_CURRENT_DATA && v.videoWidth > 0) {
-              const scale = Math.min(1, 640 / v.videoWidth);
-              canvas.width = Math.round(v.videoWidth * scale);
-              canvas.height = Math.round(v.videoHeight * scale);
-              ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+              const vw = v.videoWidth;
+              const vh = v.videoHeight;
+              const useCrop = frameIdx % 2 === 0;
+              const sx = useCrop ? Math.round(vw * 0.2) : 0;
+              const sy = useCrop ? Math.round(vh * 0.2) : 0;
+              const sw = useCrop ? Math.round(vw * 0.6) : vw;
+              const sh = useCrop ? Math.round(vh * 0.6) : vh;
+              const scale = Math.min(1, 640 / sw);
+              canvas.width = Math.round(sw * scale);
+              canvas.height = Math.round(sh * scale);
+              ctx.drawImage(v, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
               const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
               const code = jsQR(img.data, img.width, img.height, {
-                inversionAttempts: "dontInvert",
+                inversionAttempts: frameIdx % 4 === 0 ? "attemptBoth" : "dontInvert",
               });
               if (
                 code?.data &&

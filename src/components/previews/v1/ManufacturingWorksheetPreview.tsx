@@ -75,9 +75,9 @@ export const ManufacturingWorksheetPreview: React.FC<
     const targetUrl = buildOrderQrTargetUrl(effectiveIdentifier, detectedBaseUrl);
     let mounted = true;
     QRCode.toDataURL(targetUrl, {
-      width: 140,
-      margin: 1,
-      errorCorrectionLevel: "M",
+      width: 160,
+      margin: 2,
+      errorCorrectionLevel: "L",
     })
       .then((url) => {
         if (mounted) setQrDataUrl(url);
