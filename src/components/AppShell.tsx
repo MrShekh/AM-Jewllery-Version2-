@@ -317,7 +317,11 @@ export const AppShell: React.FC<{
       if (BarcodeDetectorCtor) {
         const detector = new BarcodeDetectorCtor({ formats: ["qr_code"] });
         const scanLoop = async () => {
-          if (!streamRef.current || !videoRef.current) return;
+          if (!streamRef.current) return;
+          if (!videoRef.current) {
+            requestAnimationFrame(scanLoop);
+            return;
+          }
           try {
             const codes = await detector.detect(videoRef.current);
             if (codes.length > 0 && codes[0].rawValue) {
@@ -339,7 +343,11 @@ export const AppShell: React.FC<{
         let lastScanAt = 0;
         let frameIdx = 0;
         const scanCanvasLoop = async (ts: number) => {
-          if (!streamRef.current || !videoRef.current || !ctx) return;
+          if (!streamRef.current || !ctx) return;
+          if (!videoRef.current) {
+            requestAnimationFrame(scanCanvasLoop);
+            return;
+          }
           if (ts - lastScanAt >= 60) {
             lastScanAt = ts;
             frameIdx += 1;

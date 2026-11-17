@@ -170,7 +170,11 @@ export default function QrLossCheckerPage() {
       if (BarcodeDetectorCtor) {
         const detector = new BarcodeDetectorCtor({ formats: ["qr_code"] });
         const loop = async () => {
-          if (!streamRef.current || !videoRef.current) return;
+          if (!streamRef.current) return;
+          if (!videoRef.current) {
+            requestAnimationFrame(loop);
+            return;
+          }
           try {
             const codes = await detector.detect(videoRef.current);
             const val = codes[0]?.rawValue;
@@ -191,7 +195,11 @@ export default function QrLossCheckerPage() {
         let lastFrameAt = 0;
         let frameIdx = 0;
         const loop = async (ts: number) => {
-          if (!streamRef.current || !videoRef.current || !ctx) return;
+          if (!streamRef.current || !ctx) return;
+          if (!videoRef.current) {
+            requestAnimationFrame(loop);
+            return;
+          }
           if (ts - lastFrameAt >= 60) {
             lastFrameAt = ts;
             frameIdx += 1;
