@@ -13047,11 +13047,14 @@ export class ErpDomainService {
           ZERO
         );
 
+      const adminOwnFineTotal = roundInternal(
+        adminFineTotal.sub(unusedCustomerGoldCredits)
+      );
       const groupCFine = roundInternal(
         wipFineTotal.add(fgFineTotal).add(outstandingLossFine)
       );
       const totalAccountedGoldFine = roundInternal(
-        adminFineTotal.add(customerFineOwed).add(groupCFine)
+        adminOwnFineTotal.add(customerFineOwed).add(groupCFine)
       );
       const physicalGoldFine = roundInternal(
         adminFineTotal.add(wipFineTotal).add(fgFineTotal)
@@ -13060,14 +13063,12 @@ export class ErpDomainService {
         adminPhysicalTotal.add(wipPhysicalTotal).add(fgPhysicalTotal)
       );
       const netTrackedGoldPosition = roundInternal(
-        totalAccountedGoldFine
-          .sub(unusedCustomerGoldCredits)
-          .sub(karigarReturnObligations)
+        totalAccountedGoldFine.sub(karigarReturnObligations)
       );
 
       return {
         groupA_adminStock: {
-          totalFine: adminFineTotal.toFixed(4),
+          totalFine: adminOwnFineTotal.toFixed(4),
           mixedPhysical: adminPhysicalTotal.toFixed(3),
           byPurity: adminByPurity,
         },

@@ -121,6 +121,7 @@ export default function StockPage() {
   const [reversalTarget, setReversalTarget] =
     useState<JournalHistoryRow | null>(null);
   const [reversalReason, setReversalReason] = useState("");
+  const [customerAdvanceFine, setCustomerAdvanceFine] = useState<number>(0);
 
   const loadData = useCallback(
     async (force = false) => {
@@ -131,6 +132,7 @@ export default function StockPage() {
           reconciliation?: DailyReconciliationReport;
           history?: JournalHistoryRow[];
           sales?: StockSaleRow[];
+          customerAdvanceFine?: string;
         }>("/api/stock", { force }),
       ]);
       if (!resolvedActor) {
@@ -143,6 +145,7 @@ export default function StockPage() {
         setReconciliation(stkData.reconciliation);
         setHistory(stkData.history || []);
         setSales(stkData.sales || []);
+        setCustomerAdvanceFine(Number(stkData.customerAdvanceFine || 0));
 
         const purities: PurityStockRow[] = stkData.reconciliation?.byPurity || [];
         const nonFinePurities = purities.filter(
@@ -194,14 +197,16 @@ export default function StockPage() {
     ? [finePurity, ...karatPurities]
     : karatPurities;
 
-  const totalAdminStockFine = allPurities.reduce(
+  const totalPoolFine = allPurities.reduce(
     (sum, p) => sum + Number(p.adminFineEquivalent || 0),
     0
   );
-  const directFineGold = finePurities.reduce(
+  const totalAdminStockFine = totalPoolFine - customerAdvanceFine;
+  const directFinePool = finePurities.reduce(
     (sum, p) => sum + Number(p.adminFineEquivalent || 0),
     0
   );
+  const directFineGold = Math.max(0, directFinePool - customerAdvanceFine);
   const directFinePhysical = finePurities.reduce(
     (sum, p) => sum + Number(p.adminPhysicalWeight || 0),
     0
@@ -582,34 +587,55 @@ export default function StockPage() {
 
         {/* Green Card: Total Admin Stock (Fine Gold) */}
         <div className="bg-gradient-to-br from-emerald-500 to-green-700 text-white p-6 rounded-xl shadow-lg">
-          <p className="text-sm opacity-90">Total Admin Stock (Fine Gold)</p>
-          <p className="text-4xl font-bold mt-2">
-            {formatWeight3(totalAdminStockFine)}g
-          </p>
-          <p className="text-xs opacity-80 mt-2">
-            Sum of every karat converted to fine (weight × purity ÷ 100) + direct
-            fine gold
-          </p>
-        </div>
-
-        {/* Sky-Blue Card: Fine Gold (Direct) */}
-        <div className="bg-gradient-to-br from-sky-500 to-blue-700 text-white p-6 rounded-xl shadow-lg">
           <div className="flex flex-wrap justify-between items-start gap-2">
             <div>
-              <p className="text-sm opacity-90">Fine Gold (Direct)</p>
-              <p className="text-3xl font-bold mt-1">
-                {formatWeight3(directFineGold)}g
+              <p className="text-sm opacity-90">Total Admin Stock (Fine Gold)</p>
+              <p className="text-4xl font-bold mt-2">
+                {formatWeight3(totalAdminStockFine)}g
               </p>
               <p className="text-xs opacity-80 mt-2">
-                Directly added fine gold + recovered from customers — can be
-                converted to any karat
+                Admin&apos;s own gold (karat gold + admin fine gold), excluding customer advances
               </p>
             </div>
-            {directFinePhysical > 0 && (
+            {customerAdvanceFine > 0 && (
               <span className="text-xs bg-white/20 px-2.5 py-1 rounded-md font-medium">
-                Physical: {formatWeight3(directFinePhysical)}g
+                Physical in Locker: {formatWeight3(totalPoolFine)}g
               </span>
             )}
+          </div>
+        </div>
+
+        {/* Fine Gold (Direct) & Customer Advance Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Sky-Blue Card: Fine Gold (Direct) */}
+          <div className="bg-gradient-to-br from-sky-500 to-blue-700 text-white p-6 rounded-xl shadow-lg">
+            <div className="flex flex-wrap justify-between items-start gap-2">
+              <div>
+                <p className="text-sm opacity-90">Admin Fine Gold (Direct)</p>
+                <p className="text-3xl font-bold mt-1">
+                  {formatWeight3(directFineGold)}g
+                </p>
+                <p className="text-xs opacity-80 mt-2">
+                  Admin&apos;s own fine gold — can be converted to any karat
+                </p>
+              </div>
+              {directFinePhysical > 0 && (
+                <span className="text-xs bg-white/20 px-2.5 py-1 rounded-md font-medium">
+                  Physical in Locker: {formatWeight3(directFinePhysical)}g
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Amber Card: Customer Advance (Held for Future Orders) */}
+          <div className="bg-gradient-to-br from-amber-500 to-orange-700 text-white p-6 rounded-xl shadow-lg">
+            <p className="text-sm opacity-90">Customer Advance (Fine Gold)</p>
+            <p className="text-3xl font-bold mt-1">
+              {formatWeight3(customerAdvanceFine)}g
+            </p>
+            <p className="text-xs opacity-80 mt-2">
+              Unused customer advance gold held in locker for future orders (excluded from Admin Stock until billed)
+            </p>
           </div>
         </div>
 

@@ -7,11 +7,12 @@ export async function GET(req: NextRequest) {
   try {
     const actor = await requireServerActor();
     const search = req.nextUrl.searchParams.get("search") || undefined;
-    const [reconciliation, history, sales, conversions] = await Promise.all([
+    const [reconciliation, history, sales, conversions, dashboard] = await Promise.all([
       erpService.getDailyReconciliation(actor),
       erpService.listJournalHistory(actor, search),
       erpService.listStockSales(actor),
       erpService.listStockConversions(actor),
+      erpService.getDashboardSummary(actor),
     ]);
 
     return NextResponse.json({
@@ -19,6 +20,7 @@ export async function GET(req: NextRequest) {
       reconciliation,
       sales,
       conversions,
+      customerAdvanceFine: dashboard.totals.unusedCustomerGoldCredits,
       history: history.map((h) => ({
         ...h,
         touchSnapshot: h.touchSnapshot.toFixed(4).replace(/\.?0+$/, ""),

@@ -417,6 +417,11 @@ export default function DashboardPage() {
                     <div className="text-[11px] text-slate-500 tabular-nums">
                       {formatWeight3(summary.groupA_adminStock.mixedPhysical)} g mixed physical on hand
                     </div>
+                    {Number(summary.totals.unusedCustomerGoldCredits) > 0 && (
+                      <div className="text-[11px] text-amber-700 font-medium tabular-nums mt-0.5">
+                        +{formatWeight3(summary.totals.unusedCustomerGoldCredits)} g customer advance in locker
+                      </div>
+                    )}
                   </div>
                   {openCard === "A" ? (
                     <ChevronDown className="h-4 w-4 text-slate-400" />
