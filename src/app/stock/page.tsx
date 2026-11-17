@@ -683,8 +683,8 @@ export default function StockPage() {
                 </label>
                 <input
                   type="number"
-                  step="0.01"
-                  min="0.01"
+                  step="0.001"
+                  min="0.001"
                   value={addWeight}
                   onChange={(e) => setAddWeight(e.target.value)}
                   placeholder="e.g. 50"
@@ -948,8 +948,8 @@ export default function StockPage() {
                 </label>
                 <input
                   type="number"
-                  step="0.01"
-                  min="0.01"
+                  step="0.001"
+                  min="0.001"
                   value={sellWeight}
                   onChange={(e) => setSellWeight(e.target.value)}
                   placeholder="e.g. 10.50"
