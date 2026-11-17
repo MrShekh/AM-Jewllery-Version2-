@@ -49,4 +49,21 @@
   .print-only-worksheet * {
     box-shadow: none !important;
   }
+
+  .print-batch-page {
+    display: grid;
+    grid-template-columns: repeat(2, 345px);
+    justify-content: space-between;
+    align-content: start;
+    row-gap: 6mm;
+    column-gap: 6mm;
+    width: 100%;
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .print-batch-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
 }

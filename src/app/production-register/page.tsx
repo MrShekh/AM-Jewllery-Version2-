@@ -227,6 +227,10 @@ function ProductionRegisterContent() {
     }>
   >([]);
   const [savingSheet, setSavingSheet] = useState<boolean>(false);
+  const [selectedPrintOrderIds, setSelectedPrintOrderIds] = useState<string[]>(
+    []
+  );
+  const [printMode, setPrintMode] = useState<"SINGLE" | "BATCH">("SINGLE");
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 220);
@@ -994,6 +998,47 @@ function ProductionRegisterContent() {
 
     const cols: ColumnDef<RegisterOrderRow>[] = [
       {
+        id: "select_print",
+        header: () => {
+          const allSelected =
+            rows.length > 0 &&
+            rows.every((r) => selectedPrintOrderIds.includes(r.order.id));
+          return (
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  setSelectedPrintOrderIds(rows.map((r) => r.order.id));
+                } else {
+                  setSelectedPrintOrderIds([]);
+                }
+              }}
+              title="Select all visible orders for 4-per-A4 printing"
+              className="cursor-pointer"
+            />
+          );
+        },
+        cell: ({ row }) => {
+          const id = row.original.order.id;
+          const checked = selectedPrintOrderIds.includes(id);
+          return (
+            <input
+              type="checkbox"
+              checked={checked}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => {
+                setSelectedPrintOrderIds((prev) =>
+                  e.target.checked ? [...prev, id] : prev.filter((x) => x !== id)
+                );
+              }}
+              title="Select for 4-per-A4 batch print"
+              className="cursor-pointer"
+            />
+          );
+        },
+      },
+      {
         id: "bagNumber",
         header: "Bag #",
         cell: ({ row }) => (
@@ -1493,6 +1538,8 @@ function ProductionRegisterContent() {
     showSettingCols,
     showFinalPolishCols,
     actor?.role,
+    rows,
+    selectedPrintOrderIds,
   ]);
 
   const table = useReactTable({
@@ -1560,31 +1607,73 @@ function ProductionRegisterContent() {
 
   return (
     <AppShell actor={actor}>
-      {/* Dedicated Print-Only Container: prints ONLY the Job Card + QR attachment */}
-      {selectedOrderRow && (
+      {/* Dedicated Print-Only Container: prints either 2x2 Batch (4 per A4) OR Single Job Card */}
+      {printMode === "BATCH" && selectedPrintOrderIds.length > 0 ? (
         <div className="print-only-worksheet">
-          <ManufacturingWorksheetPreview
-            {...adaptV2OrderToV1WorksheetProps({
-              bagNumber: selectedOrderRow.order.bagNumber,
-              customerName: selectedOrderRow.customer.name,
-              orderName: selectedOrderRow.order.orderName,
-              orderDate: selectedOrderRow.order.orderDate,
-              dueDate: selectedOrderRow.order.dueDate,
-              purityDisplayLabel: selectedOrderRow.purity.displayLabel,
-              targetWeightGrams:
-                selectedOrderRow.order.targetWeight ||
-                selectedOrderRow.order.initialIssuedMetalWeight,
-              size: selectedOrderRow.order.size,
-              photoUrl: selectedOrderRow.order.photoUrl,
-              selectedProcesses: selectedOrderRow.processes.map(
-                (p) => p.processType
-              ),
-              adDetailsJson: selectedOrderRow.order.adDetailsJson,
-            })}
-            qrCodeOrderId={selectedOrderRow.order.id}
-            qrCodeBagNumber={selectedOrderRow.order.bagNumber}
-          />
+          {(() => {
+            const selectedRows = rows.filter((r) =>
+              selectedPrintOrderIds.includes(r.order.id)
+            );
+            const pages: RegisterOrderRow[][] = [];
+            for (let i = 0; i < selectedRows.length; i += 4) {
+              pages.push(selectedRows.slice(i, i + 4));
+            }
+            return pages.map((pageRows, pageIdx) => (
+              <div key={`print_page_${pageIdx}`} className="print-batch-page">
+                {pageRows.map((r) => (
+                  <ManufacturingWorksheetPreview
+                    key={`batch_card_${r.order.id}`}
+                    {...adaptV2OrderToV1WorksheetProps({
+                      bagNumber: r.order.bagNumber,
+                      customerName: r.customer.name,
+                      orderName: r.order.orderName,
+                      orderDate: r.order.orderDate,
+                      dueDate: r.order.dueDate,
+                      purityDisplayLabel: r.purity.displayLabel,
+                      targetWeightGrams:
+                        r.order.targetWeightText ||
+                        r.order.targetWeight ||
+                        r.order.initialIssuedMetalWeight,
+                      size: r.order.size,
+                      photoUrl: r.order.photoUrl,
+                      selectedProcesses: r.processes.map((p) => p.processType),
+                      adDetailsJson: r.order.adDetailsJson,
+                    })}
+                    qrCodeOrderId={r.order.id}
+                    qrCodeBagNumber={r.order.bagNumber}
+                  />
+                ))}
+              </div>
+            ));
+          })()}
         </div>
+      ) : (
+        selectedOrderRow && (
+          <div className="print-only-worksheet">
+            <ManufacturingWorksheetPreview
+              {...adaptV2OrderToV1WorksheetProps({
+                bagNumber: selectedOrderRow.order.bagNumber,
+                customerName: selectedOrderRow.customer.name,
+                orderName: selectedOrderRow.order.orderName,
+                orderDate: selectedOrderRow.order.orderDate,
+                dueDate: selectedOrderRow.order.dueDate,
+                purityDisplayLabel: selectedOrderRow.purity.displayLabel,
+                targetWeightGrams:
+                  selectedOrderRow.order.targetWeightText ||
+                  selectedOrderRow.order.targetWeight ||
+                  selectedOrderRow.order.initialIssuedMetalWeight,
+                size: selectedOrderRow.order.size,
+                photoUrl: selectedOrderRow.order.photoUrl,
+                selectedProcesses: selectedOrderRow.processes.map(
+                  (p) => p.processType
+                ),
+                adDetailsJson: selectedOrderRow.order.adDetailsJson,
+              })}
+              qrCodeOrderId={selectedOrderRow.order.id}
+              qrCodeBagNumber={selectedOrderRow.order.bagNumber}
+            />
+          </div>
+        )
       )}
 
       <div className="space-y-3 hide-on-print">
@@ -1611,6 +1700,27 @@ function ProductionRegisterContent() {
               >
                 + New Order
               </Link>
+              {selectedPrintOrderIds.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPrintMode("BATCH");
+                      setTimeout(() => window.print(), 250);
+                    }}
+                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xs cursor-pointer"
+                  >
+                    Print 4-per-A4 ({selectedPrintOrderIds.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPrintOrderIds([])}
+                    className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-semibold rounded-xs cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -1944,7 +2054,10 @@ function ProductionRegisterContent() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={() => {
+                    setPrintMode("SINGLE");
+                    setTimeout(() => window.print(), 80);
+                  }}
                   className="px-3 py-1.5 text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white rounded-xs cursor-pointer"
                 >
                   Print Job Card
@@ -3101,7 +3214,10 @@ function ProductionRegisterContent() {
                 <div className="space-y-2 no-print">
                   <button
                     type="button"
-                    onClick={() => window.print()}
+                    onClick={() => {
+                      setPrintMode("SINGLE");
+                      setTimeout(() => window.print(), 80);
+                    }}
                     className="block w-full px-4 py-2 bg-blue-700 text-white text-xs font-semibold rounded-xs cursor-pointer"
                   >
                     Print Job Card & QR Label
