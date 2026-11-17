@@ -406,6 +406,7 @@ model Order {
   purity                   PurityDefinition @relation(fields: [purityId], references: [id])
   touchSnapshot            Decimal          @db.Decimal(8, 4)
   targetWeight             Decimal?         @db.Decimal(18, 6)
+  targetWeightText         String?
   size                     String?
   orderDate                DateTime
   dueDate                  DateTime?

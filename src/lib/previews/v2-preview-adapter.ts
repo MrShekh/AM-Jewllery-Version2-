@@ -62,12 +62,19 @@ export function parseAdDetailsFromJson(
 export function adaptV2OrderToV1WorksheetProps(
   input: V2OrderPreviewInput
 ): ManufacturingWorksheetPreviewProps {
-  const rawWt =
+  const rawStr =
     input.targetWeightGrams !== null &&
     input.targetWeightGrams !== undefined &&
-    Number(input.targetWeightGrams) > 0
-      ? Number(input.targetWeightGrams)
-      : Number(input.initialIssuedWeightGrams || 0);
+    String(input.targetWeightGrams).trim() !== ""
+      ? String(input.targetWeightGrams).trim()
+      : input.initialIssuedWeightGrams !== null &&
+        input.initialIssuedWeightGrams !== undefined
+      ? String(input.initialIssuedWeightGrams).trim()
+      : "";
+  const isPureNum = rawStr !== "" && /^\d+(\.\d+)?$/.test(rawStr);
+  const weightInGrams: number | string = isPureNum
+    ? Number(Number(rawStr).toFixed(3))
+    : rawStr || 0;
 
   const adDetails = parseAdDetailsFromJson(
     input.adDetailsJson,
@@ -81,7 +88,7 @@ export function adaptV2OrderToV1WorksheetProps(
     date: toIsoDatePart(input.orderDate),
     deliveryDate: toIsoDatePart(input.dueDate),
     selectedKarat: input.purityDisplayLabel || input.purityKaratLabel || "",
-    weightInGrams: Number.isFinite(rawWt) ? Number(rawWt.toFixed(3)) : 0,
+    weightInGrams,
     size: input.size || "",
     selectedProcesses: input.selectedProcesses.map(
       (p) => PROCESS_DISPLAY_LABELS[p] || p
@@ -103,7 +110,10 @@ export function adaptV2OrderToV1WorksheetPDFData(
     customerName: props.customerName,
     orderName: props.orderName,
     karat: props.selectedKarat,
-    weightInGrams: props.weightInGrams,
+    weightInGrams:
+      typeof props.weightInGrams === "number"
+        ? props.weightInGrams
+        : Number.parseFloat(String(props.weightInGrams)) || 0,
     size: props.size,
     deliveryDate: props.deliveryDate
       ? new Date(props.deliveryDate).toLocaleDateString("en-GB")

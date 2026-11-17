@@ -17,7 +17,7 @@ export interface ManufacturingWorksheetPreviewProps {
   date: string;
   deliveryDate: string;
   selectedKarat: string;
-  weightInGrams: number;
+  weightInGrams: number | string;
   size: string;
   selectedProcesses: string[];
   adDetails: AdDetail[];
@@ -176,7 +176,11 @@ export const ManufacturingWorksheetPreview: React.FC<
                 <span className="shrink-0">
                   Wt:{" "}
                   <strong className="text-blue-700">
-                    {weightInGrams > 0 ? `${weightInGrams}g` : "—"}
+                    {typeof weightInGrams === "string"
+                      ? weightInGrams.trim() || "—"
+                      : weightInGrams > 0
+                      ? `${weightInGrams}g`
+                      : "—"}
                   </strong>
                 </span>
               </div>

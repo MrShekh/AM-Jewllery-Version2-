@@ -201,6 +201,7 @@ export interface OrderEntity {
   purityId: string;
   touchSnapshot: Decimal;
   targetWeight: Decimal | null;
+  targetWeightText?: string | null;
   size: string | null;
   orderDate: Date;
   dueDate: Date | null;

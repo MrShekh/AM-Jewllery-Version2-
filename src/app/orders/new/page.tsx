@@ -106,17 +106,14 @@ export default function NewOrderPage() {
 
     if (cData.ok && cData.customers) {
       setCustomers(cData.customers);
-      if (cData.customers.length > 0 && !customerId) {
-        setCustomerId(cData.customers[0].id);
-      }
     }
     if (pData.ok && pData.purities) {
       setPurities(pData.purities);
-      if (pData.purities.length > 0 && !purityId) {
-        setPurityId(pData.purities[0].id);
+      if (pData.purities.length > 0) {
+        setPurityId((prev) => prev || pData.purities![0].id);
       }
     }
-  }, [router, customerId, purityId]);
+  }, [router]);
 
   useEffect(() => {
     loadInitial();
@@ -248,7 +245,7 @@ export default function NewOrderPage() {
     dueDate: dueDate || null,
     purityDisplayLabel: selectedPurity?.displayLabel || "22K (92%)",
     purityKaratLabel: selectedPurity?.karatLabel || "22KT",
-    targetWeightGrams: targetWeight ? Number(targetWeight) : 0,
+    targetWeightGrams: targetWeight || 0,
     size,
     photoUrl,
     selectedProcesses,
@@ -395,16 +392,14 @@ export default function NewOrderPage() {
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Target Weight (g)
+                  Weight (Text / Grams)
                 </label>
                 <input
-                  type="number"
-                  step="0.001"
-                  min="0"
+                  type="text"
                   value={targetWeight}
                   onChange={(e) => setTargetWeight(e.target.value)}
-                  placeholder="20.000"
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-xs font-mono tabular-nums"
+                  placeholder="e.g. 20.000 or 15-16g"
+                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-xs font-mono"
                 />
               </div>
               <div>

@@ -27,6 +27,9 @@ function serializeOrderRow(r: Awaited<ReturnType<typeof erpService.listRegisterO
       targetWeight: r.order.targetWeight
         ? r.order.targetWeight.toFixed(3)
         : null,
+      targetWeightText:
+        r.order.targetWeightText ??
+        (r.order.targetWeight ? r.order.targetWeight.toFixed(3) : null),
       initialIssuedMetalWeight: r.order.initialIssuedMetalWeight.toFixed(3),
       retainedStoneWeight: r.order.retainedStoneWeight.toFixed(3),
       finishedGrossWeight: r.order.finishedGrossWeight

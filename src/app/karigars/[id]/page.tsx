@@ -30,6 +30,8 @@ interface KarigarProfileResponse {
     writtenOffFineWeight: string;
     makingDeductedFineWeight: string;
     unallocatedAdvanceFine: string;
+    totalAdPieces: number;
+    totalKlPieces: number;
   };
   karatWiseLoss: Array<{
     purityId: string;
@@ -55,6 +57,8 @@ interface KarigarProfileResponse {
     custodyWeight: string;
     rawLossWeight: string;
     fineLossWeight: string;
+    adPieces: number;
+    klPieces: number;
     updatedAt: string;
   }>;
   recovery: {
@@ -222,7 +226,7 @@ export default function KarigarProfilePage() {
         ) : profile ? (
           <>
             {/* KPI Summary Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <div className="bg-white border border-slate-200 rounded-xs p-3">
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   Total Orders
@@ -256,6 +260,18 @@ export default function KarigarProfilePage() {
                 </div>
                 <div className="text-[11px] text-slate-600 font-mono mt-0.5">
                   Advance: {profile.summary.unallocatedAdvanceFine} g
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-xs p-3">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Setting Stones (Pcs)
+                </div>
+                <div className="mt-1 text-base font-bold font-mono text-blue-800">
+                  AD: {profile.summary.totalAdPieces}
+                </div>
+                <div className="text-xs font-bold font-mono text-purple-800 mt-0.5">
+                  KL: {profile.summary.totalKlPieces}
                 </div>
               </div>
 
@@ -353,6 +369,8 @@ export default function KarigarProfilePage() {
                       <th className="p-2 text-left font-semibold">Process</th>
                       <th className="p-2 text-left font-semibold">Status</th>
                       <th className="p-2 text-right font-semibold">Custody (g)</th>
+                      <th className="p-2 text-right font-semibold">AD Pcs</th>
+                      <th className="p-2 text-right font-semibold">KL Pcs</th>
                       <th className="p-2 text-right font-semibold">Loss (g)</th>
                       <th className="p-2 text-right font-semibold">Fine Loss (g)</th>
                     </tr>
@@ -360,7 +378,7 @@ export default function KarigarProfilePage() {
                   <tbody>
                     {profile.orders.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="p-4 text-center text-slate-500">
+                        <td colSpan={11} className="p-4 text-center text-slate-500">
                           No orders assigned to this karigar yet.
                         </td>
                       </tr>
@@ -401,6 +419,12 @@ export default function KarigarProfilePage() {
                           <td className="p-2 text-right font-mono text-slate-700">
                             {o.custodyWeight}
                           </td>
+                          <td className="p-2 text-right font-mono text-blue-800">
+                            {o.adPieces > 0 ? o.adPieces : "—"}
+                          </td>
+                          <td className="p-2 text-right font-mono text-purple-800">
+                            {o.klPieces > 0 ? o.klPieces : "—"}
+                          </td>
                           <td className="p-2 text-right font-mono text-rose-700">
                             {o.rawLossWeight}
                           </td>
@@ -411,6 +435,22 @@ export default function KarigarProfilePage() {
                       ))
                     )}
                   </tbody>
+                  {profile.orders.length > 0 && (
+                    <tfoot>
+                      <tr className="bg-slate-100 border-t border-slate-300 font-bold text-xs">
+                        <td colSpan={7} className="p-2 text-right text-slate-700">
+                          Total Setting Pieces:
+                        </td>
+                        <td className="p-2 text-right font-mono text-blue-800">
+                          {profile.summary.totalAdPieces}
+                        </td>
+                        <td className="p-2 text-right font-mono text-purple-800">
+                          {profile.summary.totalKlPieces}
+                        </td>
+                        <td colSpan={2} />
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
             </div>

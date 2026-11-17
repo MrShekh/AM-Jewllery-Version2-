@@ -65,6 +65,7 @@ interface RegisterOrderRow {
     purityId: string;
     touchSnapshot: string;
     targetWeight: string | null;
+    targetWeightText?: string | null;
     size: string | null;
     orderDate: string;
     dueDate: string | null;
@@ -1314,9 +1315,15 @@ function ProductionRegisterContent() {
           const adSum = settingStones
             .filter((s) => s.componentType === "AD")
             .reduce((acc, s) => acc + Number(s.weightGrams || 0), 0);
+          const adPiecesSum = settingStones
+            .filter((s) => s.componentType === "AD")
+            .reduce((acc, s) => acc + (s.pieces || 0), 0);
           const klSum = settingStones
             .filter((s) => s.componentType === "KL")
             .reduce((acc, s) => acc + Number(s.weightGrams || 0), 0);
+          const klPiecesSum = settingStones
+            .filter((s) => s.componentType === "KL")
+            .reduce((acc, s) => acc + (s.pieces || 0), 0);
           const totalIn =
             Number(p.latestGrossInWeight || 0) + Number(p.addedStoneWeight || 0);
           return (
@@ -1328,11 +1335,15 @@ function ProductionRegisterContent() {
               {renderProcessInButton(row.original, p, p.latestGrossInWeight)}
               <span className="text-slate-300">|</span>
               <span className="font-mono text-blue-800">
-                {adSum > 0 ? adSum.toFixed(3) : "—"}
+                {adSum > 0 || adPiecesSum > 0
+                  ? `${adSum.toFixed(3)} (${adPiecesSum}p)`
+                  : "—"}
               </span>
               <span className="text-slate-300">|</span>
               <span className="font-mono text-purple-800">
-                {klSum > 0 ? klSum.toFixed(3) : "—"}
+                {klSum > 0 || klPiecesSum > 0
+                  ? `${klSum.toFixed(3)} (${klPiecesSum}p)`
+                  : "—"}
               </span>
               <span className="text-slate-300">|</span>
               <span className="font-mono font-semibold text-slate-900">
@@ -1767,6 +1778,34 @@ function ProductionRegisterContent() {
                 All Orders
               </button>
             )}
+            <div className="ml-auto flex items-center gap-3 font-mono text-[11px]">
+              <span className="px-2 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 rounded-xs font-semibold">
+                Total AD Pcs:{" "}
+                {rows.reduce(
+                  (sum, r) =>
+                    sum +
+                    (r.stoneComponents ?? [])
+                      .filter(
+                        (s) => s.direction === "ADDED" && s.componentType === "AD"
+                      )
+                      .reduce((a, s) => a + (s.pieces || 0), 0),
+                  0
+                )}
+              </span>
+              <span className="px-2 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 rounded-xs font-semibold">
+                Total KL Pcs:{" "}
+                {rows.reduce(
+                  (sum, r) =>
+                    sum +
+                    (r.stoneComponents ?? [])
+                      .filter(
+                        (s) => s.direction === "ADDED" && s.componentType === "KL"
+                      )
+                      .reduce((a, s) => a + (s.pieces || 0), 0),
+                  0
+                )}
+              </span>
+            </div>
           </div>
 
           {/* Column Visibility Toggles */}
@@ -1881,7 +1920,11 @@ function ProductionRegisterContent() {
                   onClick={() => {
                     setEditOrderName(selectedOrderRow.order.orderName || "");
                     setEditCustomerId(selectedOrderRow.customer.id || "");
-                    setEditTargetWeight(selectedOrderRow.order.targetWeight || "");
+                    setEditTargetWeight(
+                      selectedOrderRow.order.targetWeightText ??
+                        selectedOrderRow.order.targetWeight ??
+                        ""
+                    );
                     setEditSize(selectedOrderRow.order.size || "");
                     setEditDueDate(
                       selectedOrderRow.order.dueDate
@@ -3040,6 +3083,7 @@ function ProductionRegisterContent() {
                       purityDisplayLabel:
                         selectedOrderRow.purity.displayLabel,
                       targetWeightGrams:
+                        selectedOrderRow.order.targetWeightText ||
                         selectedOrderRow.order.targetWeight ||
                         selectedOrderRow.order.initialIssuedMetalWeight,
                       size: selectedOrderRow.order.size,
@@ -3172,15 +3216,13 @@ function ProductionRegisterContent() {
                   </div>
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">
-                      Target Weight (g)
+                      Weight (Text / Grams)
                     </label>
                     <input
-                      type="number"
-                      step="0.001"
-                      min="0"
+                      type="text"
                       value={editTargetWeight}
                       onChange={(e) => setEditTargetWeight(e.target.value)}
-                      placeholder="15.000"
+                      placeholder="e.g. 15.000 or 15-16g"
                       className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xs font-mono"
                     />
                   </div>

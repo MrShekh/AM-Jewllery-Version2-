@@ -216,6 +216,10 @@ export async function getKarigarProfileWorkspace(
             },
           },
         },
+        stoneComponentEntries: {
+          where: { direction: "ADDED" },
+          select: { componentType: true, pieces: true, weightGrams: true },
+        },
       },
       orderBy: { updatedAt: "desc" },
     }),
@@ -304,6 +308,9 @@ export async function getKarigarProfileWorkspace(
     kEntry.fineLoss += fine;
   }
 
+  let totalAdPieces = 0;
+  let totalKlPieces = 0;
+
   const orderProcessRows = processes.map((proc) => {
     orderIds.add(proc.orderId);
     const isDelivered = proc.order.deliveryStatus === "DELIVERED";
@@ -328,6 +335,14 @@ export async function getKarigarProfileWorkspace(
     karatMap.get(p.id)!.orderIds.add(proc.orderId);
 
     const procLoss = lossByOrderProcess.get(proc.id) || { raw: 0, fine: 0 };
+    const adPieces = proc.stoneComponentEntries
+      .filter((s) => s.componentType === "AD")
+      .reduce((acc, s) => acc + (s.pieces || 0), 0);
+    const klPieces = proc.stoneComponentEntries
+      .filter((s) => s.componentType === "KL")
+      .reduce((acc, s) => acc + (s.pieces || 0), 0);
+    totalAdPieces += adPieces;
+    totalKlPieces += klPieces;
 
     return {
       orderProcessId: proc.id,
@@ -344,6 +359,8 @@ export async function getKarigarProfileWorkspace(
       custodyWeight: cust.toFixed(3),
       rawLossWeight: procLoss.raw.toFixed(3),
       fineLossWeight: procLoss.fine.toFixed(3),
+      adPieces,
+      klPieces,
       updatedAt: proc.updatedAt.toISOString(),
     };
   });
@@ -391,6 +408,8 @@ export async function getKarigarProfileWorkspace(
         karigarSummaryFromRecovery?.makingAllowedFine ?? "0.000",
       unallocatedAdvanceFine:
         karigarSummaryFromRecovery?.unallocatedCreditFine ?? "0.000",
+      totalAdPieces,
+      totalKlPieces,
     },
     karatWiseLoss,
     orders: orderProcessRows,

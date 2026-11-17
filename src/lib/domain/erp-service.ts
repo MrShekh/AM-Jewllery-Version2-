@@ -1130,11 +1130,14 @@ export class ErpDomainService {
 
     const orderDate = parseBusinessDate(input.orderDate);
     const dueDate = input.dueDate ? parseBusinessDate(input.dueDate) : null;
+    const rawTargetWeightStr =
+      input.targetWeight !== null && input.targetWeight !== undefined
+        ? String(input.targetWeight).trim()
+        : "";
+    const targetWeightText = rawTargetWeightStr || null;
     const targetWeight =
-      input.targetWeight !== null &&
-      input.targetWeight !== undefined &&
-      input.targetWeight !== ""
-        ? roundInternal(input.targetWeight)
+      rawTargetWeightStr && /^\d+(\.\d+)?$/.test(rawTargetWeightStr)
+        ? roundInternal(rawTargetWeightStr)
         : null;
 
     return this.repo.runInTransaction(async (tx) => {
@@ -1179,6 +1182,7 @@ export class ErpDomainService {
         purityId: purity.id,
         touchSnapshot: roundTouch(purity.touchPercent),
         targetWeight,
+        targetWeightText,
         size: input.size?.trim() || null,
         orderDate,
         dueDate,
@@ -1317,12 +1321,15 @@ export class ErpDomainService {
         nextTouch = purity.touchPercent;
       }
 
-      const nextTargetWeight =
-        input.targetWeight === undefined
-          ? order.targetWeight
-          : input.targetWeight === null || input.targetWeight === ""
-          ? null
-          : roundInternal(input.targetWeight);
+      let nextTargetWeight = order.targetWeight;
+      let nextTargetWeightText = order.targetWeightText ?? null;
+      if (input.targetWeight !== undefined) {
+        const rawTw =
+          input.targetWeight === null ? "" : String(input.targetWeight).trim();
+        nextTargetWeightText = rawTw || null;
+        nextTargetWeight =
+          rawTw && /^\d+(\.\d+)?$/.test(rawTw) ? roundInternal(rawTw) : null;
+      }
 
       const updated = await tx.updateOrder({
         ...order,
@@ -1334,6 +1341,7 @@ export class ErpDomainService {
         purityId: nextPurityId,
         touchSnapshot: nextTouch,
         targetWeight: nextTargetWeight,
+        targetWeightText: nextTargetWeightText,
         size: input.size !== undefined ? input.size?.trim() || null : order.size,
         orderDate:
           input.orderDate !== undefined

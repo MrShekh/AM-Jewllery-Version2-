@@ -85,6 +85,7 @@ function mapOrder(row: {
   purityId: string;
   touchSnapshot: Prisma.Decimal;
   targetWeight: Prisma.Decimal | null;
+  targetWeightText: string | null;
   size: string | null;
   orderDate: Date;
   dueDate: Date | null;
@@ -686,6 +687,7 @@ export class PrismaErpRepository implements ErpRepository {
             targetWeight: order.targetWeight
               ? order.targetWeight.toFixed(6)
               : null,
+            targetWeightText: order.targetWeightText ?? null,
             size: order.size,
             orderDate: order.orderDate,
             dueDate: order.dueDate,
@@ -706,6 +708,20 @@ export class PrismaErpRepository implements ErpRepository {
         const row = await ptx.order.update({
           where: { id: order.id },
           data: {
+            customerId: order.customerId,
+            orderName: order.orderName,
+            photoUrl: order.photoUrl,
+            purityId: order.purityId,
+            touchSnapshot: order.touchSnapshot.toFixed(4),
+            targetWeight: order.targetWeight
+              ? order.targetWeight.toFixed(6)
+              : null,
+            targetWeightText: order.targetWeightText ?? null,
+            size: order.size,
+            orderDate: order.orderDate,
+            dueDate: order.dueDate,
+            notes: order.notes,
+            adDetailsJson: order.adDetailsJson,
             status: order.status,
             initialIssuedMetalWeight:
               order.initialIssuedMetalWeight.toFixed(6),
