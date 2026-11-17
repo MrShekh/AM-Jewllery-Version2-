@@ -2,6 +2,7 @@
 
 import React from "react";
 import { AdDetail, ManufacturingWorksheetPreviewProps } from "./ManufacturingWorksheetPreview";
+import { formatWeight3 } from "@/lib/decimal";
 
 /**
  * Preserved V1 Bill Preview Generator & Synthetic Fixtures (Rule 2)
@@ -86,7 +87,7 @@ export const PreservedV1BillPreview: React.FC<{ data: PreservedBillData }> = ({
           </div>
           {pastJama > 0 && (
             <div className="mt-2 bg-yellow-200 border border-black p-1.5 text-xs font-bold">
-              Past Jama Gold: {pastJama.toFixed(3)} g
+              Past Jama Gold: {formatWeight3(pastJama)} g
             </div>
           )}
         </div>
@@ -123,22 +124,22 @@ export const PreservedV1BillPreview: React.FC<{ data: PreservedBillData }> = ({
                 #{item.orderNumber} - {item.orderName} ({item.karat})
               </td>
               <td className="border-r border-black p-1.5 text-right font-mono">
-                {item.netWeight.toFixed(3)}
+                {formatWeight3(item.netWeight)}
               </td>
               <td className="border-r border-black p-1.5 text-right font-mono">
-                {item.stoneWeight.toFixed(3)}
+                {formatWeight3(item.stoneWeight)}
               </td>
               <td className="border-r border-black p-1.5 text-right font-mono">
-                {item.adWeight.toFixed(3)}
+                {formatWeight3(item.adWeight)}
               </td>
               <td className="border-r border-black p-1.5 text-right font-mono">
-                {item.wastageWeight.toFixed(3)} ({item.wastagePercent}%)
+                {formatWeight3(item.wastageWeight)} ({item.wastagePercent}%)
               </td>
               <td className="border-r border-black p-1.5 text-right font-mono">
-                {item.grossWeight.toFixed(3)}
+                {formatWeight3(item.grossWeight)}
               </td>
               <td className="border-r border-black p-1.5 text-right font-mono font-bold">
-                {item.totalFineGold.toFixed(3)}
+                {formatWeight3(item.totalFineGold)}
               </td>
               <td className="p-1.5 text-right font-mono">
                 ₹{item.makingChargesRupees.toLocaleString("en-IN")}
@@ -159,15 +160,15 @@ export const PreservedV1BillPreview: React.FC<{ data: PreservedBillData }> = ({
           </div>
           <div className="flex justify-between py-0.5">
             <span>Past jama order:</span>
-            <span className="font-mono">{pastJama.toFixed(3)} g</span>
+            <span className="font-mono">{formatWeight3(pastJama)} g</span>
           </div>
           <div className="flex justify-between py-0.5">
             <span>Current order:</span>
-            <span className="font-mono">{currentTotalFine.toFixed(3)} g</span>
+            <span className="font-mono">{formatWeight3(currentTotalFine)} g</span>
           </div>
           <div className="flex justify-between py-1 border-t border-black font-bold">
             <span>Total Fine Gold:</span>
-            <span className="font-mono">{netPayableFine.toFixed(3)} g</span>
+            <span className="font-mono">{formatWeight3(netPayableFine)} g</span>
           </div>
           <div className="flex justify-between py-0.5 font-bold text-blue-900">
             <span>Total Rupees:</span>

@@ -13,6 +13,7 @@ import {
   getCachedActor,
   getCachedJson,
 } from "@/lib/client-cache";
+import { formatWeight3 } from "@/lib/decimal";
 
 interface CustomerSummary {
   customerId: string;
@@ -1224,13 +1225,13 @@ function BillingWorkspaceInner() {
             <div className="bg-white border border-slate-300 rounded-xs p-2.5">
               <div className="text-[11px] text-slate-500 font-semibold">Fine Gold Owed</div>
               <div className="text-base font-bold font-mono tabular-nums text-red-700">
-                {Number(activeCustomer.fineOwed).toFixed(3)} g
+                {formatWeight3(activeCustomer.fineOwed)} g
               </div>
             </div>
             <div className="bg-white border border-slate-300 rounded-xs p-2.5">
               <div className="text-[11px] text-slate-500 font-semibold">Fine Gold Advance / Credit</div>
               <div className="text-base font-bold font-mono tabular-nums text-emerald-700">
-                {Number(activeCustomer.fineAdvance).toFixed(3)} g
+                {formatWeight3(activeCustomer.fineAdvance)} g
               </div>
             </div>
             <div className="bg-white border border-slate-300 rounded-xs p-2.5">
@@ -1643,7 +1644,7 @@ function BillingWorkspaceInner() {
                                         : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
                                     }`}
                                   >
-                                    ● Pure Gold ({Number(draft.netWeight || 0).toFixed(2)}g)
+                                    ● Pure Gold ({formatWeight3(draft.netWeight)}g)
                                   </button>
                                   <button
                                     type="button"
@@ -1658,7 +1659,7 @@ function BillingWorkspaceInner() {
                                         : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
                                     }`}
                                   >
-                                    ● With Stones ({Number(draft.finishWeight || 0).toFixed(2)}g)
+                                    ● With Stones ({formatWeight3(draft.finishWeight)}g)
                                   </button>
                                 </div>
                               </td>
@@ -1802,12 +1803,12 @@ function BillingWorkspaceInner() {
                               {/* 8. Calculated Gross Billing Wt */}
                               <td className="py-2.5 px-2 text-right font-mono bg-emerald-50/40 min-w-[100px]">
                                 <div className="text-sm font-bold text-emerald-800">
-                                  {finalBillingWt.toFixed(3)} g
+                                  {formatWeight3(finalBillingWt)} g
                                 </div>
                                 {totalCustomStone !== 0 && (
                                   <div className="text-[10px] text-slate-600">
-                                    ({baseWt.toFixed(2)} {totalCustomStone >= 0 ? "+" : ""}
-                                    {totalCustomStone.toFixed(2)})
+                                    ({formatWeight3(baseWt)} {totalCustomStone >= 0 ? "+" : ""}
+                                    {formatWeight3(totalCustomStone)})
                                   </div>
                                 )}
                               </td>
@@ -1815,7 +1816,7 @@ function BillingWorkspaceInner() {
                               {/* 9. Calculated Fine Gold Total */}
                               <td className="py-2.5 px-2 text-right font-mono bg-amber-50/50 min-w-[105px]">
                                 <div className="text-sm font-bold text-amber-950">
-                                  {lineFine.toFixed(3)} g
+                                  {formatWeight3(lineFine)} g
                                 </div>
                                 <div className="text-[10px] text-slate-500">
                                   @ {effectivePurity.toFixed(1)}%
@@ -1869,7 +1870,7 @@ function BillingWorkspaceInner() {
                           placeholder="0.000"
                         />
                         <span className="text-[10px] text-slate-500">
-                          Available Advance: {draftTotals.availAdv.toFixed(3)} g fine
+                          Available Advance: {formatWeight3(draftTotals.availAdv)} g fine
                         </span>
                       </div>
                       <div>
@@ -1907,35 +1908,35 @@ function BillingWorkspaceInner() {
                       <div className="flex justify-between">
                         <span className="text-slate-600">Current Order Subtotal (Fine Gold):</span>
                         <span className="font-mono font-semibold">
-                          {draftTotals.fineTotal.toFixed(3)} g fine
+                          {formatWeight3(draftTotals.fineTotal)} g fine
                         </span>
                       </div>
                       {draftTotals.advUsed > 0 && (
                         <div className="flex justify-between text-red-700">
                           <span>Less: Advance Gold Used:</span>
                           <span className="font-mono font-semibold">
-                            -{draftTotals.advUsed.toFixed(3)} g fine
+                            -{formatWeight3(draftTotals.advUsed)} g fine
                           </span>
                         </div>
                       )}
                       <div className="flex justify-between font-bold text-sm border-t border-slate-200 pt-1.5">
                         <span className="text-slate-900">Customer Owes (Current Order):</span>
                         <span className="font-mono text-orange-600">
-                          {draftTotals.netCustomerOwesFine.toFixed(3)} g fine gold
+                          {formatWeight3(draftTotals.netCustomerOwesFine)} g fine gold
                         </span>
                       </div>
                       {draftTotals.pastJamaFine > 0 && (
                         <div className="flex justify-between text-red-700 pt-1">
                           <span>Past Jama Gold (Previous Unpaid Bills):</span>
                           <span className="font-mono font-semibold">
-                            +{draftTotals.pastJamaFine.toFixed(3)} g fine
+                            +{formatWeight3(draftTotals.pastJamaFine)} g fine
                           </span>
                         </div>
                       )}
                       <div className="flex justify-between font-bold text-sm border-t border-slate-200 pt-1.5">
                         <span className="text-slate-900">Grand Total Fine Gold Balance:</span>
                         <span className="font-mono text-blue-800">
-                          {draftTotals.grandTotalFineWithPast.toFixed(3)} g fine
+                          {formatWeight3(draftTotals.grandTotalFineWithPast)} g fine
                         </span>
                       </div>
                       {draftTotals.inrTotal > 0 && (
@@ -1965,7 +1966,7 @@ function BillingWorkspaceInner() {
                       >
                         {submitting
                           ? "Creating Bill..."
-                          : `Create Bill & Deliver (${draftTotals.netCustomerOwesFine.toFixed(3)} g Fine Gold)`}
+                          : `Create Bill & Deliver (${formatWeight3(draftTotals.netCustomerOwesFine)} g Fine Gold)`}
                       </button>
                     </div>
                   </div>
@@ -2111,22 +2112,22 @@ function BillingWorkspaceInner() {
                                   #{ord.bagNumber} - {ord.orderName} ({Number(ord.touchPercent).toFixed(2).replace(/\.?0+$/, "")}%)
                                 </td>
                                 <td className="border border-slate-200 px-2 py-2.5 text-right font-mono">
-                                  {baseWt.toFixed(3)}
+                                  {formatWeight3(baseWt)}
                                 </td>
                                 <td className="border border-slate-200 px-2 py-2.5 text-right font-mono">
-                                  {customStone.toFixed(3)}
+                                  {formatWeight3(customStone)}
                                 </td>
                                 <td className="border border-slate-200 px-2 py-2.5 text-right font-mono">
-                                  {customAd.toFixed(3)}
+                                  {formatWeight3(customAd)}
                                 </td>
                                 <td className="border border-slate-200 px-2 py-2.5 text-right font-mono font-semibold">
-                                  {finalBillingWt.toFixed(3)}
+                                  {formatWeight3(finalBillingWt)}
                                 </td>
                                 <td className="border border-slate-200 px-2 py-2.5 text-center font-mono">
                                   {makingPts}%
                                 </td>
                                 <td className="border border-slate-200 px-2.5 py-2.5 text-right font-mono font-bold">
-                                  {lineFine.toFixed(3)}
+                                  {formatWeight3(lineFine)}
                                 </td>
                                 <td className="border border-slate-200 px-2.5 py-2.5 text-right font-mono">
                                   ₹{lineInr.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
@@ -2147,7 +2148,7 @@ function BillingWorkspaceInner() {
                               PAST JAMA (FINE):
                             </span>
                             <span className="font-mono font-semibold text-red-700">
-                              {draftTotals.pastJamaFine.toFixed(3)} g
+                              {formatWeight3(draftTotals.pastJamaFine)} g
                             </span>
                           </div>
                         )}
@@ -2156,7 +2157,7 @@ function BillingWorkspaceInner() {
                             TOTAL (FINE GOLD):
                           </span>
                           <span className="font-mono font-semibold text-slate-900">
-                            {draftTotals.netCustomerOwesFine.toFixed(3)} g
+                            {formatWeight3(draftTotals.netCustomerOwesFine)} g
                           </span>
                         </div>
                         {draftTotals.inrTotal > 0 && (
@@ -2172,7 +2173,7 @@ function BillingWorkspaceInner() {
                         <div className="flex justify-between items-center px-3.5 py-3 bg-[#9e7c42] text-white font-bold">
                           <span className="uppercase tracking-wide">TOTAL DUE (FINE):</span>
                           <span className="font-mono text-sm">
-                            {draftTotals.grandTotalFineWithPast.toFixed(3)} g
+                            {formatWeight3(draftTotals.grandTotalFineWithPast)} g
                           </span>
                         </div>
                       </div>
@@ -2202,7 +2203,7 @@ function BillingWorkspaceInner() {
                   <div>
                     <span className="text-slate-500">Total Bill Charge (Fine): </span>
                     <strong className="font-mono text-blue-800">
-                      {draftTotals.fineTotal.toFixed(3)} g
+                      {formatWeight3(draftTotals.fineTotal)} g
                     </strong>
                   </div>
                   <div>
@@ -2301,9 +2302,9 @@ function BillingWorkspaceInner() {
                     </td>
                     <td className="p-2 text-[11px]">{b.deliveryStatus}</td>
                     <td className="p-2 text-[11px] font-semibold">{b.settlementStatus}</td>
-                    <td className="p-2 text-right font-mono tabular-nums">{Number(b.totalFineGold).toFixed(3)} g</td>
+                    <td className="p-2 text-right font-mono tabular-nums">{formatWeight3(b.totalFineGold)} g</td>
                     <td className="p-2 text-right font-mono tabular-nums font-semibold text-red-700">
-                      {Number(b.fineOutstanding).toFixed(3)} g
+                      {formatWeight3(b.fineOutstanding)} g
                     </td>
                     <td className="p-2 text-right font-mono tabular-nums">₹{b.totalCashRupees}</td>
                     <td className="p-2 text-right font-mono tabular-nums font-semibold text-red-700">

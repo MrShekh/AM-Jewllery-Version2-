@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell, AppShellUser } from "@/components/AppShell";
 import { DailyReconciliationReport } from "@/lib/domain/erp-service";
+import { formatWeight3 } from "@/lib/decimal";
 
 export default function ReconciliationPage() {
   const router = useRouter();
@@ -172,19 +173,19 @@ export default function ReconciliationPage() {
                     </td>
                     <td className="p-2 text-right">{p.touchPercent}%</td>
                     <td className="p-2 text-right font-bold">
-                      {p.adminPhysicalWeight} g
+                      {formatWeight3(p.adminPhysicalWeight)} g
                     </td>
                     <td className="p-2 text-right">
-                      {p.journalDerivedPhysicalWeight} g
+                      {formatWeight3(p.journalDerivedPhysicalWeight)} g
                     </td>
                     <td className="p-2 text-right text-blue-800">
-                      {p.adminFineEquivalent} g
+                      {formatWeight3(p.adminFineEquivalent)} g
                     </td>
                     <td className="p-2 text-right text-blue-800">
-                      {p.journalDerivedFineEquivalent} g
+                      {formatWeight3(p.journalDerivedFineEquivalent)} g
                     </td>
                     <td className="p-2 text-right text-emerald-800">
-                      {p.finishedGoodsPhysicalWeight} g ({p.finishedGoodsFineEquivalent} g fine)
+                      {formatWeight3(p.finishedGoodsPhysicalWeight)} g ({formatWeight3(p.finishedGoodsFineEquivalent)} g fine)
                     </td>
                     <td className="p-2 text-center font-sans">
                       <span
@@ -248,16 +249,16 @@ export default function ReconciliationPage() {
                         {k.karigarName}
                       </td>
                       <td className="p-2 text-right font-bold">
-                        {k.custodyPhysicalWeight} g
+                        {formatWeight3(k.custodyPhysicalWeight)} g
                       </td>
                       <td className="p-2 text-right text-blue-800">
-                        {k.custodyFineWeight} g
+                        {formatWeight3(k.custodyFineWeight)} g
                       </td>
                       <td className="p-2 text-right text-amber-800">
-                        {k.pendingLossRawWeight} g ({k.pendingLossFineWeight} g fine)
+                        {formatWeight3(k.pendingLossRawWeight)} g ({formatWeight3(k.pendingLossFineWeight)} g fine)
                       </td>
                       <td className="p-2 text-right font-bold text-emerald-800">
-                        {k.eligibleLossRawWeight} g ({k.eligibleLossFineWeight} g fine)
+                        {formatWeight3(k.eligibleLossRawWeight)} g ({formatWeight3(k.eligibleLossFineWeight)} g fine)
                       </td>
                     </tr>
                   ))

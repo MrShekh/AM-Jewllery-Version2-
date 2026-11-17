@@ -10,6 +10,7 @@ import {
   getCachedActor,
   getCachedJson,
 } from "@/lib/client-cache";
+import { formatWeight3 } from "@/lib/decimal";
 
 type OrderTab = "ALL" | "ONGOING" | "COMPLETED" | "DELIVERED" | "CANCELLED";
 
@@ -526,9 +527,9 @@ export default function CustomerProfilePage() {
         setTouchPercentOverride("");
         setShowReceiptForm(false);
         setMessage(
-          `Saved Receipt ${data.receiptNumber}: +${Number(
+          `Saved Receipt ${data.receiptNumber}: +${formatWeight3(
             data.totalFineWeight
-          ).toFixed(2)}g Fine Gold added to Admin Stock.`
+          )}g Fine Gold added to Admin Stock.`
         );
         await loadWorkspace();
       }
@@ -988,7 +989,7 @@ export default function CustomerProfilePage() {
             <div className="bg-amber-50 p-4 rounded-lg border-2 border-amber-200">
               <p className="text-sm text-gray-600">Total Gold Due (Jama)</p>
               <p className="text-3xl font-bold text-amber-700 mt-1">
-                {Number(summaryCards.goldDue).toFixed(3)}g
+                {formatWeight3(summaryCards.goldDue)}g
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 Remaining unpaid fine gold across bills
@@ -998,7 +999,7 @@ export default function CustomerProfilePage() {
             <div className="bg-emerald-50 p-4 rounded-lg border-2 border-emerald-200">
               <p className="text-sm text-gray-600">Advance Available</p>
               <p className="text-3xl font-bold text-emerald-700 mt-1">
-                {Number(summaryCards.advanceAvailable).toFixed(3)}g
+                {formatWeight3(summaryCards.advanceAvailable)}g
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 Credit ready to apply on future bills
@@ -1013,7 +1014,7 @@ export default function CustomerProfilePage() {
                 </span>
               </div>
               <p className="text-3xl font-bold text-green-700 mt-1">
-                {Number(summaryCards.totalGoldReceivedHistorical).toFixed(3)}g
+                {formatWeight3(summaryCards.totalGoldReceivedHistorical)}g
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 Total fine gold collected from customer
@@ -1183,25 +1184,25 @@ export default function CustomerProfilePage() {
                   <div>
                     Crediting:{" "}
                     <strong className="text-emerald-700">
-                      +{liveReceiptPreview.fineCredited.toFixed(3)}g Fine
+                      +{formatWeight3(liveReceiptPreview.fineCredited)}g Fine
                     </strong>
                   </div>
                   <div>
                     Settling Bills:{" "}
                     <strong className="text-blue-700">
-                      {liveReceiptPreview.settlingBills.toFixed(3)}g
+                      {formatWeight3(liveReceiptPreview.settlingBills)}g
                     </strong>
                   </div>
                   <div>
                     Remaining Due:{" "}
                     <strong className="text-amber-800">
-                      {liveReceiptPreview.remainingDue.toFixed(3)}g
+                      {formatWeight3(liveReceiptPreview.remainingDue)}g
                     </strong>
                   </div>
                   <div>
                     Available Advance:{" "}
                     <strong className="text-emerald-700">
-                      {liveReceiptPreview.advanceAfterSettlement.toFixed(3)}g
+                      {formatWeight3(liveReceiptPreview.advanceAfterSettlement)}g
                     </strong>
                   </div>
                 </div>
@@ -1467,13 +1468,13 @@ export default function CustomerProfilePage() {
                       </td>
                       <td className="px-3 py-2.5 text-gray-600">{b.date}</td>
                       <td className="px-3 py-2.5 text-right">
-                        {Number(b.originalFineCharge).toFixed(3)}g
+                        {formatWeight3(b.originalFineCharge)}g
                       </td>
                       <td className="px-3 py-2.5 text-right text-emerald-700 font-medium">
-                        {Number(b.settledFine).toFixed(3)}g
+                        {formatWeight3(b.settledFine)}g
                       </td>
                       <td className="px-3 py-2.5 text-right font-bold text-amber-700">
-                        {Number(b.remainingFine).toFixed(3)}g
+                        {formatWeight3(b.remainingFine)}g
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         <span
@@ -1511,10 +1512,12 @@ export default function CustomerProfilePage() {
                                   onClick={() => {
                                     setSettlingBillId(b.id);
                                     setSettleAmountFine(
-                                      Math.min(
-                                        Number(b.remainingFine),
-                                        Number(summaryCards.advanceAvailable)
-                                      ).toFixed(4)
+                                      formatWeight3(
+                                        Math.min(
+                                          Number(b.remainingFine),
+                                          Number(summaryCards.advanceAvailable)
+                                        )
+                                      )
                                     );
                                   }}
                                   className="px-2.5 py-1 text-xs font-medium bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded cursor-pointer"
@@ -1613,7 +1616,7 @@ export default function CustomerProfilePage() {
                 >
                   <div>
                     <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-green-200 text-green-800 mr-2">
-                      +{Number(r.totalFineWeight).toFixed(3)}g Fine
+                      +{formatWeight3(r.totalFineWeight)}g Fine
                     </span>
                     <span className="text-xs text-gray-500">
                       ({r.receiptNumber})
@@ -1621,7 +1624,7 @@ export default function CustomerProfilePage() {
                     {Number(r.unallocatedFineWeight) > 0 && (
                       <span className="ml-2 text-xs text-emerald-700 font-medium">
                         • Advance left:{" "}
-                        {Number(r.unallocatedFineWeight).toFixed(3)}g
+                        {formatWeight3(r.unallocatedFineWeight)}g
                       </span>
                     )}
                     <p className="text-sm font-medium text-gray-800 mt-1">

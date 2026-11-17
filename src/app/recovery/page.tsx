@@ -12,6 +12,7 @@ import {
   formatKolkataDateDDMMYYYY,
   getTodayBusinessDateString,
 } from "@/lib/date-and-export";
+import { formatWeight3 } from "@/lib/decimal";
 import {
   fetchActorCached,
   fetchCachedJson,
@@ -330,8 +331,8 @@ function RecoveryContent() {
     const defaultPur = purities[0];
     setActiveRecovery({
       scopeType: "ALL_TOUCHES",
-      grossFine: totalOutstandingFine.toFixed(4),
-      priorMakingFine: priorMaking.toFixed(4),
+      grossFine: formatWeight3(totalOutstandingFine),
+      priorMakingFine: formatWeight3(priorMaking),
       hasPriorMaking: hasPrior,
       claimIds: allClaimIds,
     });
@@ -564,8 +565,8 @@ function RecoveryContent() {
       Number(targetLoss.outstandingFine)
     );
     const amt = window.prompt(
-      `Allocate unallocated credit from ${receipt.receiptNumber} (${receipt.unallocatedFineWeight}g fine) to Bag #${targetLoss.bagNumber} (outstanding ${targetLoss.outstandingFine}g fine):`,
-      maxAmt.toFixed(4)
+      `Allocate unallocated credit from ${receipt.receiptNumber} (${formatWeight3(receipt.unallocatedFineWeight)}g fine) to Bag #${targetLoss.bagNumber} (outstanding ${formatWeight3(targetLoss.outstandingFine)}g fine):`,
+      formatWeight3(maxAmt)
     );
     if (!amt || Number(amt) <= 0) return;
     setError(null);
@@ -827,15 +828,15 @@ function RecoveryContent() {
                         {Number(g.touchPercent)}%
                         {g.hasPriorMakingDeduction && (
                           <span className="ml-2 text-[10px] font-normal px-1.5 py-0.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-xs">
-                            Making already allowed: {Number(g.makingAllowedFine).toFixed(3)}g fine
+                            Making already allowed: {formatWeight3(g.makingAllowedFine)}g fine
                           </span>
                         )}
                       </td>
                       <td className="p-2 text-right font-semibold text-slate-900">
-                        {g.outstandingMetalEquivalent}g
+                        {formatWeight3(g.outstandingMetalEquivalent)}g
                       </td>
                       <td className="p-2 text-right font-semibold text-blue-900">
-                        {Number(g.outstandingFine).toFixed(3)}g fine
+                        {formatWeight3(g.outstandingFine)}g fine
                       </td>
                       <td className="p-2 text-right font-sans">
                         {actor.role === "OWNER_ADMIN" && (
@@ -859,7 +860,7 @@ function RecoveryContent() {
             <div className="text-xs font-mono">
               Total outstanding:{" "}
               <strong className="text-sm text-blue-950">
-                {totalOutstandingFine.toFixed(3)}g fine
+                {formatWeight3(totalOutstandingFine)}g fine
               </strong>
             </div>
             <div className="flex items-center gap-2">
@@ -926,8 +927,8 @@ function RecoveryContent() {
                       key={g.touchPercent}
                       className="px-2 py-0.5 bg-white border border-slate-300 rounded-xs"
                     >
-                      {Number(g.touchPercent)}%: {g.outstandingMetalEquivalent}g
-                      {" "}({Number(g.outstandingFine).toFixed(3)}g fine)
+                      {Number(g.touchPercent)}%: {formatWeight3(g.outstandingMetalEquivalent)}g
+                      {" "}({formatWeight3(g.outstandingFine)}g fine)
                     </span>
                   ))}
                 </div>
@@ -942,12 +943,12 @@ function RecoveryContent() {
                 </div>
                 <div className="text-sm font-mono font-bold text-slate-900 mt-0.5">
                   {calcPreview.isSingle
-                    ? `${calcPreview.grossRaw.toFixed(3)}g @ ${calcPreview.scopeTouch}%`
-                    : `${calcPreview.grossFine.toFixed(4)}g fine`}
+                    ? `${formatWeight3(calcPreview.grossRaw)}g @ ${calcPreview.scopeTouch}%`
+                    : `${formatWeight3(calcPreview.grossFine)}g fine`}
                 </div>
                 {calcPreview.isSingle && (
                   <div className="text-[11px] font-mono text-slate-500">
-                    ({calcPreview.grossFine.toFixed(4)}g fine)
+                    ({formatWeight3(calcPreview.grossFine)}g fine)
                   </div>
                 )}
               </div>
@@ -968,7 +969,7 @@ function RecoveryContent() {
                 />
                 {calcPreview.isSingle && (
                   <div className="text-[11px] font-mono text-slate-500 mt-0.5">
-                    = {calcPreview.makingFine.toFixed(4)}g fine
+                    = {formatWeight3(calcPreview.makingFine)}g fine
                   </div>
                 )}
               </div>
@@ -979,12 +980,12 @@ function RecoveryContent() {
                 </div>
                 <div className="text-sm font-mono font-bold text-blue-950 mt-0.5">
                   {calcPreview.isSingle
-                    ? `${calcPreview.netExpectedRaw.toFixed(3)}g @ ${calcPreview.scopeTouch}%`
-                    : `${calcPreview.netExpectedFine.toFixed(4)}g fine`}
+                    ? `${formatWeight3(calcPreview.netExpectedRaw)}g @ ${calcPreview.scopeTouch}%`
+                    : `${formatWeight3(calcPreview.netExpectedFine)}g fine`}
                 </div>
                 {calcPreview.isSingle && (
                   <div className="text-[11px] font-mono text-blue-700">
-                    ({calcPreview.netExpectedFine.toFixed(4)}g fine)
+                    ({formatWeight3(calcPreview.netExpectedFine)}g fine)
                   </div>
                 )}
               </div>
@@ -994,7 +995,7 @@ function RecoveryContent() {
             {activeRecovery.hasPriorMaking && calcPreview.makingFine > 0 && (
               <div className="p-2.5 bg-amber-50 border border-amber-300 rounded-xs text-xs space-y-2">
                 <div className="font-semibold text-amber-950">
-                  Carried claims already have {Number(activeRecovery.priorMakingFine).toFixed(4)}g fine making allowed. Confirm to apply an additional making deduction:
+                  Carried claims already have {formatWeight3(activeRecovery.priorMakingFine)}g fine making allowed. Confirm to apply an additional making deduction:
                 </div>
                 <label className="inline-flex items-center gap-2 cursor-pointer">
                   <input
@@ -1123,11 +1124,11 @@ function RecoveryContent() {
                   </div>
                   <div className="sm:col-span-2 flex items-center justify-between gap-1">
                     <span className="font-mono text-[11px] text-slate-600">
-                      {(
+                      {formatWeight3(
                         (Number(line.grossWeight || 0) *
                           Number(line.touchPercent || 0)) /
-                        100
-                      ).toFixed(4)}
+                          100
+                      )}
                       g fine
                     </span>
                     {recLines.length > 1 && (
@@ -1161,23 +1162,23 @@ function RecoveryContent() {
               <div className="flex flex-wrap items-center justify-between gap-2 font-mono">
                 <span>
                   Received:{" "}
-                  <strong>{calcPreview.receivedGross.toFixed(3)}g</strong> (
-                  <strong>{calcPreview.receivedFine.toFixed(4)}g fine</strong>)
+                  <strong>{formatWeight3(calcPreview.receivedGross)}g</strong> (
+                  <strong>{formatWeight3(calcPreview.receivedFine)}g fine</strong>)
                 </span>
                 <span>
                   {calcPreview.differenceFine > 0.0001 ? (
                     <strong className="text-amber-950">
                       Remaining shortage:{" "}
                       {calcPreview.isSameTouch
-                        ? `${calcPreview.differenceRaw.toFixed(3)}g @ ${calcPreview.scopeTouch}% (${calcPreview.differenceFine.toFixed(4)}g fine)`
-                        : `${calcPreview.differenceFine.toFixed(4)}g fine`}
+                        ? `${formatWeight3(calcPreview.differenceRaw)}g @ ${calcPreview.scopeTouch}% (${formatWeight3(calcPreview.differenceFine)}g fine)`
+                        : `${formatWeight3(calcPreview.differenceFine)}g fine`}
                     </strong>
                   ) : calcPreview.differenceFine < -0.0001 ? (
                     <strong className="text-emerald-900">
                       Extra gold received:{" "}
                       {calcPreview.isSameTouch
-                        ? `${Math.abs(calcPreview.differenceRaw).toFixed(3)}g @ ${calcPreview.scopeTouch}% (${Math.abs(calcPreview.differenceFine).toFixed(4)}g fine)`
-                        : `${Math.abs(calcPreview.differenceFine).toFixed(4)}g fine`}
+                        ? `${formatWeight3(Math.abs(calcPreview.differenceRaw))}g @ ${calcPreview.scopeTouch}% (${formatWeight3(Math.abs(calcPreview.differenceFine))}g fine)`
+                        : `${formatWeight3(Math.abs(calcPreview.differenceFine))}g fine`}
                     </strong>
                   ) : (
                     <strong className="text-blue-900">Fully settled (0.000g difference)</strong>
@@ -1244,8 +1245,8 @@ function RecoveryContent() {
                         Carried forward:{" "}
                         <strong>
                           {calcPreview.isSingle
-                            ? `${calcPreview.carryPartRaw.toFixed(3)}g @ ${calcPreview.scopeTouch}% (${calcPreview.carryPartFine.toFixed(4)}g fine)`
-                            : `${calcPreview.carryPartFine.toFixed(4)}g fine`}
+                            ? `${formatWeight3(calcPreview.carryPartRaw)}g @ ${calcPreview.scopeTouch}% (${formatWeight3(calcPreview.carryPartFine)}g fine)`
+                            : `${formatWeight3(calcPreview.carryPartFine)}g fine`}
                         </strong>
                       </div>
                     </div>
@@ -1422,19 +1423,19 @@ function RecoveryContent() {
                               : ""}
                           </td>
                           <td className="p-2 text-right">
-                            {Number(st.grossSelectedFine).toFixed(4)}g
+                            {formatWeight3(st.grossSelectedFine)}g
                           </td>
                           <td className="p-2 text-right text-amber-800">
-                            {Number(st.makingDeductionFine).toFixed(4)}g
+                            {formatWeight3(st.makingDeductionFine)}g
                           </td>
                           <td className="p-2 text-right text-emerald-700">
-                            {Number(st.receivedFine).toFixed(4)}g
+                            {formatWeight3(st.receivedFine)}g
                           </td>
                           <td className="p-2 text-right">
-                            {Number(st.acceptedShortageFine).toFixed(4)}g
+                            {formatWeight3(st.acceptedShortageFine)}g
                           </td>
                           <td className="p-2 text-right text-blue-900">
-                            {Number(st.carriedShortageFine).toFixed(4)}g
+                            {formatWeight3(st.carriedShortageFine)}g
                           </td>
                           <td className="p-2 text-right font-sans">
                             <button
@@ -1547,31 +1548,31 @@ function RecoveryContent() {
                 <div>
                   <div className="text-[10px] font-sans text-slate-500">Total Loss</div>
                   <div className="font-bold">
-                    {Number(printableSettlement.grossSelectedFine).toFixed(4)}g
+                    {formatWeight3(printableSettlement.grossSelectedFine)}g
                   </div>
                 </div>
                 <div>
                   <div className="text-[10px] font-sans text-slate-500">Making Allowed</div>
                   <div className="font-bold text-amber-800">
-                    {Number(printableSettlement.makingDeductionFine).toFixed(4)}g
+                    {formatWeight3(printableSettlement.makingDeductionFine)}g
                   </div>
                 </div>
                 <div>
                   <div className="text-[10px] font-sans text-slate-500">Gold Recovered</div>
                   <div className="font-bold text-emerald-700">
-                    {Number(printableSettlement.receivedFine).toFixed(4)}g
+                    {formatWeight3(printableSettlement.receivedFine)}g
                   </div>
                 </div>
                 <div>
                   <div className="text-[10px] font-sans text-slate-500">Accepted Shortage</div>
                   <div className="font-bold">
-                    {Number(printableSettlement.acceptedShortageFine).toFixed(4)}g
+                    {formatWeight3(printableSettlement.acceptedShortageFine)}g
                   </div>
                 </div>
                 <div>
                   <div className="text-[10px] font-sans text-slate-500">Carried Balance</div>
                   <div className="font-bold text-blue-800">
-                    {Number(printableSettlement.carriedShortageFine).toFixed(4)}g
+                    {formatWeight3(printableSettlement.carriedShortageFine)}g
                   </div>
                 </div>
               </div>

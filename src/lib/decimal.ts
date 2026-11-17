@@ -43,10 +43,11 @@ export function roundTouch(value: DecimalInput): Decimal {
 }
 
 /**
- * Operational display scale: 3 decimal places (milligram precision: 0.000 g).
+ * Operational display scale: 3 decimal places (milligram precision: 0.000 g),
+ * truncated with ROUND_DOWN (no round-off).
  */
 export function roundOperational(value: DecimalInput): Decimal {
-  return toDecimal(value).toDecimalPlaces(3, Decimal.ROUND_HALF_UP);
+  return toDecimal(value).toDecimalPlaces(3, Decimal.ROUND_DOWN);
 }
 
 /**
@@ -92,8 +93,10 @@ export function formatRegisterWeight(
   if (options?.emptyWhenZero && d.isZero()) {
     return "-";
   }
-  return `${d.toDecimalPlaces(3, Decimal.ROUND_HALF_UP).toFixed(3)}${suffix}`;
+  return `${d.toDecimalPlaces(3, Decimal.ROUND_DOWN).toFixed(3)}${suffix}`;
 }
+
+export const truncateWeight3 = formatWeight3;
 
 /**
  * Formats a touch percentage cleanly (e.g. 92.0000 -> "92%", 75.5000 -> "75.5%", 99.9000 -> "99.9%").

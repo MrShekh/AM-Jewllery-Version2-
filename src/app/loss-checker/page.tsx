@@ -6,6 +6,7 @@ import jsQR from "jsqr";
 import { Camera, QrCode, Trash2, X } from "lucide-react";
 import { AppShell, AppShellUser } from "@/components/AppShell";
 import { fetchActorCached } from "@/lib/client-cache";
+import { formatWeight3 } from "@/lib/decimal";
 import {
   CANONICAL_PROCESS_SEQUENCE,
   PROCESS_DISPLAY_LABELS,
@@ -497,10 +498,10 @@ export default function QrLossCheckerPage() {
                   {PROCESS_DISPLAY_LABELS[pt]} Loss
                 </div>
                 <div className="mt-1 text-base font-bold font-mono text-slate-900">
-                  {val.raw.toFixed(3)} g
+                  {formatWeight3(val.raw)} g
                 </div>
                 <div className="text-[11px] font-mono text-blue-700">
-                  {val.fine.toFixed(3)} g fine
+                  {formatWeight3(val.fine)} g fine
                 </div>
               </div>
             );
@@ -508,10 +509,10 @@ export default function QrLossCheckerPage() {
           <div className="bg-amber-50 border border-amber-300 rounded-xs p-3">
             <div className="text-[11px] font-semibold text-amber-900">Grand Total Loss</div>
             <div className="mt-1 text-base font-bold font-mono text-amber-950">
-              {processTotals.grandRaw.toFixed(3)} g
+              {formatWeight3(processTotals.grandRaw)} g
             </div>
             <div className="text-[11px] font-mono text-amber-800">
-              {processTotals.grandFine.toFixed(3)} g fine
+              {formatWeight3(processTotals.grandFine)} g fine
             </div>
           </div>
         </div>
@@ -541,12 +542,12 @@ export default function QrLossCheckerPage() {
                       <tr key={k.purityLabel} className="border-b border-slate-100 font-mono">
                         <td className="p-1.5 font-sans font-semibold">{k.purityLabel}</td>
                         <td className="p-1.5 text-right">{k.bagCount}</td>
-                        <td className="p-1.5 text-right">{k.FILING.toFixed(3)}</td>
-                        <td className="p-1.5 text-right">{k.FREE_POLISH.toFixed(3)}</td>
-                        <td className="p-1.5 text-right">{k.SETTING.toFixed(3)}</td>
-                        <td className="p-1.5 text-right">{k.FINAL_POLISH.toFixed(3)}</td>
+                        <td className="p-1.5 text-right">{formatWeight3(k.FILING)}</td>
+                        <td className="p-1.5 text-right">{formatWeight3(k.FREE_POLISH)}</td>
+                        <td className="p-1.5 text-right">{formatWeight3(k.SETTING)}</td>
+                        <td className="p-1.5 text-right">{formatWeight3(k.FINAL_POLISH)}</td>
                         <td className="p-1.5 text-right font-bold text-blue-800">
-                          {k.totalRaw.toFixed(3)}g ({k.totalFine.toFixed(3)}g)
+                          {formatWeight3(k.totalRaw)}g ({formatWeight3(k.totalFine)}g)
                         </td>
                       </tr>
                     ))}
@@ -582,12 +583,12 @@ export default function QrLossCheckerPage() {
                       karigarBreakdown.map((k) => (
                         <tr key={k.karigarName} className="border-b border-slate-100 font-mono">
                           <td className="p-1.5 font-sans font-semibold">{k.karigarName}</td>
-                          <td className="p-1.5 text-right">{k.FILING.toFixed(3)}</td>
-                          <td className="p-1.5 text-right">{k.FREE_POLISH.toFixed(3)}</td>
-                          <td className="p-1.5 text-right">{k.SETTING.toFixed(3)}</td>
-                          <td className="p-1.5 text-right">{k.FINAL_POLISH.toFixed(3)}</td>
+                          <td className="p-1.5 text-right">{formatWeight3(k.FILING)}</td>
+                          <td className="p-1.5 text-right">{formatWeight3(k.FREE_POLISH)}</td>
+                          <td className="p-1.5 text-right">{formatWeight3(k.SETTING)}</td>
+                          <td className="p-1.5 text-right">{formatWeight3(k.FINAL_POLISH)}</td>
                           <td className="p-1.5 text-right font-bold text-blue-800">
-                            {k.totalRaw.toFixed(3)}g ({k.totalFine.toFixed(3)}g)
+                            {formatWeight3(k.totalRaw)}g ({formatWeight3(k.totalFine)}g)
                           </td>
                         </tr>
                       ))

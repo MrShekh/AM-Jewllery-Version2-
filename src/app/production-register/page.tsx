@@ -26,6 +26,7 @@ import {
   formatMonthKeyLabel,
   getTodayBusinessDateString,
 } from "@/lib/date-and-export";
+import { formatWeight3 } from "@/lib/decimal";
 import {
   fetchActorCached,
   fetchCachedJson,
@@ -173,7 +174,7 @@ function fmtCellWeight(val: string | null | undefined, showDashWhenZero = true):
   const num = Number(val);
   if (!Number.isFinite(num)) return "-";
   if (showDashWhenZero && num === 0) return "-";
-  return `${num.toFixed(3)} g`;
+  return `${formatWeight3(val)} g`;
 }
 
 function ProductionRegisterContent() {
@@ -2883,7 +2884,7 @@ function ProductionRegisterContent() {
                               Net Metal IN
                             </div>
                             <div className="font-bold">
-                              {liveMetalIn.toFixed(3)} g
+                              {formatWeight3(liveMetalIn)} g
                             </div>
                           </div>
                           <div>
@@ -2891,7 +2892,7 @@ function ProductionRegisterContent() {
                               Stone / Non-Gold OUT
                             </div>
                             <div className="font-bold text-blue-800">
-                              {liveStoneOut.toFixed(3)} g
+                              {formatWeight3(liveStoneOut)} g
                             </div>
                           </div>
                           <div>
@@ -2901,7 +2902,7 @@ function ProductionRegisterContent() {
                             <div className="font-bold">
                               {entryStep === "GIVE_WORK"
                                 ? "—"
-                                : `${liveMetalOut.toFixed(3)} g`}
+                                : `${formatWeight3(liveMetalOut)} g`}
                             </div>
                           </div>
                           <div>
@@ -2919,7 +2920,7 @@ function ProductionRegisterContent() {
                             >
                               {entryStep === "GIVE_WORK"
                                 ? "Pending"
-                                : `${liveRawLoss.toFixed(3)} g (${liveFineLoss.toFixed(3)} g fine)`}
+                                : `${formatWeight3(liveRawLoss)} g (${formatWeight3(liveFineLoss)} g fine)`}
                             </div>
                           </div>
                         </div>
@@ -2928,13 +2929,13 @@ function ProductionRegisterContent() {
                             <span>
                               Jewellery returned:{" "}
                               <strong className="font-mono">
-                                {liveMetalOut.toFixed(3)}g
+                                {formatWeight3(liveMetalOut)}g
                               </strong>
                             </span>
                             <span>
                               Gold back to admin:{" "}
                               <strong className="font-mono text-emerald-800">
-                                {liveExtraMetal.toFixed(3)}g at {liveExtraTouch}%
+                                {formatWeight3(liveExtraMetal)}g at {liveExtraTouch}%
                               </strong>
                             </span>
                             <span>
@@ -2944,7 +2945,7 @@ function ProductionRegisterContent() {
                                   liveRawLoss < 0 ? "text-red-700" : "text-slate-900"
                                 }`}
                               >
-                                {liveRawLoss.toFixed(3)}g
+                                {formatWeight3(liveRawLoss)}g
                               </strong>
                             </span>
                             <button
@@ -3460,20 +3461,20 @@ function ProductionRegisterContent() {
                     <div>
                       <div className="text-[10px] font-sans text-slate-500">IN</div>
                       <div className="font-semibold">
-                        {hasIn ? `${Number(openProc.latestGrossInWeight).toFixed(3)}g` : "—"}
+                        {hasIn ? `${formatWeight3(openProc.latestGrossInWeight)}g` : "—"}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] font-sans text-slate-500">OUT</div>
                       <div className="font-semibold">
-                        {hasOut ? `${Number(openProc.latestGrossOutWeight).toFixed(3)}g` : "—"}
+                        {hasOut ? `${formatWeight3(openProc.latestGrossOutWeight)}g` : "—"}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] font-sans text-slate-500">Loss</div>
                       <div className="font-semibold">
                         {openProc.status === "CLOSED"
-                          ? `${Number(openProc.closedLossWeight).toFixed(3)}g`
+                          ? `${formatWeight3(openProc.closedLossWeight)}g`
                           : hasIn
                           ? "Pending"
                           : "—"}

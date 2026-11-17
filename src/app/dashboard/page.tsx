@@ -22,6 +22,7 @@ import type {
   AdminMakingChargeSummary,
   MakingChargeFilter,
 } from "@/lib/admin-making-charge";
+import { formatWeight3 } from "@/lib/decimal";
 
 interface DashboardSummary {
   groupA_adminStock: {
@@ -411,10 +412,10 @@ export default function DashboardPage() {
                       Gold Available with Admin
                     </div>
                     <div className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
-                      {summary.groupA_adminStock.totalFine} g fine
+                      {formatWeight3(summary.groupA_adminStock.totalFine)} g fine
                     </div>
                     <div className="text-[11px] text-slate-500 tabular-nums">
-                      {summary.groupA_adminStock.mixedPhysical} g mixed physical on hand
+                      {formatWeight3(summary.groupA_adminStock.mixedPhysical)} g mixed physical on hand
                     </div>
                   </div>
                   {openCard === "A" ? (
@@ -438,10 +439,10 @@ export default function DashboardPage() {
                           <tr key={p.purityId} className="border-b border-slate-100">
                             <td className="py-1 font-medium">{p.displayLabel}</td>
                             <td className="py-1 text-right tabular-nums">
-                              {p.physicalWeight} g
+                              {formatWeight3(p.physicalWeight)} g
                             </td>
                             <td className="py-1 text-right tabular-nums font-semibold">
-                              {p.fineWeight} g
+                              {formatWeight3(p.fineWeight)} g
                             </td>
                           </tr>
                         ))}
@@ -471,7 +472,7 @@ export default function DashboardPage() {
                       Gold Due from Customers
                     </div>
                     <div className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
-                      {summary.groupB_customerGoldOwed.totalFine} g fine
+                      {formatWeight3(summary.groupB_customerGoldOwed.totalFine)} g fine
                     </div>
                     <div className="text-[11px] text-slate-500">
                       Across {summary.groupB_customerGoldOwed.openBillCount} unpaid bill(s)
@@ -507,7 +508,7 @@ export default function DashboardPage() {
                                 </Link>
                               </td>
                               <td className="py-1 text-right tabular-nums font-semibold">
-                                {b.outstandingFine} g
+                                {formatWeight3(b.outstandingFine)} g
                               </td>
                             </tr>
                           ))}
@@ -538,12 +539,12 @@ export default function DashboardPage() {
                       Gold in Production &amp; Recovery
                     </div>
                     <div className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
-                      {summary.groupC_productionAndRecovery.totalFine} g fine
+                      {formatWeight3(summary.groupC_productionAndRecovery.totalFine)} g fine
                     </div>
                     <div className="text-[11px] text-slate-500 tabular-nums">
-                      With Karigars {summary.groupC_productionAndRecovery.wipFine} + Finished{" "}
-                      {summary.groupC_productionAndRecovery.finishedGoodsFine} + Loss{" "}
-                      {summary.groupC_productionAndRecovery.outstandingLossFine}
+                      With Karigars {formatWeight3(summary.groupC_productionAndRecovery.wipFine)} + Finished{" "}
+                      {formatWeight3(summary.groupC_productionAndRecovery.finishedGoodsFine)} + Loss{" "}
+                      {formatWeight3(summary.groupC_productionAndRecovery.outstandingLossFine)}
                     </div>
                   </div>
                   {openCard === "C" ? (
@@ -557,7 +558,7 @@ export default function DashboardPage() {
                     <div>
                       <div className="font-semibold text-slate-700">
                         Work with karigars / between processes (
-                        {summary.groupC_productionAndRecovery.wipFine} g fine)
+                        {formatWeight3(summary.groupC_productionAndRecovery.wipFine)} g fine)
                       </div>
                       {summary.groupC_productionAndRecovery.wipOrders.length === 0 ? (
                         <div className="text-slate-400">None</div>
@@ -572,7 +573,7 @@ export default function DashboardPage() {
                                 Bag #{w.bagNumber} ({w.orderName})
                               </Link>
                               <span className="tabular-nums font-medium">
-                                {w.custodyFine} g fine
+                                {formatWeight3(w.custodyFine)} g fine
                               </span>
                             </li>
                           ))}
@@ -583,7 +584,7 @@ export default function DashboardPage() {
                     <div>
                       <div className="font-semibold text-slate-700">
                         Finished jewellery waiting for delivery (
-                        {summary.groupC_productionAndRecovery.finishedGoodsFine} g fine)
+                        {formatWeight3(summary.groupC_productionAndRecovery.finishedGoodsFine)} g fine)
                       </div>
                       {summary.groupC_productionAndRecovery.finishedGoodsOrders.length === 0 ? (
                         <div className="text-slate-400">None</div>
@@ -599,7 +600,7 @@ export default function DashboardPage() {
                                   Bag #{fg.bagNumber} ({fg.orderName})
                                 </Link>
                                 <span className="tabular-nums font-medium">
-                                  {fg.netWeight} g net
+                                  {formatWeight3(fg.netWeight)} g net
                                 </span>
                               </li>
                             )
@@ -611,7 +612,7 @@ export default function DashboardPage() {
                     <div>
                       <div className="font-semibold text-slate-700">
                         Loss remaining to recover (
-                        {summary.groupC_productionAndRecovery.outstandingLossFine} g fine)
+                        {formatWeight3(summary.groupC_productionAndRecovery.outstandingLossFine)} g fine)
                       </div>
                       {summary.groupC_productionAndRecovery.outstandingLosses.length === 0 ? (
                         <div className="text-slate-400">None</div>
@@ -624,7 +625,7 @@ export default function DashboardPage() {
                                   {l.karigarName} — {l.processType}
                                 </span>
                                 <span className="tabular-nums font-medium text-red-700">
-                                  {l.outstandingFine} g fine
+                                  {formatWeight3(l.outstandingFine)} g fine
                                 </span>
                               </li>
                             )
@@ -660,10 +661,10 @@ export default function DashboardPage() {
                     Total Accounted Gold
                   </div>
                   <div className="mt-0.5 text-2xl font-bold tabular-nums text-amber-950">
-                    {summary.totals.totalAccountedGoldFine} g fine
+                    {formatWeight3(summary.totals.totalAccountedGoldFine)} g fine
                   </div>
                   <p className="mt-0.5 text-xs text-amber-900">
-                    Sum of gold with Admin ({summary.groupA_adminStock.totalFine}g) + gold due from customers ({summary.groupB_customerGoldOwed.totalFine}g) + gold in orders &amp; karigar recovery ({summary.groupC_productionAndRecovery.totalFine}g).
+                    Sum of gold with Admin ({formatWeight3(summary.groupA_adminStock.totalFine)}g) + gold due from customers ({formatWeight3(summary.groupB_customerGoldOwed.totalFine)}g) + gold in orders &amp; karigar recovery ({formatWeight3(summary.groupC_productionAndRecovery.totalFine)}g).
                   </p>
                 </div>
                 <button
@@ -687,10 +688,10 @@ export default function DashboardPage() {
                       Physical Gold On Hand
                     </div>
                     <div className="mt-1 text-lg font-bold tabular-nums text-slate-900">
-                      {summary.totals.physicalGoldFine} g fine
+                      {formatWeight3(summary.totals.physicalGoldFine)} g fine
                     </div>
                     <div className="mt-0.5 text-[11px] text-slate-500 tabular-nums">
-                      {summary.totals.physicalGoldMixed} g mixed physical (Admin + With Karigars + Finished)
+                      {formatWeight3(summary.totals.physicalGoldMixed)} g mixed physical (Admin + With Karigars + Finished)
                     </div>
                   </div>
 
@@ -701,13 +702,13 @@ export default function DashboardPage() {
                     <div className="mt-1 text-xs text-slate-700 tabular-nums">
                       Unused Customer Advances:{" "}
                       <span className="font-semibold text-blue-700">
-                        {summary.totals.unusedCustomerGoldCredits} g fine
+                        {formatWeight3(summary.totals.unusedCustomerGoldCredits)} g fine
                       </span>
                     </div>
                     <div className="mt-0.5 text-xs text-slate-700 tabular-nums">
                       Karigar Return Obligations:{" "}
                       <span className="font-semibold text-indigo-700">
-                        {summary.totals.karigarReturnObligations} g fine
+                        {formatWeight3(summary.totals.karigarReturnObligations)} g fine
                       </span>
                     </div>
                   </div>
@@ -717,7 +718,7 @@ export default function DashboardPage() {
                       Net Tracked Gold Position
                     </div>
                     <div className="mt-1 text-lg font-bold tabular-nums text-emerald-950">
-                      {summary.totals.netTrackedGoldPosition} g fine
+                      {formatWeight3(summary.totals.netTrackedGoldPosition)} g fine
                     </div>
                     <div className="mt-0.5 text-[11px] text-emerald-800">
                       Total Accounted Gold minus unused customer advances &amp; obligations

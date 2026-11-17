@@ -8,6 +8,7 @@ import {
   PurityStockRow,
 } from "@/lib/domain/erp-service";
 import { getTodayBusinessDateString } from "@/lib/date-and-export";
+import { formatWeight3 } from "@/lib/decimal";
 import {
   fetchActorCached,
   fetchCachedJson,
@@ -296,21 +297,17 @@ export default function StockPage() {
           conversionType: convDirection,
           businessDate: convDate,
           sourcePurityId,
-          sourceWeight: sourcePhysical.toFixed(3),
+          sourceWeight: formatWeight3(sourcePhysical),
           targetPurityId,
-          actualOutputWeight: actualOutput.toFixed(3),
+          actualOutputWeight: formatWeight3(actualOutput),
           returnedMetalWeight: "0",
           residueWeight: "0",
           lossTreatment: "ACCEPTED",
           notes:
             convDescription.trim() ||
             (isFineToKarat
-              ? `Converted ${inputAmt.toFixed(3)}g Fine → ${actualOutput.toFixed(
-                  3
-                )}g of ${karatPurity.displayLabel}`
-              : `Converted ${inputAmt.toFixed(3)}g ${karatPurity.displayLabel} → ${actualOutput.toFixed(
-                  3
-                )}g Fine`),
+              ? `Converted ${formatWeight3(inputAmt)}g Fine → ${formatWeight3(actualOutput)}g of ${karatPurity.displayLabel}`
+              : `Converted ${formatWeight3(inputAmt)}g ${karatPurity.displayLabel} → ${formatWeight3(actualOutput)}g Fine`),
           idempotencyKey: `ui_conv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         }),
       });
@@ -324,12 +321,8 @@ export default function StockPage() {
         setShowConvertForm(false);
         setMessage(
           isFineToKarat
-            ? `Converted ${inputAmt.toFixed(2)}g Fine → ${actualOutput.toFixed(
-                2
-              )}g of ${karatPurity.displayLabel}`
-            : `Converted ${inputAmt.toFixed(2)}g ${karatPurity.displayLabel} → ${actualOutput.toFixed(
-                2
-              )}g Fine`
+            ? `Converted ${formatWeight3(inputAmt)}g Fine → ${formatWeight3(actualOutput)}g of ${karatPurity.displayLabel}`
+            : `Converted ${formatWeight3(inputAmt)}g ${karatPurity.displayLabel} → ${formatWeight3(actualOutput)}g Fine`
         );
         await loadData(true);
       }
@@ -591,7 +584,7 @@ export default function StockPage() {
         <div className="bg-gradient-to-br from-emerald-500 to-green-700 text-white p-6 rounded-xl shadow-lg">
           <p className="text-sm opacity-90">Total Admin Stock (Fine Gold)</p>
           <p className="text-4xl font-bold mt-2">
-            {totalAdminStockFine.toFixed(2)}g
+            {formatWeight3(totalAdminStockFine)}g
           </p>
           <p className="text-xs opacity-80 mt-2">
             Sum of every karat converted to fine (weight × purity ÷ 100) + direct
@@ -605,7 +598,7 @@ export default function StockPage() {
             <div>
               <p className="text-sm opacity-90">Fine Gold (Direct)</p>
               <p className="text-3xl font-bold mt-1">
-                {directFineGold.toFixed(2)}g
+                {formatWeight3(directFineGold)}g
               </p>
               <p className="text-xs opacity-80 mt-2">
                 Directly added fine gold + recovered from customers — can be
@@ -614,7 +607,7 @@ export default function StockPage() {
             </div>
             {directFinePhysical > 0 && (
               <span className="text-xs bg-white/20 px-2.5 py-1 rounded-md font-medium">
-                Physical: {directFinePhysical.toFixed(2)}g
+                Physical: {formatWeight3(directFinePhysical)}g
               </span>
             )}
           </div>
@@ -729,7 +722,7 @@ export default function StockPage() {
             <p className="text-sm text-gray-600">
               Available Fine Gold:{" "}
               <span className="font-bold text-sky-700">
-                {directFineGold.toFixed(2)}g
+                {formatWeight3(directFineGold)}g
               </span>
             </p>
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -845,11 +838,11 @@ export default function StockPage() {
                     {convDirection === "FINE_TO_KARAT" ? (
                       <>
                         <span className="font-semibold">
-                          {Number(convFineWeight).toFixed(3)}g Fine
+                          {formatWeight3(convFineWeight)}g Fine
                         </span>{" "}
                         →{" "}
                         <span className="font-bold text-purple-700">
-                          {outG.toFixed(3)}g of {targetP.displayLabel} gold
+                          {formatWeight3(outG)}g of {targetP.displayLabel} gold
                         </span>{" "}
                         <span className="text-xs text-purple-600">
                           (Fine × 100 ÷ {targetP.touchPercent})
@@ -858,11 +851,11 @@ export default function StockPage() {
                     ) : (
                       <>
                         <span className="font-semibold">
-                          {Number(convFineWeight).toFixed(3)}g {targetP.displayLabel}
+                          {formatWeight3(convFineWeight)}g {targetP.displayLabel}
                         </span>{" "}
                         →{" "}
                         <span className="font-bold text-purple-700">
-                          {outG.toFixed(3)}g Fine Gold
+                          {formatWeight3(outG)}g Fine Gold
                         </span>{" "}
                         <span className="text-xs text-purple-600">
                           (Karat × {targetP.touchPercent} ÷ {fineTouch})
@@ -936,8 +929,8 @@ export default function StockPage() {
                   {selectablePurities.map((p) => (
                     <option key={p.purityId} value={p.purityId}>
                       {p.purityId === finePurity?.purityId
-                        ? `Fine (direct) (Available: ${directFineGold.toFixed(2)}g)`
-                        : `${p.displayLabel} (Available: ${p.adminPhysicalWeight}g)`}
+                        ? `Fine (direct) (Available: ${formatWeight3(directFineGold)}g)`
+                        : `${p.displayLabel} (Available: ${formatWeight3(p.adminPhysicalWeight)}g)`}
                     </option>
                   ))}
                 </select>
@@ -1005,7 +998,7 @@ export default function StockPage() {
                 <div>
                   Sale Summary:{" "}
                   <span className="font-bold">
-                    {Number(sellWeight).toFixed(2)}g
+                    {formatWeight3(sellWeight)}g
                   </span>{" "}
                   for{" "}
                   <span className="font-bold text-emerald-700">
@@ -1123,9 +1116,12 @@ export default function StockPage() {
             </h2>
             <span className="text-xs text-gray-500">
               Mixed-Purity Physical:{" "}
-              {allPurities
-                .reduce((s, p) => s + Number(p.adminPhysicalWeight || 0), 0)
-                .toFixed(2)}
+              {formatWeight3(
+                allPurities.reduce(
+                  (s, p) => s + Number(p.adminPhysicalWeight || 0),
+                  0
+                )
+              )}
               g
             </span>
           </div>
@@ -1146,10 +1142,10 @@ export default function StockPage() {
                     </span>
                   </p>
                   <p className="text-3xl font-bold text-amber-800 mt-1">
-                    {weight.toFixed(2)}g
+                    {formatWeight3(weight)}g
                   </p>
                   <p className="text-xs text-amber-900 mt-2 font-medium">
-                    Fine: {fine.toFixed(2)}g
+                    Fine: {formatWeight3(fine)}g
                   </p>
                 </div>
               );
@@ -1175,7 +1171,7 @@ export default function StockPage() {
                     Total Gold Sold
                   </p>
                   <p className="text-base font-bold text-rose-800">
-                    {totalSoldGrams.toFixed(2)}g
+                    {formatWeight3(totalSoldGrams)}g
                   </p>
                 </div>
                 <div className="bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg">
@@ -1240,10 +1236,10 @@ export default function StockPage() {
                           </span>
                         </td>
                         <td className="px-3 py-2.5 font-semibold text-rose-700">
-                          -{Number(sale.physicalWeight).toFixed(2)}g
+                          -{formatWeight3(sale.physicalWeight)}g
                         </td>
                         <td className="px-3 py-2.5 text-gray-600">
-                          {Number(sale.fineEquivalentWeight).toFixed(2)}g
+                          {formatWeight3(sale.fineEquivalentWeight)}g
                         </td>
                         <td className="px-3 py-2.5 font-bold text-emerald-700">
                           ₹
@@ -1352,11 +1348,11 @@ export default function StockPage() {
                           }`}
                         >
                           {isInternal ? "Moved " : signPrefix}
-                          {weight.toFixed(2)}g @ {entry.purityLabel}
+                          {formatWeight3(weight)}g @ {entry.purityLabel}
                         </span>
                         <span className="text-xs text-gray-500">
                           (Fine: {signPrefix}
-                          {fine.toFixed(2)}g{isInternal ? " • internal" : ""})
+                          {formatWeight3(fine)}g{isInternal ? " • internal" : ""})
                         </span>
                         {showTechDetails && (
                           <span className="text-xs font-mono text-gray-400">
