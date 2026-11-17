@@ -52,19 +52,23 @@
 
   .print-batch-page {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 5mm;
-    row-gap: 4mm;
-    width: 100%;
-    max-width: 198mm;
+    grid-template-columns: repeat(2, 94mm);
+    justify-content: space-between;
+    align-content: start;
+    row-gap: 6mm;
+    width: 194mm;
     page-break-after: always;
     break-after: page;
   }
 
   .print-batch-page .job-card-root {
-    width: 100% !important;
-    padding: 3px !important;
+    width: 94mm !important;
+    height: 134mm !important;
+    max-height: 134mm !important;
+    overflow: hidden !important;
+    padding: 2mm !important;
     border-radius: 0 !important;
+    box-sizing: border-box !important;
   }
 
   .print-batch-page:last-child {
