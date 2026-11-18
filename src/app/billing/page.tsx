@@ -71,6 +71,28 @@ interface BillRow {
   cancellationReason: string | null;
   previewHtml: string | null;
   notes: string | null;
+  lines?: Array<{
+    id: string;
+    lineType: "ORDER_LINE" | "MANUAL_SERVICE";
+    orderId: string | null;
+    bagNumberSnapshot: string | null;
+    orderNameSnapshot: string | null;
+    description: string;
+    grossWeight: string;
+    stoneWeight: string;
+    adKlWeight?: string;
+    netWeight: string;
+    touchSnapshot: string;
+    chargeableWeight: string;
+    billingBasis: "NET_METAL" | "GROSS_WEIGHT" | "MANUAL";
+    makingPercentagePoints: string;
+    extraFineCharge: string;
+    fineDiscount: string;
+    makingCharges: string;
+    stoneChargeRupees: string;
+    rupeeDiscount: string;
+    adjustmentReason: string | null;
+  }>;
 }
 
 interface GoldReceiptRow {
@@ -212,6 +234,10 @@ function BillingWorkspaceInner() {
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [billNotes, setBillNotes] = useState("");
   const [adminMakingCharge, setAdminMakingCharge] = useState("");
+  const [additionalRupees, setAdditionalRupees] = useState("");
+  const [additionalRupeesNote, setAdditionalRupeesNote] = useState("Additional Charges");
+  const [editingBillId, setEditingBillId] = useState<string | null>(null);
+  const [editingBillNumber, setEditingBillNumber] = useState<string | null>(null);
   const [applyFineAdvance, setApplyFineAdvance] = useState(true);
   const [applyInrAdvance, setApplyInrAdvance] = useState(true);
   const [draftId, setDraftId] = useState<string | undefined>(undefined);
@@ -576,6 +602,8 @@ function BillingWorkspaceInner() {
       }
     }
 
+    inrTotal += Math.max(0, Number(additionalRupees || 0));
+
     const availAdv = Number(activeCustomer?.fineAdvance || 0);
     const advUsed = applyFineAdvance
       ? Math.min(availAdv, Math.max(0, Number(customAdvanceGoldUsed || 0)))
@@ -602,14 +630,84 @@ function BillingWorkspaceInner() {
     activeCustomer,
     applyFineAdvance,
     customAdvanceGoldUsed,
+    additionalRupees,
   ]);
 
-  const handleBillSubmit = async (action: "SAVE_DRAFT" | "POST_BILL_AND_DELIVER") => {
+  const startEditPostedBill = (b: BillRow) => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setEditingBillId(b.id);
+    setEditingBillNumber(b.billNumber);
+    setDraftId(undefined);
+    setCustomerId(b.customerId);
+    setBillDate(b.billDate);
+    setBillType(b.billType);
+    setBillNotes(b.notes || "");
+    setAdminMakingCharge("");
+
+    if (b.billType === "ORDER_DELIVERY") {
+      const nextOrders: Record<string, OrderLineDraft> = {};
+      let extraInr = 0;
+      let extraDesc = "Additional Charges";
+      for (const l of b.lines || []) {
+        if (l.lineType === "ORDER_LINE" && l.orderId) {
+          const ord = orders.find((o) => o.id === l.orderId);
+          const grossWt = ord?.grossWeight ?? l.grossWeight;
+          const netWt = ord?.netWeight ?? l.netWeight;
+          const isWithStones =
+            Number(l.grossWeight) > 0 &&
+            Math.abs(Number(l.grossWeight) - Number(grossWt)) < 0.002 &&
+            Math.abs(Number(grossWt) - Number(netWt)) > 0.002;
+          nextOrders[l.orderId] = {
+            orderId: l.orderId,
+            finishWeight: grossWt,
+            netWeight: netWt,
+            baseWeightOption: isWithStones ? "with_stones" : "pure_gold",
+            customStoneWeight: Number(l.stoneWeight || 0) === 0 ? "0" : l.stoneWeight,
+            customAdWeight: Number(l.adKlWeight || 0) === 0 ? "0" : String(l.adKlWeight || "0"),
+            billingBasis: "MANUAL",
+            manualChargeableWeight: l.chargeableWeight,
+            makingPercentagePoints: String(Number(l.makingPercentagePoints || 0)),
+            extraFineCharge: l.extraFineCharge,
+            fineDiscount: l.fineDiscount,
+            makingChargesRupees: String(Number(l.makingCharges || 0)),
+            stoneChargeRupees: String(Number(l.stoneChargeRupees || 0)),
+            rupeeDiscount: String(Number(l.rupeeDiscount || 0)),
+            adjustmentReason: l.adjustmentReason || "",
+          };
+        } else if (l.lineType === "MANUAL_SERVICE") {
+          extraInr += Number(l.makingCharges || 0);
+          if (l.description) extraDesc = l.description;
+        }
+      }
+      setSelectedOrderLines(nextOrders);
+      setAdditionalRupees(extraInr > 0 ? extraInr.toFixed(2) : "");
+      setAdditionalRupeesNote(extraDesc);
+    } else {
+      const mLines: ManualLineDraft[] = (b.lines || []).map((l) => ({
+        lineType: "MANUAL_SERVICE",
+        description: l.description,
+        extraFineCharge: l.extraFineCharge,
+        fineDiscount: l.fineDiscount,
+        makingChargesRupees: l.makingCharges,
+        stoneChargeRupees: l.stoneChargeRupees,
+        rupeeDiscount: l.rupeeDiscount,
+        adjustmentReason: l.adjustmentReason || "",
+      }));
+      setManualLines(mLines.length > 0 ? mLines : manualLines);
+      setAdditionalRupees("");
+    }
+    setActiveTab("new-bill");
+  };
+
+  const handleBillSubmit = async (
+    action: "SAVE_DRAFT" | "POST_BILL_AND_DELIVER" | "EDIT_POSTED_BILL"
+  ) => {
     setErrorMsg(null);
     setSuccessMsg(null);
     setSubmitting(true);
     try {
-      const lines =
+      const baseLines: unknown[] =
         billType === "ORDER_DELIVERY"
           ? Object.values(selectedOrderLines).map((draft) => {
               const baseWt =
@@ -629,13 +727,27 @@ function BillingWorkspaceInner() {
                 customNetWeight: finalBillingWt.toFixed(3),
               };
             })
-          : manualLines;
+          : [...manualLines];
+
+      if (billType === "ORDER_DELIVERY" && Number(additionalRupees || 0) > 0) {
+        baseLines.push({
+          lineType: "MANUAL_SERVICE",
+          description: additionalRupeesNote.trim() || "Additional Charges",
+          extraFineCharge: "0",
+          fineDiscount: "0",
+          makingChargesRupees: Number(additionalRupees).toFixed(2),
+          stoneChargeRupees: "0",
+          rupeeDiscount: "0",
+        });
+      }
+
       const res = await fetch("/api/billing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action,
-          draftId,
+          billId: action === "EDIT_POSTED_BILL" ? editingBillId : undefined,
+          draftId: action === "EDIT_POSTED_BILL" ? undefined : draftId,
           customerId,
           billDate,
           billType,
@@ -648,7 +760,7 @@ function BillingWorkspaceInner() {
               ? draftTotals.advUsed.toFixed(3)
               : "0",
           applyInrAdvance,
-          lines,
+          lines: baseLines,
           idempotencyKey: `bill_${action}_${Date.now()}`,
         }),
       });
@@ -659,12 +771,22 @@ function BillingWorkspaceInner() {
       if (action === "SAVE_DRAFT") {
         setDraftId(data.billId);
         setSuccessMsg(`Saved draft ${data.billNumber}`);
+      } else if (action === "EDIT_POSTED_BILL") {
+        setEditingBillId(null);
+        setEditingBillNumber(null);
+        setSelectedOrderLines({});
+        setAdminMakingCharge("");
+        setAdditionalRupees("");
+        setSuccessMsg(
+          `Updated Bill ${data.billNumber} (${formatWeight3(data.totalFineGold)}g fine, ₹${data.totalCashRupees})`
+        );
       } else {
         setDraftId(undefined);
         setSelectedOrderLines({});
         setAdminMakingCharge("");
+        setAdditionalRupees("");
         setSuccessMsg(
-          `Posted & Delivered Bill ${data.billNumber} (${data.totalFineGold}g fine, ₹${data.totalCashRupees})`
+          `Posted & Delivered Bill ${data.billNumber} (${formatWeight3(data.totalFineGold)}g fine, ₹${data.totalCashRupees})`
         );
       }
       await loadWorkspace();
@@ -1902,6 +2024,32 @@ function BillingWorkspaceInner() {
                           Dashboard only — not shown on customer bill PDF/preview
                         </span>
                       </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-emerald-900 mb-0.5">
+                          Additional Rupees (₹) — Added to Bill
+                        </label>
+                        <div className="flex gap-1.5">
+                          <input
+                            type="text"
+                            value={additionalRupeesNote}
+                            onChange={(e) => setAdditionalRupeesNote(e.target.value)}
+                            placeholder="Reason (e.g. Extra charge)"
+                            className="w-1/2 px-2 py-1.5 border border-emerald-300 rounded-xs bg-white text-[11px]"
+                          />
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={additionalRupees}
+                            onChange={(e) => setAdditionalRupees(e.target.value)}
+                            placeholder="0.00"
+                            className="w-1/2 px-2.5 py-1.5 border border-emerald-300 rounded-xs bg-white font-mono"
+                          />
+                        </div>
+                        <span className="text-[10px] text-emerald-800">
+                          Extra cash charge added to customer bill (other than order)
+                        </span>
+                      </div>
                     </div>
 
                     <div className="bg-white border border-slate-200 rounded-xs p-3 space-y-1.5">
@@ -1949,25 +2097,59 @@ function BillingWorkspaceInner() {
                       )}
                     </div>
 
+                    {editingBillId && (
+                      <div className="p-2 bg-blue-50 border border-blue-300 rounded-xs text-[11px] text-blue-900 font-semibold flex items-center justify-between gap-2">
+                        <span>Editing Posted Bill {editingBillNumber}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingBillId(null);
+                            setEditingBillNumber(null);
+                            setSelectedOrderLines({});
+                            setAdditionalRupees("");
+                            setBillNotes("");
+                          }}
+                          className="text-red-700 underline cursor-pointer"
+                        >
+                          Cancel Edit
+                        </button>
+                      </div>
+                    )}
+
                     <div className="flex flex-wrap gap-2 pt-1">
-                      <button
-                        type="button"
-                        disabled={submitting || !customerId}
-                        onClick={() => handleBillSubmit("SAVE_DRAFT")}
-                        className="px-4 py-2 text-xs font-semibold bg-white hover:bg-slate-100 border border-slate-300 rounded-xs cursor-pointer"
-                      >
-                        Save Draft
-                      </button>
-                      <button
-                        type="button"
-                        disabled={submitting || !customerId}
-                        onClick={() => handleBillSubmit("POST_BILL_AND_DELIVER")}
-                        className="flex-1 px-5 py-2.5 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xs cursor-pointer shadow-xs"
-                      >
-                        {submitting
-                          ? "Creating Bill..."
-                          : `Create Bill & Deliver (${formatWeight3(draftTotals.netCustomerOwesFine)} g Fine Gold)`}
-                      </button>
+                      {editingBillId ? (
+                        <button
+                          type="button"
+                          disabled={submitting || !customerId}
+                          onClick={() => handleBillSubmit("EDIT_POSTED_BILL")}
+                          className="flex-1 px-5 py-2.5 text-sm font-bold bg-blue-700 hover:bg-blue-800 text-white rounded-xs cursor-pointer shadow-xs"
+                        >
+                          {submitting
+                            ? "Updating Bill..."
+                            : `Save Updated Bill ${editingBillNumber} (${formatWeight3(draftTotals.netCustomerOwesFine)} g Fine Gold)`}
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            disabled={submitting || !customerId}
+                            onClick={() => handleBillSubmit("SAVE_DRAFT")}
+                            className="px-4 py-2 text-xs font-semibold bg-white hover:bg-slate-100 border border-slate-300 rounded-xs cursor-pointer"
+                          >
+                            Save Draft
+                          </button>
+                          <button
+                            type="button"
+                            disabled={submitting || !customerId}
+                            onClick={() => handleBillSubmit("POST_BILL_AND_DELIVER")}
+                            className="flex-1 px-5 py-2.5 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xs cursor-pointer shadow-xs"
+                          >
+                            {submitting
+                              ? "Creating Bill..."
+                              : `Create Bill & Deliver (${formatWeight3(draftTotals.netCustomerOwesFine)} g Fine Gold)`}
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -2135,6 +2317,30 @@ function BillingWorkspaceInner() {
                               </tr>
                             );
                           })}
+                          {Number(additionalRupees || 0) > 0 && (
+                            <tr className="bg-emerald-50/30">
+                              <td className="border border-slate-200 px-2.5 py-2.5 text-center font-mono">
+                                {Object.keys(selectedOrderLines).length + 1}
+                              </td>
+                              <td className="border border-slate-200 px-2 py-2.5 text-center text-slate-400">
+                                —
+                              </td>
+                              <td className="border border-slate-200 px-3 py-2.5 font-medium text-slate-900">
+                                {additionalRupeesNote.trim() || "Additional Charges"}
+                              </td>
+                              <td className="border border-slate-200 px-2 py-2.5 text-right font-mono text-slate-400">—</td>
+                              <td className="border border-slate-200 px-2 py-2.5 text-right font-mono text-slate-400">—</td>
+                              <td className="border border-slate-200 px-2 py-2.5 text-right font-mono text-slate-400">—</td>
+                              <td className="border border-slate-200 px-2 py-2.5 text-right font-mono text-slate-400">—</td>
+                              <td className="border border-slate-200 px-2 py-2.5 text-center font-mono text-slate-400">—</td>
+                              <td className="border border-slate-200 px-2.5 py-2.5 text-right font-mono font-bold">
+                                0.000
+                              </td>
+                              <td className="border border-slate-200 px-2.5 py-2.5 text-right font-mono font-bold">
+                                ₹{Number(additionalRupees).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -2326,6 +2532,15 @@ function BillingWorkspaceInner() {
                       >
                         {sendingWaBillId === b.id ? "Sending PDF..." : "WhatsApp PDF"}
                       </button>
+                      {b.status === "POSTED" && (
+                        <button
+                          type="button"
+                          onClick={() => startEditPostedBill(b)}
+                          className="px-2 py-1 text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-300 rounded-xs cursor-pointer font-semibold"
+                        >
+                          Edit
+                        </button>
+                      )}
                       {b.status === "POSTED" && actor.role === "OWNER_ADMIN" && (
                         <button
                           type="button"

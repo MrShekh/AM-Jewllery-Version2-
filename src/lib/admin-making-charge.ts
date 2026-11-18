@@ -56,6 +56,14 @@ export async function recordBillAdminMakingCharge(input: {
     .toISOString()
     .slice(0, 10);
 
+  await prisma.auditEvent.deleteMany({
+    where: {
+      organizationId: input.organizationId,
+      entityType: "BILL_ADMIN_MAKING_CHARGE",
+      entityId: input.billId,
+    },
+  });
+
   await prisma.auditEvent.create({
     data: {
       organizationId: input.organizationId,

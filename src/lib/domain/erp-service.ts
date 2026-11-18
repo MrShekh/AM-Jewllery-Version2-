@@ -7712,7 +7712,9 @@ export class ErpDomainService {
       const inp = inputLines[i];
       const lineType: BillLineType =
         billType === "ORDER_DELIVERY"
-          ? "ORDER_LINE"
+          ? inp.lineType === "MANUAL_SERVICE"
+            ? "MANUAL_SERVICE"
+            : "ORDER_LINE"
           : inp.lineType || "MANUAL_SERVICE";
 
       if (lineType === "ORDER_LINE") {
@@ -7745,11 +7747,15 @@ export class ErpDomainService {
             `Order Bag #${order.bagNumber} is ${order.status} and cannot enter a delivery bill`
           );
         }
+        const isSameBillEdit = Boolean(
+          excludeBillId && order.activeBillId === excludeBillId
+        );
         if (
-          order.billingStatus === "BILLED" ||
-          (order.deliveryStatus === "DELIVERED" &&
-            order.billingStatus !== "REVERSED") ||
-          billedOrderIds.has(order.id)
+          !isSameBillEdit &&
+          (order.billingStatus === "BILLED" ||
+            (order.deliveryStatus === "DELIVERED" &&
+              order.billingStatus !== "REVERSED") ||
+            billedOrderIds.has(order.id))
         ) {
           throw new ConflictError(
             `Order Bag #${order.bagNumber} is already billed/delivered`
@@ -10628,6 +10634,169 @@ export class ErpDomainService {
     });
   }
 
+  public async editPostedBill(
+    actor: ActorContext,
+    input: {
+      billId: string;
+      billDate?: string | Date;
+      notes?: string;
+      templateId?: string;
+      lines: Array<{
+        lineType?: BillLineType;
+        orderId?: string;
+        description?: string;
+        billingBasis?: BillingBasis;
+        manualChargeableWeight?: DecimalInput;
+        customNetWeight?: DecimalInput;
+        customStoneWeight?: DecimalInput;
+        customAdWeight?: DecimalInput;
+        customGrossWeight?: DecimalInput;
+        makingPercentagePoints?: DecimalInput;
+        extraFineCharge?: DecimalInput;
+        fineDiscount?: DecimalInput;
+        makingChargesRupees?: DecimalInput;
+        stoneChargeRupees?: DecimalInput;
+        rupeeDiscount?: DecimalInput;
+        adjustmentReason?: string;
+      }>;
+    }
+  ): Promise<{
+    bill: CustomerBillEntity;
+    lines: CustomerBillLineEntity[];
+  }> {
+    const validActor = this.assertRole(actor, ["OWNER_ADMIN", "OPERATOR"]);
+
+    return this.repo.runInTransaction(async (tx) => {
+      const bill = await tx.getCustomerBillById(
+        validActor.organizationId,
+        input.billId
+      );
+      if (!bill) throw new NotFoundError(`Bill ${input.billId} not found`);
+      if (bill.status !== "POSTED") {
+        throw new ConflictError(
+          `Only POSTED bills can be edited (current: ${bill.status})`
+        );
+      }
+
+      await tx.lockCustomerForUpdate(validActor.organizationId, bill.customerId);
+
+      const billDate = input.billDate
+        ? parseBusinessDate(input.billDate)
+        : bill.billDate;
+
+      const built = await this.buildAndValidateBillLines(
+        tx,
+        validActor.organizationId,
+        bill.customerId,
+        bill.id,
+        bill.billType,
+        input.lines,
+        bill.id
+      );
+
+      const allocs = await tx.listCustomerPaymentAllocations(
+        validActor.organizationId,
+        { billId: bill.id }
+      );
+      const activeAllocs = allocs.filter((a) => a.status === "ACTIVE");
+      const activeFineAllocated = activeAllocs.reduce(
+        (s, a) => roundInternal(s.add(a.allocatedFineWeight)),
+        ZERO
+      );
+      const activeInrAllocated = activeAllocs.reduce(
+        (s, a) => roundRupees(s.add(a.allocatedRupees)),
+        ZERO
+      );
+
+      if (built.totalFineGold.lt(activeFineAllocated)) {
+        throw new ConflictError(
+          `Cannot reduce bill fine gold (${built.totalFineGold.toFixed(
+            3
+          )}g) below already-allocated payments (${activeFineAllocated.toFixed(
+            3
+          )}g). Undo excess payment allocation first.`
+        );
+      }
+      if (built.totalCashRupees.lt(activeInrAllocated)) {
+        throw new ConflictError(
+          `Cannot reduce bill rupees (₹${built.totalCashRupees.toFixed(
+            2
+          )}) below already-allocated cash (₹${activeInrAllocated.toFixed(
+            2
+          )}). Undo excess cash allocation first.`
+        );
+      }
+
+      const fineRem = roundInternal(built.totalFineGold.sub(activeFineAllocated));
+      const inrRem = roundRupees(built.totalCashRupees.sub(activeInrAllocated));
+      const settlementStatus: BillSettlementStatus =
+        fineRem.lte(ZERO) && inrRem.lte(ZERO)
+          ? "SETTLED"
+          : activeFineAllocated.gt(ZERO) || activeInrAllocated.gt(ZERO)
+          ? "PARTIALLY_SETTLED"
+          : "UNPAID";
+
+      const customer = (await tx.getCustomerById(
+        validActor.organizationId,
+        bill.customerId
+      ))!;
+      const templates = await tx.listBillTemplates(validActor.organizationId);
+      const chosenTpl = input.templateId
+        ? templates.find((t) => t.id === input.templateId)
+        : templates.find((t) => t.isDefault) ?? templates[0];
+      const parsedTpl = bill.templateSnapshotJson
+        ? (JSON.parse(bill.templateSnapshotJson) as ParsedBillTemplate)
+        : parseTemplateEntity(chosenTpl);
+
+      const now = new Date();
+      const updatedBill: CustomerBillEntity = {
+        ...bill,
+        billDate,
+        notes: input.notes !== undefined ? input.notes.trim() || null : bill.notes,
+        totalFineGold: built.totalFineGold,
+        totalCashRupees: built.totalCashRupees,
+        commercialMakingFine: built.commercialMakingFine,
+        settlementStatus,
+        closingFineDueSnapshot: roundInternal(
+          (bill.historicalFineBalance ?? ZERO)
+            .add(built.totalFineGold)
+            .sub(activeFineAllocated)
+        ),
+        updatedAt: now,
+      };
+      updatedBill.previewHtml = renderBillSnapshotHtml({
+        bill: updatedBill,
+        appliedFineCredit: activeFineAllocated,
+        appliedInrCredit: activeInrAllocated,
+        customer,
+        lines: built.lines,
+        template: parsedTpl,
+      });
+
+      const savedBill = await tx.updateCustomerBill(updatedBill);
+      const savedLines = await tx.replaceCustomerBillLines(
+        savedBill.id,
+        built.lines
+      );
+
+      await tx.createAuditEvent({
+        id: newId("aud"),
+        organizationId: validActor.organizationId,
+        actorId: validActor.userId,
+        entityType: "CustomerBill",
+        entityId: savedBill.id,
+        action: "BILL_EDITED",
+        summary: `Edited Bill ${savedBill.billNumber}: totalFine=${savedBill.totalFineGold.toFixed(
+          3
+        )}g, totalRupees=₹${savedBill.totalCashRupees.toFixed(2)}`,
+        metadataJson: null,
+        createdAt: now,
+      });
+
+      return { bill: savedBill, lines: savedLines };
+    });
+  }
+
   public async undoCustomerPaymentAllocation(
     actor: ActorContext,
     input: { allocationId: string; reason: string }
@@ -10988,6 +11157,7 @@ export class ErpDomainService {
             description: l.description,
             grossWeight: l.grossWeight.toFixed(3),
             stoneWeight: l.stoneWeight.toFixed(3),
+            adKlWeight: l.adKlWeight.toFixed(3),
             netWeight: l.netWeight.toFixed(3),
             touchSnapshot: l.touchSnapshot.toFixed(2),
             chargeableWeight: l.chargeableWeight.toFixed(3),

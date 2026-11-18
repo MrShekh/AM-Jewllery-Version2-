@@ -105,6 +105,37 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    if (action === "EDIT_POSTED_BILL") {
+      const res = await erpService.editPostedBill(actor, {
+        billId: String(body.billId || ""),
+        billDate: body.billDate,
+        notes: body.notes,
+        templateId: body.templateId,
+        lines: Array.isArray(body.lines) ? body.lines : [],
+      });
+      if (body.adminMakingChargeRupees !== undefined) {
+        await recordBillAdminMakingCharge({
+          organizationId: actor.organizationId,
+          actorId: actor.userId,
+          billId: res.bill.id,
+          billNumber: res.bill.billNumber,
+          billDate: res.bill.billDate,
+          customerId: res.bill.customerId,
+          amountRupees: Number(body.adminMakingChargeRupees || 0),
+        });
+      }
+      return NextResponse.json({
+        ok: true,
+        billId: res.bill.id,
+        billNumber: res.bill.billNumber,
+        status: res.bill.status,
+        settlementStatus: res.bill.settlementStatus,
+        totalFineGold: res.bill.totalFineGold.toFixed(4),
+        totalCashRupees: res.bill.totalCashRupees.toFixed(2),
+        previewHtml: res.bill.previewHtml,
+      });
+    }
+
     if (action === "CONFIGURE_FINE_CONVENTION") {
       const res = await erpService.configureCustomerFineReceiptConvention(
         actor,
