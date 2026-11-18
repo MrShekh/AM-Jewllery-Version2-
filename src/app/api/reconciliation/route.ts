@@ -88,6 +88,10 @@ export async function GET(req: NextRequest) {
         ...(showSetting
           ? [
               "Setting Gross In (g)",
+              "Setting AD (g)",
+              "Setting AD Pcs",
+              "Setting KL (g)",
+              "Setting KL Pcs",
               "Stones Added (g)",
               "Setting Gross Out (g)",
               "Setting Extra Return (g)",
@@ -116,6 +120,21 @@ export async function GET(req: NextRequest) {
         const fp = findP("FREE_POLISH");
         const set = findP("SETTING");
         const fin = findP("FINAL_POLISH");
+        const setStones = (r.stoneComponents ?? []).filter(
+          (s) => s.direction === "ADDED" && (!set || s.orderProcessId === set.id)
+        );
+        const setAdWeight = setStones
+          .filter((s) => s.componentType === "AD")
+          .reduce((acc, s) => acc + Number(s.weightGrams || 0), 0);
+        const setAdPieces = setStones
+          .filter((s) => s.componentType === "AD")
+          .reduce((acc, s) => acc + (s.pieces || 0), 0);
+        const setKlWeight = setStones
+          .filter((s) => s.componentType === "KL")
+          .reduce((acc, s) => acc + Number(s.weightGrams || 0), 0);
+        const setKlPieces = setStones
+          .filter((s) => s.componentType === "KL")
+          .reduce((acc, s) => acc + (s.pieces || 0), 0);
 
         return [
           { value: r.order.bagNumber },
@@ -176,6 +195,22 @@ export async function GET(req: NextRequest) {
             ? [
                 {
                   value: set ? set.latestGrossInWeight.toFixed(3) : "",
+                  isNumeric: true,
+                },
+                {
+                  value: setAdWeight > 0 ? setAdWeight.toFixed(3) : "",
+                  isNumeric: true,
+                },
+                {
+                  value: setAdPieces > 0 ? String(setAdPieces) : "",
+                  isNumeric: true,
+                },
+                {
+                  value: setKlWeight > 0 ? setKlWeight.toFixed(3) : "",
+                  isNumeric: true,
+                },
+                {
+                  value: setKlPieces > 0 ? String(setKlPieces) : "",
                   isNumeric: true,
                 },
                 {
