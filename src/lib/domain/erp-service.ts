@@ -8740,6 +8740,109 @@ export class ErpDomainService {
         }
       }
 
+      let directDeliveredFine = ZERO;
+      if (billType === "MANUAL_COMMERCIAL") {
+        const directLinesWithMetal = built.lines.filter(
+          (l) => l.netWeight.gt(ZERO) && l.touchSnapshot.gt(ZERO)
+        );
+        if (directLinesWithMetal.length > 0) {
+          const allPurities = await tx.listPurities(validActor.organizationId);
+          const fineFallback =
+            allPurities.find((p) => p.isFineCategory) ?? allPurities[0];
+          const byDirectPurity = new Map<
+            string,
+            { purity: PurityEntity; netWeight: Decimal; fineWeight: Decimal }
+          >();
+
+          for (const dl of directLinesWithMetal) {
+            const matchedPurity =
+              allPurities.find(
+                (p) =>
+                  Math.abs(
+                    Number(p.touchPercent) - Number(dl.touchSnapshot)
+                  ) < 0.01
+              ) ?? fineFallback;
+            if (!matchedPurity) continue;
+
+            const isMatchedExact =
+              Math.abs(
+                Number(matchedPurity.touchPercent) - Number(dl.touchSnapshot)
+              ) < 0.01;
+            const lineFine = roundInternal(dl.metalChargeFine);
+            const linePhys = isMatchedExact
+              ? roundInternal(dl.netWeight)
+              : roundInternal(
+                  lineFine
+                    .mul(100)
+                    .div(roundTouch(matchedPurity.touchPercent))
+                );
+
+            const cur = byDirectPurity.get(matchedPurity.id) ?? {
+              purity: matchedPurity,
+              netWeight: ZERO,
+              fineWeight: ZERO,
+            };
+            cur.netWeight = roundInternal(cur.netWeight.add(linePhys));
+            cur.fineWeight = roundInternal(cur.fineWeight.add(lineFine));
+            byDirectPurity.set(matchedPurity.id, cur);
+          }
+
+          for (const [, grp] of byDirectPurity.entries()) {
+            if (grp.netWeight.lte(ZERO) || grp.fineWeight.lte(ZERO)) continue;
+            const adminPoolAcct = await this.ensureSystemAccount(
+              tx,
+              validActor.organizationId,
+              `ADMIN_POOL_${grp.purity.code}`,
+              `Admin Pool - ${grp.purity.displayLabel}`,
+              "ADMIN_KARAT_POOL",
+              grp.purity.id,
+              null
+            );
+            if (adminPoolAcct.cachedPhysicalBalance.lt(grp.netWeight)) {
+              throw new ConflictError(
+                `Insufficient Admin Stock in ${grp.purity.displayLabel} for Direct Bill: available ${adminPoolAcct.cachedPhysicalBalance.toFixed(
+                  3
+                )}g, required ${grp.netWeight.toFixed(3)}g`
+              );
+            }
+            const deliveredAcct = await this.ensureSystemAccount(
+              tx,
+              validActor.organizationId,
+              `CUSTOMER_DELIVERED_${grp.purity.code}`,
+              `Delivered to Customers - ${grp.purity.displayLabel}`,
+              "CUSTOMER_DELIVERED",
+              grp.purity.id,
+              null
+            );
+            const jtx = await this.postBalancedJournalEntry(tx, {
+              organizationId: validActor.organizationId,
+              actorId: validActor.userId,
+              transactionType: "BILL_POST_AND_DELIVER",
+              businessDate: billDate,
+              purity: grp.purity,
+              physicalWeight: grp.netWeight,
+              fineEquivalentWeight: grp.fineWeight,
+              sourceAccount: adminPoolAcct,
+              destinationAccount: deliveredAcct,
+              sourceReference: billNumber,
+              reason: `Direct Bill ${billNumber} delivery to ${customer.name} (${grp.purity.displayLabel})`,
+              idempotencyKey: `bill_dir_del_${input.idempotencyKey}_${grp.purity.id}`,
+            });
+            if (!firstJournalTxId) firstJournalTxId = jtx.id;
+            directDeliveredFine = roundInternal(
+              directDeliveredFine.add(grp.fineWeight)
+            );
+          }
+        }
+      }
+
+      const finalDeliveredFine = roundInternal(
+        built.deliveredFineMetal.add(directDeliveredFine)
+      );
+      const finalCommercialMakingFine = roundInternal(
+        built.totalFineGold.sub(finalDeliveredFine)
+      );
+
       const postedBill: CustomerBillEntity = {
         id: billId,
         organizationId: validActor.organizationId,
@@ -8749,12 +8852,14 @@ export class ErpDomainService {
         billType,
         status: "POSTED",
         deliveryStatus:
-          billType === "ORDER_DELIVERY" ? "DELIVERED" : "NOT_DELIVERED",
+          billType === "ORDER_DELIVERY" || directDeliveredFine.gt(ZERO)
+            ? "DELIVERED"
+            : "NOT_DELIVERED",
         settlementStatus: "UNPAID",
         totalFineGold: built.totalFineGold,
         totalCashRupees: built.totalCashRupees,
-        deliveredFineMetal: built.deliveredFineMetal,
-        commercialMakingFine: built.commercialMakingFine,
+        deliveredFineMetal: finalDeliveredFine,
+        commercialMakingFine: finalCommercialMakingFine,
         historicalFineBalance: histBal.fineOwed,
         historicalInrBalance: histBal.inrOwed,
         templateId: chosenTpl?.id ?? null,
@@ -10863,6 +10968,86 @@ export class ErpDomainService {
               billingStatus: "REVERSED",
               activeBillId: null,
               updatedAt: now,
+            });
+          }
+        }
+      }
+
+      if (bill.billType === "MANUAL_COMMERCIAL" && bill.deliveredFineMetal.gt(ZERO)) {
+        const directLinesWithMetal = lines.filter(
+          (l) => l.netWeight.gt(ZERO) && l.touchSnapshot.gt(ZERO)
+        );
+        if (directLinesWithMetal.length > 0) {
+          const allPurities = await tx.listPurities(validActor.organizationId);
+          const fineFallback =
+            allPurities.find((p) => p.isFineCategory) ?? allPurities[0];
+          const byDirectPurity = new Map<
+            string,
+            { purity: PurityEntity; netWeight: Decimal; fineWeight: Decimal }
+          >();
+          for (const dl of directLinesWithMetal) {
+            const matchedPurity =
+              allPurities.find(
+                (p) =>
+                  Math.abs(
+                    Number(p.touchPercent) - Number(dl.touchSnapshot)
+                  ) < 0.01
+              ) ?? fineFallback;
+            if (!matchedPurity) continue;
+            const isMatchedExact =
+              Math.abs(
+                Number(matchedPurity.touchPercent) - Number(dl.touchSnapshot)
+              ) < 0.01;
+            const lineFine = roundInternal(dl.metalChargeFine);
+            const linePhys = isMatchedExact
+              ? roundInternal(dl.netWeight)
+              : roundInternal(
+                  lineFine
+                    .mul(100)
+                    .div(roundTouch(matchedPurity.touchPercent))
+                );
+            const cur = byDirectPurity.get(matchedPurity.id) ?? {
+              purity: matchedPurity,
+              netWeight: ZERO,
+              fineWeight: ZERO,
+            };
+            cur.netWeight = roundInternal(cur.netWeight.add(linePhys));
+            cur.fineWeight = roundInternal(cur.fineWeight.add(lineFine));
+            byDirectPurity.set(matchedPurity.id, cur);
+          }
+          for (const [, grp] of byDirectPurity.entries()) {
+            if (grp.netWeight.lte(ZERO) || grp.fineWeight.lte(ZERO)) continue;
+            const adminPoolAcct = await this.ensureSystemAccount(
+              tx,
+              validActor.organizationId,
+              `ADMIN_POOL_${grp.purity.code}`,
+              `Admin Pool - ${grp.purity.displayLabel}`,
+              "ADMIN_KARAT_POOL",
+              grp.purity.id,
+              null
+            );
+            const deliveredAcct = await this.ensureSystemAccount(
+              tx,
+              validActor.organizationId,
+              `CUSTOMER_DELIVERED_${grp.purity.code}`,
+              `Delivered to Customers - ${grp.purity.displayLabel}`,
+              "CUSTOMER_DELIVERED",
+              grp.purity.id,
+              null
+            );
+            await this.postBalancedJournalEntry(tx, {
+              organizationId: validActor.organizationId,
+              actorId: validActor.userId,
+              transactionType: "BILL_CANCELLATION_REVERSAL",
+              businessDate: parseBusinessDate(now),
+              purity: grp.purity,
+              physicalWeight: grp.netWeight,
+              fineEquivalentWeight: grp.fineWeight,
+              sourceAccount: deliveredAcct,
+              destinationAccount: adminPoolAcct,
+              sourceReference: creditNoteNumber,
+              reason: `Direct Bill ${bill.billNumber} cancelled (${creditNoteNumber}): return ${grp.netWeight.toFixed(3)}g to Admin Stock`,
+              idempotencyKey: `bill_dir_rev_${bill.id}_${grp.purity.id}_${now.getTime()}`,
             });
           }
         }
