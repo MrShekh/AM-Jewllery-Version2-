@@ -50,7 +50,7 @@ export async function recordBillAdminMakingCharge(input: {
   amountRupees: number;
 }): Promise<void> {
   const safeAmount = Number.isFinite(input.amountRupees)
-    ? Math.max(0, Math.round(input.amountRupees * 100) / 100)
+    ? Math.max(0, Math.floor(input.amountRupees * 1000 + 1e-9) / 1000)
     : 0;
   const billDateIst = new Date(input.billDate.getTime() + 330 * 60 * 1000)
     .toISOString()
@@ -178,7 +178,7 @@ export async function getAdminMakingChargeSummary(
     fromDate,
     toDate,
     month,
-    totalRupees: total.toFixed(2),
+    totalRupees: total.toFixed(3),
     billCount: bills.length,
     bills,
   };

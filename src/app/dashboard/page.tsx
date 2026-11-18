@@ -259,11 +259,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="mt-1 flex items-baseline gap-2.5">
                       <span className="text-2xl font-bold font-mono tabular-nums text-slate-900">
-                        ₹
-                        {Number(adminMakingCharge.totalRupees).toLocaleString("en-IN", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
+                        {formatWeight3(adminMakingCharge.totalRupees)} g
                       </span>
                       <span className="text-xs font-medium text-slate-600">
                         ({adminMakingCharge.billCount}{" "}
@@ -383,11 +379,7 @@ export default function DashboardPage() {
                               {b.billDate}
                             </td>
                             <td className="py-1 text-right font-mono font-semibold text-emerald-700">
-                              ₹
-                              {b.amountRupees.toLocaleString("en-IN", {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
+                              {formatWeight3(b.amountRupees)} g
                             </td>
                           </tr>
                         ))}

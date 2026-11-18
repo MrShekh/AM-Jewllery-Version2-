@@ -452,7 +452,25 @@ function ProductionRegisterContent() {
         processType
       )
     );
-    return defKar?.id ?? null;
+    if (defKar) return defKar.id;
+
+    const nameMatchKeyword =
+      processType === "FILING"
+        ? "hasan"
+        : processType === "FREE_POLISH" || processType === "FINAL_POLISH"
+        ? "boro"
+        : processType === "SETTING"
+        ? "josim"
+        : null;
+    if (nameMatchKeyword) {
+      const byName = karigars.find((k) =>
+        k.name.toLowerCase().includes(nameMatchKeyword)
+      );
+      if (byName) return byName.id;
+    }
+
+    const byCap = karigars.find((k) => k.capabilities?.includes(processType));
+    return byCap?.id ?? null;
   }
 
   // Sync default open process & pre-fill weights only when switching to a different order
@@ -473,13 +491,13 @@ function ProductionRegisterContent() {
       setActiveProcessType(openProc.processType);
       const hasIn = Number(openProc.latestGrossInWeight || 0) > 0;
       setEntryStep(hasIn ? "RECEIVE_WORK" : "GIVE_WORK");
-      if (openProc.assignedKarigarId) {
+      const defKarId = resolveDefaultKarigarIdForProcess(openProc.processType);
+      if (openProc.status === "PENDING" && defKarId) {
+        setSelectedKarigarId(defKarId);
+      } else if (openProc.assignedKarigarId) {
         setSelectedKarigarId(openProc.assignedKarigarId);
-      } else {
-        const defKarId = resolveDefaultKarigarIdForProcess(openProc.processType);
-        if (defKarId) {
-          setSelectedKarigarId(defKarId);
-        }
+      } else if (defKarId) {
+        setSelectedKarigarId(defKarId);
       }
       const openIdx = selectedOrderRow.processes.findIndex(
         (p) => p.id === openProc.id
@@ -549,13 +567,13 @@ function ProductionRegisterContent() {
     );
     const proc = procIdx >= 0 ? orderRow.processes[procIdx] : null;
     const prevProc = procIdx > 0 ? orderRow.processes[procIdx - 1] : null;
-    if (proc?.assignedKarigarId) {
+    const defKarId = resolveDefaultKarigarIdForProcess(processType);
+    if (proc?.status === "PENDING" && defKarId) {
+      setSelectedKarigarId(defKarId);
+    } else if (proc?.assignedKarigarId) {
       setSelectedKarigarId(proc.assignedKarigarId);
-    } else {
-      const defKarId = resolveDefaultKarigarIdForProcess(processType);
-      if (defKarId) {
-        setSelectedKarigarId(defKarId);
-      }
+    } else if (defKarId) {
+      setSelectedKarigarId(defKarId);
     }
     const suggestedIn =
       proc && Number(proc.latestGrossInWeight || 0) > 0
@@ -2859,6 +2877,11 @@ function ProductionRegisterContent() {
                                 placeholder="0.500"
                                 className="w-full px-2 py-1 text-xs border border-slate-300 rounded-xs font-mono tabular-nums"
                               />
+                              {Number(adWeight || 0) > 0 && (
+                                <div className="text-[10px] font-mono font-bold text-amber-800 mt-0.5">
+                                  {Math.round(Number(adWeight) * 1000)} mg
+                                </div>
+                              )}
                             </div>
                             <div>
                               <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
@@ -2886,6 +2909,11 @@ function ProductionRegisterContent() {
                                 placeholder="1.000"
                                 className="w-full px-2 py-1 text-xs border border-slate-300 rounded-xs font-mono tabular-nums"
                               />
+                              {Number(klWeight || 0) > 0 && (
+                                <div className="text-[10px] font-mono font-bold text-amber-800 mt-0.5">
+                                  {Math.round(Number(klWeight) * 1000)} mg
+                                </div>
+                              )}
                             </div>
                             <div>
                               <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">

@@ -1857,8 +1857,15 @@ function BillingWorkspaceInner() {
                                   className="w-20 px-2 py-1.5 text-right text-xs border border-amber-300 rounded-xs bg-white font-mono"
                                   placeholder="0"
                                 />
-                                <div className="text-[10px] text-right text-slate-500 mt-0.5">
-                                  + add / - less
+                                <div className="text-[10px] text-right mt-0.5 font-mono">
+                                  {customStone !== 0 ? (
+                                    <span className="font-bold text-amber-800">
+                                      {customStone > 0 ? "+" : ""}
+                                      {Math.round(customStone * 1000)} mg
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-500">+ add / - less</span>
+                                  )}
                                 </div>
                               </td>
 
@@ -1876,8 +1883,15 @@ function BillingWorkspaceInner() {
                                   className="w-20 px-2 py-1.5 text-right text-xs border border-amber-300 rounded-xs bg-white font-mono"
                                   placeholder="0"
                                 />
-                                <div className="text-[10px] text-right text-slate-500 mt-0.5">
-                                  + add / - less
+                                <div className="text-[10px] text-right mt-0.5 font-mono">
+                                  {customAd !== 0 ? (
+                                    <span className="font-bold text-amber-800">
+                                      {customAd > 0 ? "+" : ""}
+                                      {Math.round(customAd * 1000)} mg
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-500">+ add / - less</span>
+                                  )}
                                 </div>
                               </td>
 
@@ -2012,19 +2026,21 @@ function BillingWorkspaceInner() {
                       </div>
                       <div>
                         <label className="block text-[11px] font-semibold text-amber-900 mb-0.5">
-                          Admin Internal Making Charge (₹)
+                          Admin Internal Making Charge (g)
                         </label>
                         <input
                           type="number"
-                          step="0.01"
+                          step="0.001"
                           min="0"
                           value={adminMakingCharge}
                           onChange={(e) => setAdminMakingCharge(e.target.value)}
-                          placeholder="0.00"
+                          placeholder="0.000"
                           className="w-full px-2.5 py-1.5 border border-amber-300 rounded-xs bg-amber-50/40 font-mono"
                         />
                         <span className="text-[10px] text-amber-800">
-                          Dashboard only — not shown on customer bill PDF/preview
+                          {Number(adminMakingCharge || 0) > 0
+                            ? `${Math.round(Number(adminMakingCharge) * 1000)} mg • Dashboard only`
+                            : "In grams (e.g. 0.040 = 40 mg) — Dashboard only"}
                         </span>
                       </div>
                       <div>
