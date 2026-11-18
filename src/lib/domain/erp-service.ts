@@ -1308,12 +1308,20 @@ export class ErpDomainService {
 
       let nextPurityId = order.purityId;
       let nextTouch = order.touchSnapshot;
+      let nextTotalFineLossWeight = order.totalFineLossWeight;
       if (input.purityId && input.purityId !== order.purityId) {
-        if (order.initialIssuedMetalWeight.gt(ZERO)) {
+        if (
+          order.status === "COMPLETED" ||
+          order.billingStatus === "BILLED"
+        ) {
           throw new ConflictError(
-            "Cannot change order purity after metal has already been issued"
+            "Cannot change order karat after order is completed or billed"
           );
         }
+        const oldPurity = await tx.getPurityById(
+          validActor.organizationId,
+          order.purityId
+        );
         const purity = await tx.getPurityById(
           validActor.organizationId,
           input.purityId
@@ -1323,6 +1331,232 @@ export class ErpDomainService {
         }
         nextPurityId = purity.id;
         nextTouch = purity.touchPercent;
+
+        if (order.initialIssuedMetalWeight.gt(ZERO) && oldPurity) {
+          const [processes, visits, lossRecords] = await Promise.all([
+            tx.listOrderProcesses(validActor.organizationId, order.id),
+            tx.listProcessVisits(validActor.organizationId, order.id),
+            tx.listProcessLossRecords(validActor.organizationId, order.id),
+          ]);
+
+          const hasRecoveredLoss = lossRecords.some(
+            (l) => l.eligibilityStatus === "ELIGIBLE"
+          );
+          if (hasRecoveredLoss) {
+            throw new ConflictError(
+              "Cannot change order karat after karigar loss has already been recovered or written off"
+            );
+          }
+
+          const hasCrossPurityExtra = visits.some(
+            (v) =>
+              v.status !== "REVERSED" &&
+              v.extraMetalReturnedWeight.gt(ZERO) &&
+              v.extraMetalPurityId &&
+              v.extraMetalPurityId !== oldPurity.id
+          );
+          if (hasCrossPurityExtra) {
+            throw new ConflictError(
+              "Cannot change order karat when extra metal was returned at an overridden purity"
+            );
+          }
+
+          const activeKarigarProc =
+            processes.find((p) => p.custodyMetalWeight.gt(ZERO) && p.assignedKarigarId) ||
+            processes.find((p) => p.assignedKarigarId);
+          const refKarigar = activeKarigarProc?.assignedKarigarId
+            ? await tx.getKarigarById(
+                validActor.organizationId,
+                activeKarigarProc.assignedKarigarId
+              )
+            : null;
+
+          if (refKarigar) {
+            const custodyAcct = await this.ensureSystemAccount(
+              tx,
+              validActor.organizationId,
+              `KARIGAR_CUSTODY_${refKarigar.id}`,
+              `Karigar Custody - ${refKarigar.name} (${refKarigar.karigarCode})`,
+              "KARIGAR_CUSTODY",
+              null,
+              refKarigar.id
+            );
+            const oldPoolAcct = await this.ensureSystemAccount(
+              tx,
+              validActor.organizationId,
+              `ADMIN_POOL_${oldPurity.code}`,
+              `Admin Pool - ${oldPurity.displayLabel}`,
+              "ADMIN_KARAT_POOL",
+              oldPurity.id
+            );
+            const newPoolAcct = await this.ensureSystemAccount(
+              tx,
+              validActor.organizationId,
+              `ADMIN_POOL_${purity.code}`,
+              `Admin Pool - ${purity.displayLabel}`,
+              "ADMIN_KARAT_POOL",
+              purity.id
+            );
+
+            const sumExtraSamePurity = visits
+              .filter((v) => v.status !== "REVERSED")
+              .reduce(
+                (s, v) => roundInternal(s.add(v.extraMetalReturnedWeight)),
+                ZERO
+              );
+            const netIssued = roundInternal(
+              order.initialIssuedMetalWeight.sub(sumExtraSamePurity)
+            );
+            const businessDate = parseBusinessDate(new Date());
+            const ts = Date.now();
+
+            if (netIssued.gt(ZERO)) {
+              const oldIssuedFine = calculateFineEquivalent(
+                netIssued,
+                oldPurity.touchPercent
+              );
+              const newIssuedFine = calculateFineEquivalent(
+                netIssued,
+                purity.touchPercent
+              );
+              await this.postBalancedJournalEntry(tx, {
+                organizationId: validActor.organizationId,
+                actorId: validActor.userId,
+                transactionType: "PURITY_CONVERSION",
+                businessDate,
+                purity: oldPurity,
+                physicalWeight: netIssued,
+                fineEquivalentWeight: oldIssuedFine,
+                sourceAccount: custodyAcct,
+                destinationAccount: oldPoolAcct,
+                sourceReference: `BAG-${order.bagNumber}`,
+                reason: `Karat change (${oldPurity.displayLabel} -> ${purity.displayLabel}): return issued metal to ${oldPurity.displayLabel}`,
+                orderId: order.id,
+                karigarId: refKarigar.id,
+                idempotencyKey: `karat_chg_ret_${order.id}_${ts}`,
+              });
+              await this.postBalancedJournalEntry(tx, {
+                organizationId: validActor.organizationId,
+                actorId: validActor.userId,
+                transactionType: "PURITY_CONVERSION",
+                businessDate,
+                purity,
+                physicalWeight: netIssued,
+                fineEquivalentWeight: newIssuedFine,
+                sourceAccount: newPoolAcct,
+                destinationAccount: custodyAcct,
+                sourceReference: `BAG-${order.bagNumber}`,
+                reason: `Karat change (${oldPurity.displayLabel} -> ${purity.displayLabel}): re-issue metal from ${purity.displayLabel}`,
+                orderId: order.id,
+                karigarId: refKarigar.id,
+                idempotencyKey: `karat_chg_iss_${order.id}_${ts}`,
+              });
+            }
+
+            if (order.totalRawLossWeight.gt(ZERO)) {
+              const oldLossAcct = await this.ensureSystemAccount(
+                tx,
+                validActor.organizationId,
+                `PROCESS_LOSS_${oldPurity.code}`,
+                `Process Loss - ${oldPurity.displayLabel}`,
+                "PROCESS_LOSS",
+                oldPurity.id
+              );
+              const newLossAcct = await this.ensureSystemAccount(
+                tx,
+                validActor.organizationId,
+                `PROCESS_LOSS_${purity.code}`,
+                `Process Loss - ${purity.displayLabel}`,
+                "PROCESS_LOSS",
+                purity.id
+              );
+              const oldLossFine = calculateFineEquivalent(
+                order.totalRawLossWeight,
+                oldPurity.touchPercent
+              );
+              const newLossFine = calculateFineEquivalent(
+                order.totalRawLossWeight,
+                purity.touchPercent
+              );
+              await this.postBalancedJournalEntry(tx, {
+                organizationId: validActor.organizationId,
+                actorId: validActor.userId,
+                transactionType: "PURITY_CONVERSION",
+                businessDate,
+                purity: oldPurity,
+                physicalWeight: order.totalRawLossWeight,
+                fineEquivalentWeight: oldLossFine,
+                sourceAccount: oldLossAcct,
+                destinationAccount: custodyAcct,
+                sourceReference: `BAG-${order.bagNumber}`,
+                reason: `Karat change (${oldPurity.displayLabel} -> ${purity.displayLabel}): reclassify process loss from ${oldPurity.displayLabel}`,
+                orderId: order.id,
+                karigarId: refKarigar.id,
+                idempotencyKey: `karat_chg_loss_out_${order.id}_${ts}`,
+              });
+              await this.postBalancedJournalEntry(tx, {
+                organizationId: validActor.organizationId,
+                actorId: validActor.userId,
+                transactionType: "PURITY_CONVERSION",
+                businessDate,
+                purity,
+                physicalWeight: order.totalRawLossWeight,
+                fineEquivalentWeight: newLossFine,
+                sourceAccount: custodyAcct,
+                destinationAccount: newLossAcct,
+                sourceReference: `BAG-${order.bagNumber}`,
+                reason: `Karat change (${oldPurity.displayLabel} -> ${purity.displayLabel}): reclassify process loss to ${purity.displayLabel}`,
+                orderId: order.id,
+                karigarId: refKarigar.id,
+                idempotencyKey: `karat_chg_loss_in_${order.id}_${ts}`,
+              });
+            }
+          }
+
+          nextTotalFineLossWeight = calculateFineEquivalent(
+            order.totalRawLossWeight,
+            purity.touchPercent
+          );
+
+          for (const v of visits) {
+            if (v.status === "REVERSED") continue;
+            await tx.updateProcessVisit({
+              ...v,
+              touchSnapshot: purity.touchPercent,
+              fineLossWeight: calculateFineEquivalent(
+                v.rawLossWeight,
+                purity.touchPercent
+              ),
+              extraMetalTouchPercent: v.extraMetalReturnedWeight.gt(ZERO)
+                ? purity.touchPercent
+                : v.extraMetalTouchPercent,
+              extraMetalPurityId: v.extraMetalReturnedWeight.gt(ZERO)
+                ? purity.id
+                : v.extraMetalPurityId,
+              extraMetalFineWeight: v.extraMetalReturnedWeight.gt(ZERO)
+                ? calculateFineEquivalent(
+                    v.extraMetalReturnedWeight,
+                    purity.touchPercent
+                  )
+                : v.extraMetalFineWeight,
+              updatedAt: new Date(),
+            });
+          }
+
+          for (const l of lossRecords) {
+            if (l.eligibilityStatus === "VOIDED") continue;
+            const origFine = calculateFineEquivalent(
+              l.rawMetalLossWeight,
+              purity.touchPercent
+            );
+            await tx.updateProcessLossRecord({
+              ...l,
+              touchSnapshot: purity.touchPercent,
+              fineEquivalentLossWeight: origFine,
+              updatedAt: new Date(),
+            });
+          }
+        }
       }
 
       let nextTargetWeight = order.targetWeight;
@@ -1344,6 +1578,7 @@ export class ErpDomainService {
             : order.orderName,
         purityId: nextPurityId,
         touchSnapshot: nextTouch,
+        totalFineLossWeight: nextTotalFineLossWeight,
         targetWeight: nextTargetWeight,
         targetWeightText: nextTargetWeightText,
         size: input.size !== undefined ? input.size?.trim() || null : order.size,
@@ -11046,32 +11281,24 @@ export class ErpDomainService {
         customers,
         orders,
         purities,
-        bills,
+        allBills,
         allLines,
-        allocs,
-        goldReceipts,
+        allAllocs,
+        allGoldReceipts,
         goldReceiptLines,
-        cashReceipts,
+        allCashReceipts,
         templates,
         fineConv,
       ] = await Promise.all([
         tx.listCustomers(validActor.organizationId),
         tx.listOrders(validActor.organizationId),
         tx.listPurities(validActor.organizationId),
-        tx.listCustomerBills(validActor.organizationId, filters?.customerId),
+        tx.listCustomerBills(validActor.organizationId),
         tx.listAllCustomerBillLinesForOrg(validActor.organizationId),
-        tx.listCustomerPaymentAllocations(validActor.organizationId, {
-          customerId: filters?.customerId,
-        }),
-        tx.listCustomerGoldReceipts(
-          validActor.organizationId,
-          filters?.customerId
-        ),
+        tx.listCustomerPaymentAllocations(validActor.organizationId),
+        tx.listCustomerGoldReceipts(validActor.organizationId),
         tx.listCustomerGoldReceiptLines(validActor.organizationId),
-        tx.listCustomerCashReceipts(
-          validActor.organizationId,
-          filters?.customerId
-        ),
+        tx.listCustomerCashReceipts(validActor.organizationId),
         tx.listBillTemplates(validActor.organizationId),
         this.resolveFineAccountAndConvention(tx, validActor.organizationId),
       ]);
@@ -11079,27 +11306,89 @@ export class ErpDomainService {
       const purityMap = new Map(purities.map((p) => [p.id, p]));
       const customerMap = new Map(customers.map((c) => [c.id, c]));
 
-      const customerSummaries = await Promise.all(
-        customers.map(async (c) => {
-          const bal = await this.computeCustomerBalances(
-            tx,
-            validActor.organizationId,
-            c.id
-          );
-          return {
-            customerId: c.id,
-            customerCode: c.customerCode,
-            name: c.name,
-            phone: c.phone,
-            fineOwed: bal.fineOwed.toFixed(4),
-            fineAdvance: bal.fineAdvance.toFixed(4),
-            totalGoldReceivedHistorical:
-              bal.totalGoldReceivedHistorical.toFixed(4),
-            inrOwed: bal.inrOwed.toFixed(2),
-            inrAdvance: bal.inrAdvance.toFixed(2),
-          };
-        })
-      );
+      // Group billing/receipt/allocation records by customerId in-memory (avoids N+1 queries)
+      const billsByCust = new Map<string, typeof allBills>();
+      for (const b of allBills) {
+        const list = billsByCust.get(b.customerId);
+        if (list) list.push(b);
+        else billsByCust.set(b.customerId, [b]);
+      }
+      const allocsByCust = new Map<string, typeof allAllocs>();
+      for (const a of allAllocs) {
+        const list = allocsByCust.get(a.customerId);
+        if (list) list.push(a);
+        else allocsByCust.set(a.customerId, [a]);
+      }
+      const goldByCust = new Map<string, typeof allGoldReceipts>();
+      for (const r of allGoldReceipts) {
+        const list = goldByCust.get(r.customerId);
+        if (list) list.push(r);
+        else goldByCust.set(r.customerId, [r]);
+      }
+      const cashByCust = new Map<string, typeof allCashReceipts>();
+      for (const r of allCashReceipts) {
+        const list = cashByCust.get(r.customerId);
+        if (list) list.push(r);
+        else cashByCust.set(r.customerId, [r]);
+      }
+
+      const customerSummaries = customers.map((c) => {
+        const cBills = (billsByCust.get(c.id) || []).filter(
+          (b) => b.status === "POSTED"
+        );
+        const cAllocs = allocsByCust.get(c.id) || [];
+        let fineOwed = ZERO;
+        let inrOwed = ZERO;
+        for (const b of cBills) {
+          const s = this.computeBillSettlement(b, cAllocs);
+          fineOwed = roundInternal(fineOwed.add(s.fineOutstanding));
+          inrOwed = roundRupees(inrOwed.add(s.inrOutstanding));
+        }
+        const cGold = (goldByCust.get(c.id) || []).filter(
+          (r) => r.status === "POSTED"
+        );
+        const fineAdvance = cGold.reduce(
+          (s, r) => roundInternal(s.add(r.unallocatedFineWeight)),
+          ZERO
+        );
+        const grossRec = cGold.reduce(
+          (s, r) => roundInternal(s.add(r.totalFineWeight)),
+          ZERO
+        );
+        const totalRefunded = cGold.reduce(
+          (s, r) => roundInternal(s.add(r.refundedFineWeight ?? ZERO)),
+          ZERO
+        );
+        const netRec = roundInternal(grossRec.sub(totalRefunded));
+        const inrAdvance = (cashByCust.get(c.id) || [])
+          .filter((r) => r.status === "POSTED")
+          .reduce((s, r) => roundRupees(s.add(r.unallocatedRupees)), ZERO);
+
+        return {
+          customerId: c.id,
+          customerCode: c.customerCode,
+          name: c.name,
+          phone: c.phone,
+          fineOwed: fineOwed.toFixed(4),
+          fineAdvance: fineAdvance.toFixed(4),
+          totalGoldReceivedHistorical: (netRec.lt(ZERO) ? ZERO : netRec).toFixed(4),
+          inrOwed: inrOwed.toFixed(2),
+          inrAdvance: inrAdvance.toFixed(2),
+        };
+      });
+
+      const bills = filters?.customerId
+        ? billsByCust.get(filters.customerId) || []
+        : allBills;
+      const allocs = filters?.customerId
+        ? allocsByCust.get(filters.customerId) || []
+        : allAllocs;
+      const goldReceipts = filters?.customerId
+        ? goldByCust.get(filters.customerId) || []
+        : allGoldReceipts;
+      const cashReceipts = filters?.customerId
+        ? cashByCust.get(filters.customerId) || []
+        : allCashReceipts;
 
       const orderRows = orders
         .filter(

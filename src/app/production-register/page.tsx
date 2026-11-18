@@ -254,6 +254,7 @@ function ProductionRegisterContent() {
   >("PROCESS_ENTRY");
   const [editOrderName, setEditOrderName] = useState("");
   const [editCustomerId, setEditCustomerId] = useState("");
+  const [editPurityId, setEditPurityId] = useState("");
   const [customers, setCustomers] = useState<
     Array<{ id: string; customerCode: string; name: string }>
   >(
@@ -1189,17 +1190,37 @@ function ProductionRegisterContent() {
         id: "preview",
         header: "Photo / Preview",
         cell: ({ row }) => (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              selectOrder(row.original.order.id);
-              setDrawerTab("JOB_CARD_QR");
-            }}
-            className="px-2 py-0.5 text-[10px] font-semibold border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 rounded-xs cursor-pointer"
-          >
-            Preview
-          </button>
+          <div className="flex items-center gap-1.5">
+            {row.original.order.photoUrl && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  selectOrder(row.original.order.id);
+                  setDrawerTab("JOB_CARD_QR");
+                }}
+                className="shrink-0 cursor-pointer"
+                title="View order photo & job card"
+              >
+                <img
+                  src={row.original.order.photoUrl}
+                  alt={row.original.order.orderName}
+                  className="w-8 h-8 object-cover rounded-xs border border-slate-300"
+                />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                selectOrder(row.original.order.id);
+                setDrawerTab("JOB_CARD_QR");
+              }}
+              className="px-2 py-0.5 text-[10px] font-semibold border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 rounded-xs cursor-pointer"
+            >
+              Preview
+            </button>
+          </div>
         ),
       },
     ];
@@ -1724,6 +1745,24 @@ function ProductionRegisterContent() {
                     })}
                     qrCodeOrderId={r.order.id}
                     qrCodeBagNumber={r.order.bagNumber}
+                    settingSummary={(() => {
+                      const sp = (r.processes ?? []).find((p) => p.processType === "SETTING");
+                      const stones = (r.stoneComponents ?? []).filter(
+                        (s) => s.direction === "ADDED" && (!sp || s.orderProcessId === sp.id)
+                      );
+                      const adStones = stones.filter((s) => s.componentType === "AD");
+                      const klStones = stones.filter((s) => s.componentType === "KL");
+                      return {
+                        inWeight: sp?.latestGrossInWeight,
+                        outWeight: sp?.latestGrossOutWeight,
+                        extraWeight: sp?.extraReturnedMetalWeight,
+                        lossWeight: sp?.closedLossWeight,
+                        adWeight: String(adStones.reduce((a, s) => a + Number(s.weightGrams || 0), 0)),
+                        adPieces: adStones.reduce((a, s) => a + (s.pieces || 0), 0),
+                        klWeight: String(klStones.reduce((a, s) => a + Number(s.weightGrams || 0), 0)),
+                        klPieces: klStones.reduce((a, s) => a + (s.pieces || 0), 0),
+                      };
+                    })()}
                   />
                 ))}
               </div>
@@ -1754,6 +1793,24 @@ function ProductionRegisterContent() {
               })}
               qrCodeOrderId={selectedOrderRow.order.id}
               qrCodeBagNumber={selectedOrderRow.order.bagNumber}
+              settingSummary={(() => {
+                const sp = (selectedOrderRow.processes ?? []).find((p) => p.processType === "SETTING");
+                const stones = (selectedOrderRow.stoneComponents ?? []).filter(
+                  (s) => s.direction === "ADDED" && (!sp || s.orderProcessId === sp.id)
+                );
+                const adStones = stones.filter((s) => s.componentType === "AD");
+                const klStones = stones.filter((s) => s.componentType === "KL");
+                return {
+                  inWeight: sp?.latestGrossInWeight,
+                  outWeight: sp?.latestGrossOutWeight,
+                  extraWeight: sp?.extraReturnedMetalWeight,
+                  lossWeight: sp?.closedLossWeight,
+                  adWeight: String(adStones.reduce((a, s) => a + Number(s.weightGrams || 0), 0)),
+                  adPieces: adStones.reduce((a, s) => a + (s.pieces || 0), 0),
+                  klWeight: String(klStones.reduce((a, s) => a + Number(s.weightGrams || 0), 0)),
+                  klPieces: klStones.reduce((a, s) => a + (s.pieces || 0), 0),
+                };
+              })()}
             />
           </div>
         )
@@ -2059,28 +2116,37 @@ function ProductionRegisterContent() {
         {selectedOrderRow && (
           <div className="bg-white border-2 border-blue-700 rounded-xs p-4 space-y-4 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 bg-blue-700 text-white font-mono font-bold text-xs rounded-xs">
-                    Bag #{selectedOrderRow.order.bagNumber}
-                  </span>
-                  <h2 className="text-sm font-bold text-slate-900">
-                    {selectedOrderRow.order.orderName} •{" "}
-                    {selectedOrderRow.customer.name}
-                  </h2>
-                  <span className="text-xs font-mono text-slate-600">
-                    ({selectedOrderRow.purity.displayLabel} @{" "}
-                    {selectedOrderRow.order.touchSnapshot}% touch)
-                  </span>
+              <div className="flex items-center gap-3">
+                {selectedOrderRow.order.photoUrl && (
+                  <img
+                    src={selectedOrderRow.order.photoUrl}
+                    alt={selectedOrderRow.order.orderName}
+                    className="w-12 h-12 object-cover rounded-xs border border-slate-300 shrink-0"
+                  />
+                )}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 bg-blue-700 text-white font-mono font-bold text-xs rounded-xs">
+                      Bag #{selectedOrderRow.order.bagNumber}
+                    </span>
+                    <h2 className="text-sm font-bold text-slate-900">
+                      {selectedOrderRow.order.orderName} •{" "}
+                      {selectedOrderRow.customer.name}
+                    </h2>
+                    <span className="text-xs font-mono text-slate-600">
+                      ({selectedOrderRow.purity.displayLabel} @{" "}
+                      {selectedOrderRow.order.touchSnapshot}% touch)
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Selected Sequence:{" "}
+                    <span className="font-semibold text-slate-800">
+                      {selectedOrderRow.processes
+                        .map((p) => `${PROCESS_DISPLAY_LABELS[p.processType]} [${p.status}]`)
+                        .join(" → ")}
+                    </span>
+                  </p>
                 </div>
-                <p className="text-xs text-slate-600 mt-1">
-                  Selected Sequence:{" "}
-                  <span className="font-semibold text-slate-800">
-                    {selectedOrderRow.processes
-                      .map((p) => `${PROCESS_DISPLAY_LABELS[p.processType]} [${p.status}]`)
-                      .join(" → ")}
-                  </span>
-                </p>
               </div>
 
               <div className="flex items-center gap-1.5">
@@ -2122,6 +2188,7 @@ function ProductionRegisterContent() {
                   onClick={() => {
                     setEditOrderName(selectedOrderRow.order.orderName || "");
                     setEditCustomerId(selectedOrderRow.customer.id || "");
+                    setEditPurityId(selectedOrderRow.purity.id || "");
                     setEditTargetWeight(
                       selectedOrderRow.order.targetWeightText ??
                         selectedOrderRow.order.targetWeight ??
@@ -2454,9 +2521,9 @@ function ProductionRegisterContent() {
                                   <button
                                     type="button"
                                     onClick={openAddFilingGoldForm}
-                                    className="px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-xs cursor-pointer"
+                                    className="px-2 py-0.5 text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-xs cursor-pointer"
                                   >
-                                    Edit
+                                    + Add / Edit Gold
                                   </button>
                                 )}
                               </div>
@@ -3387,6 +3454,24 @@ function ProductionRegisterContent() {
                     })}
                     qrCodeOrderId={selectedOrderRow.order.id}
                     qrCodeBagNumber={selectedOrderRow.order.bagNumber}
+                    settingSummary={(() => {
+                      const sp = (selectedOrderRow.processes ?? []).find((p) => p.processType === "SETTING");
+                      const stones = (selectedOrderRow.stoneComponents ?? []).filter(
+                        (s) => s.direction === "ADDED" && (!sp || s.orderProcessId === sp.id)
+                      );
+                      const adStones = stones.filter((s) => s.componentType === "AD");
+                      const klStones = stones.filter((s) => s.componentType === "KL");
+                      return {
+                        inWeight: sp?.latestGrossInWeight,
+                        outWeight: sp?.latestGrossOutWeight,
+                        extraWeight: sp?.extraReturnedMetalWeight,
+                        lossWeight: sp?.closedLossWeight,
+                        adWeight: String(adStones.reduce((a, s) => a + Number(s.weightGrams || 0), 0)),
+                        adPieces: adStones.reduce((a, s) => a + (s.pieces || 0), 0),
+                        klWeight: String(klStones.reduce((a, s) => a + Number(s.weightGrams || 0), 0)),
+                        klPieces: klStones.reduce((a, s) => a + (s.pieces || 0), 0),
+                      };
+                    })()}
                   />
                 </div>
 
@@ -3448,6 +3533,7 @@ function ProductionRegisterContent() {
                       body: JSON.stringify({
                         orderId: selectedOrderRow.order.id,
                         customerId: editCustomerId || undefined,
+                        purityId: editPurityId || undefined,
                         orderName: editOrderName,
                         targetWeight: editTargetWeight || null,
                         size: editSize || null,
@@ -3463,7 +3549,6 @@ function ProductionRegisterContent() {
                         `Updated details for Bag #${selectedOrderRow.order.bagNumber}`
                       );
                       await loadRegister(true);
-                      setDrawerTab("JOB_CARD_QR");
                     }
                   } catch (err) {
                     setActionError(
@@ -3493,6 +3578,27 @@ function ProductionRegisterContent() {
                       {customers.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name} ({c.customerCode})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Karat / Purity
+                    </label>
+                    <select
+                      value={editPurityId}
+                      onChange={(e) => setEditPurityId(e.target.value)}
+                      disabled={
+                        selectedOrderRow.order.status === "COMPLETED" ||
+                        selectedOrderRow.order.status === "DELIVERED" ||
+                        selectedOrderRow.order.status === "CANCELLED"
+                      }
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xs disabled:bg-slate-100"
+                    >
+                      {purities.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.displayLabel} ({p.touchPercent}%)
                         </option>
                       ))}
                     </select>
@@ -3563,7 +3669,14 @@ function ProductionRegisterContent() {
                     disabled={savingOrderEdit}
                     className="px-4 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded-xs cursor-pointer disabled:opacity-60"
                   >
-                    {savingOrderEdit ? "Saving..." : "Save & Open Job Card"}
+                    {savingOrderEdit ? "Saving..." : "Save Changes"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDrawerTab("JOB_CARD_QR")}
+                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xs cursor-pointer"
+                  >
+                    Open Job Card
                   </button>
                   <button
                     type="button"

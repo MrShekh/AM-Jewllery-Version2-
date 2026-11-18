@@ -71,12 +71,14 @@ interface BillRow {
   cancellationReason: string | null;
   previewHtml: string | null;
   notes: string | null;
+  adminMakingChargeRupees?: number;
   lines?: Array<{
     id: string;
     lineType: "ORDER_LINE" | "MANUAL_SERVICE";
     orderId: string | null;
     bagNumberSnapshot: string | null;
     orderNameSnapshot: string | null;
+    photoUrlSnapshot?: string | null;
     description: string;
     grossWeight: string;
     stoneWeight: string;
@@ -196,6 +198,13 @@ const WASTAGE_PRESET_OPTIONS = [
 interface ManualLineDraft {
   lineType: "MANUAL_SERVICE" | "MANUAL_FINE_CHARGE" | "MANUAL_STONE_INR" | "MANUAL_DISCOUNT";
   description: string;
+  photoUrl?: string | null;
+  touchPercent?: string;
+  grossWeight?: string;
+  stoneWeight?: string;
+  adWeight?: string;
+  netWeight?: string;
+  makingPercentagePoints?: string;
   extraFineCharge: string;
   fineDiscount: string;
   makingChargesRupees: string;
@@ -209,6 +218,7 @@ function BillingWorkspaceInner() {
   const searchParams = useSearchParams();
   const initialCustomerId = searchParams.get("customerId") || "";
   const initialOrderIdsParam = searchParams.get("orderIds") || "";
+  const initialEditBillId = searchParams.get("editBillId") || "";
   const initialTab = (searchParams.get("tab") as "new-bill" | "bills" | "collections" | "templates") || "new-bill";
 
   const [actor, setActor] = useState<AppShellUser | null>(() => getCachedActor());
@@ -384,6 +394,8 @@ function BillingWorkspaceInner() {
   }, []);
 
   const hasAutoSelectedCustomerRef = React.useRef(false);
+  const skipNextReloadRef = React.useRef(false);
+  const hasAutoEditedBillRef = React.useRef(false);
 
   useEffect(() => {
     void refreshWaStatus();
@@ -391,6 +403,10 @@ function BillingWorkspaceInner() {
 
   const loadWorkspace = useCallback(
     async (force = false) => {
+      if (skipNextReloadRef.current && !force) {
+        skipNextReloadRef.current = false;
+        return;
+      }
       const q = customerId ? `?customerId=${encodeURIComponent(customerId)}` : "";
       const url = `/api/billing${q}`;
       const cached = getCachedJson<Record<string, unknown>>(url);
@@ -456,6 +472,7 @@ function BillingWorkspaceInner() {
           data.customerSummaries.length > 0
         ) {
           hasAutoSelectedCustomerRef.current = true;
+          skipNextReloadRef.current = true;
           setCustomerId(data.customerSummaries[0].customerId);
         } else {
           hasAutoSelectedCustomerRef.current = true;
@@ -594,7 +611,15 @@ function BillingWorkspaceInner() {
       }
     } else {
       for (const ml of manualLines) {
-        fineTotal += Number(ml.extraFineCharge || 0) - Number(ml.fineDiscount || 0);
+        const net = Number(ml.netWeight || 0);
+        const touch = Number(ml.touchPercent || 0);
+        const waste = Number(ml.makingPercentagePoints || 0);
+        const weightFine =
+          net > 0 && touch > 0 ? (net * (touch + waste)) / 100 : 0;
+        fineTotal +=
+          weightFine +
+          Number(ml.extraFineCharge || 0) -
+          Number(ml.fineDiscount || 0);
         inrTotal +=
           Number(ml.makingChargesRupees || 0) +
           Number(ml.stoneChargeRupees || 0) -
@@ -646,7 +671,11 @@ function BillingWorkspaceInner() {
     setBillDate(b.billDate);
     setBillType(b.billType);
     setBillNotes(b.notes || "");
-    setAdminMakingCharge("");
+    setAdminMakingCharge(
+      b.adminMakingChargeRupees && b.adminMakingChargeRupees > 0
+        ? String(b.adminMakingChargeRupees)
+        : ""
+    );
 
     if (b.billType === "ORDER_DELIVERY") {
       const nextOrders: Record<string, OrderLineDraft> = {};
@@ -690,6 +719,16 @@ function BillingWorkspaceInner() {
       const mLines: ManualLineDraft[] = (b.lines || []).map((l) => ({
         lineType: "MANUAL_SERVICE",
         description: l.description,
+        photoUrl: l.photoUrlSnapshot || null,
+        touchPercent: Number(l.touchSnapshot || 0) > 0 ? String(Number(l.touchSnapshot)) : "",
+        grossWeight: Number(l.grossWeight || 0) > 0 ? String(l.grossWeight) : "",
+        stoneWeight: Number(l.stoneWeight || 0) > 0 ? String(l.stoneWeight) : "",
+        adWeight: Number(l.adKlWeight || 0) > 0 ? String(l.adKlWeight) : "",
+        netWeight: Number(l.netWeight || 0) > 0 ? String(l.netWeight) : "",
+        makingPercentagePoints:
+          Number(l.makingPercentagePoints || 0) > 0
+            ? String(Number(l.makingPercentagePoints))
+            : "",
         extraFineCharge: l.extraFineCharge,
         fineDiscount: l.fineDiscount,
         makingChargesRupees: l.makingCharges,
@@ -702,6 +741,16 @@ function BillingWorkspaceInner() {
     }
     setActiveTab("new-bill");
   };
+
+  useEffect(() => {
+    if (!initialEditBillId || hasAutoEditedBillRef.current || bills.length === 0) return;
+    const found = bills.find((b) => b.id === initialEditBillId && b.status === "POSTED");
+    if (found) {
+      hasAutoEditedBillRef.current = true;
+      startEditPostedBill(found);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialEditBillId, bills]);
 
   const handleBillSubmit = async (
     action: "SAVE_DRAFT" | "POST_BILL_AND_DELIVER" | "EDIT_POSTED_BILL"
@@ -1587,77 +1636,186 @@ function BillingWorkspaceInner() {
                     <Plus className="w-3 h-3" /> Add Line
                   </button>
                 </div>
-                {manualLines.map((ml, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center text-xs border-t border-slate-200 pt-2">
-                    <select
-                      value={ml.lineType}
-                      onChange={(e) => {
-                        const copy = [...manualLines];
-                        copy[idx].lineType = e.target.value as ManualLineDraft["lineType"];
-                        setManualLines(copy);
-                      }}
-                      className="col-span-2 px-1.5 py-1 border border-slate-300 rounded-xs"
-                    >
-                      <option value="MANUAL_SERVICE">Service (INR)</option>
-                      <option value="MANUAL_FINE_CHARGE">Fine Charge (g)</option>
-                      <option value="MANUAL_STONE_INR">Stone (INR)</option>
-                      <option value="MANUAL_DISCOUNT">Discount</option>
-                    </select>
-                    <input
-                      type="text"
-                      placeholder="Description"
-                      value={ml.description}
-                      onChange={(e) => {
-                        const copy = [...manualLines];
-                        copy[idx].description = e.target.value;
-                        setManualLines(copy);
-                      }}
-                      className="col-span-3 px-2 py-1 border border-slate-300 rounded-xs"
-                    />
-                    <input
-                      type="number"
-                      step="0.001"
-                      placeholder="Fine +g"
-                      value={ml.extraFineCharge}
-                      onChange={(e) => {
-                        const copy = [...manualLines];
-                        copy[idx].extraFineCharge = e.target.value;
-                        setManualLines(copy);
-                      }}
-                      className="col-span-1 px-1.5 py-1 border border-slate-300 rounded-xs font-mono"
-                    />
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="INR +"
-                      value={ml.makingChargesRupees}
-                      onChange={(e) => {
-                        const copy = [...manualLines];
-                        copy[idx].makingChargesRupees = e.target.value;
-                        setManualLines(copy);
-                      }}
-                      className="col-span-2 px-1.5 py-1 border border-slate-300 rounded-xs font-mono"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Reason (required for discounts)"
-                      value={ml.adjustmentReason}
-                      onChange={(e) => {
-                        const copy = [...manualLines];
-                        copy[idx].adjustmentReason = e.target.value;
-                        setManualLines(copy);
-                      }}
-                      className="col-span-3 px-2 py-1 border border-slate-300 rounded-xs"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setManualLines((p) => p.filter((_, i) => i !== idx))}
-                      className="col-span-1 text-red-600 flex justify-center cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                {manualLines.map((ml, idx) => {
+                  const hasWeights =
+                    Number(ml.touchPercent || 0) > 0 ||
+                    Number(ml.grossWeight || 0) > 0 ||
+                    Number(ml.netWeight || 0) > 0;
+                  return (
+                  <div key={idx} className="space-y-2 border-t border-slate-200 pt-2 text-xs">
+                    <div className="grid grid-cols-12 gap-2 items-center">
+                      <select
+                        value={ml.lineType}
+                        onChange={(e) => {
+                          const copy = [...manualLines];
+                          copy[idx].lineType = e.target.value as ManualLineDraft["lineType"];
+                          setManualLines(copy);
+                        }}
+                        className="col-span-2 px-1.5 py-1 border border-slate-300 rounded-xs"
+                      >
+                        <option value="MANUAL_SERVICE">Direct / Service</option>
+                        <option value="MANUAL_FINE_CHARGE">Fine Charge (g)</option>
+                        <option value="MANUAL_STONE_INR">Stone (INR)</option>
+                        <option value="MANUAL_DISCOUNT">Discount</option>
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="Item / Description"
+                        value={ml.description}
+                        onChange={(e) => {
+                          const copy = [...manualLines];
+                          copy[idx].description = e.target.value;
+                          setManualLines(copy);
+                        }}
+                        className="col-span-3 px-2 py-1 border border-slate-300 rounded-xs font-medium"
+                      />
+                      <input
+                        type="number"
+                        step="0.001"
+                        placeholder="Fine +g"
+                        value={ml.extraFineCharge}
+                        onChange={(e) => {
+                          const copy = [...manualLines];
+                          copy[idx].extraFineCharge = e.target.value;
+                          setManualLines(copy);
+                        }}
+                        className="col-span-1 px-1.5 py-1 border border-slate-300 rounded-xs font-mono"
+                      />
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="INR +"
+                        value={ml.makingChargesRupees}
+                        onChange={(e) => {
+                          const copy = [...manualLines];
+                          copy[idx].makingChargesRupees = e.target.value;
+                          setManualLines(copy);
+                        }}
+                        className="col-span-2 px-1.5 py-1 border border-slate-300 rounded-xs font-mono"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Reason (required for discounts)"
+                        value={ml.adjustmentReason}
+                        onChange={(e) => {
+                          const copy = [...manualLines];
+                          copy[idx].adjustmentReason = e.target.value;
+                          setManualLines(copy);
+                        }}
+                        className="col-span-3 px-2 py-1 border border-slate-300 rounded-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setManualLines((p) => p.filter((_, i) => i !== idx))}
+                        className="col-span-1 text-red-600 flex justify-center cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    {(hasWeights || billType === "MANUAL_COMMERCIAL") && (
+                      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 bg-slate-50 p-2 rounded-xs border border-slate-200">
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-600">Touch %</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={ml.touchPercent || ""}
+                            onChange={(e) => {
+                              const copy = [...manualLines];
+                              copy[idx].touchPercent = e.target.value;
+                              setManualLines(copy);
+                            }}
+                            placeholder="92"
+                            className="w-full px-1.5 py-1 border border-slate-300 rounded-xs font-mono bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-600">Gross Wt (g)</label>
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={ml.grossWeight || ""}
+                            onChange={(e) => {
+                              const copy = [...manualLines];
+                              copy[idx].grossWeight = e.target.value;
+                              const g = Number(e.target.value || 0);
+                              const s = Number(copy[idx].stoneWeight || 0);
+                              const a = Number(copy[idx].adWeight || 0);
+                              copy[idx].netWeight = Math.max(0, g - s - a).toFixed(3);
+                              setManualLines(copy);
+                            }}
+                            className="w-full px-1.5 py-1 border border-slate-300 rounded-xs font-mono bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-600">Stone Wt (g)</label>
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={ml.stoneWeight || ""}
+                            onChange={(e) => {
+                              const copy = [...manualLines];
+                              copy[idx].stoneWeight = e.target.value;
+                              const g = Number(copy[idx].grossWeight || 0);
+                              const s = Number(e.target.value || 0);
+                              const a = Number(copy[idx].adWeight || 0);
+                              copy[idx].netWeight = Math.max(0, g - s - a).toFixed(3);
+                              setManualLines(copy);
+                            }}
+                            className="w-full px-1.5 py-1 border border-slate-300 rounded-xs font-mono bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-600">AD Wt (g)</label>
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={ml.adWeight || ""}
+                            onChange={(e) => {
+                              const copy = [...manualLines];
+                              copy[idx].adWeight = e.target.value;
+                              const g = Number(copy[idx].grossWeight || 0);
+                              const s = Number(copy[idx].stoneWeight || 0);
+                              const a = Number(e.target.value || 0);
+                              copy[idx].netWeight = Math.max(0, g - s - a).toFixed(3);
+                              setManualLines(copy);
+                            }}
+                            className="w-full px-1.5 py-1 border border-slate-300 rounded-xs font-mono bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-600">Net Wt (g)</label>
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={ml.netWeight || ""}
+                            onChange={(e) => {
+                              const copy = [...manualLines];
+                              copy[idx].netWeight = e.target.value;
+                              setManualLines(copy);
+                            }}
+                            className="w-full px-1.5 py-1 border border-slate-300 rounded-xs font-mono bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-600">Wastage %</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={ml.makingPercentagePoints || ""}
+                            onChange={(e) => {
+                              const copy = [...manualLines];
+                              copy[idx].makingPercentagePoints = e.target.value;
+                              setManualLines(copy);
+                            }}
+                            className="w-full px-1.5 py-1 border border-slate-300 rounded-xs font-mono bg-white"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ))}
+                );
+                })}
               </div>
             )}
 

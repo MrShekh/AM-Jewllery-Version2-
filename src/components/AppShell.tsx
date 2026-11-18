@@ -480,13 +480,13 @@ export const AppShell: React.FC<{
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xs text-xs font-medium transition-colors ${
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-bold transition-colors ${
                       active
-                        ? "bg-blue-700 text-white"
+                        ? "bg-blue-700 text-white shadow-2xs"
                         : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                     }`}
                   >
-                    <Icon className="w-3.5 h-3.5" />
+                    <Icon className="w-4 h-4 shrink-0" />
                     <span>{item.label}</span>
                   </Link>
                 );

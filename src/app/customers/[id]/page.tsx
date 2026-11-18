@@ -922,7 +922,105 @@ export default function CustomerProfilePage() {
 
   return (
     <AppShell actor={actor}>
-      <div className="space-y-6">
+      {/* Printable Customer Statement Sheet (V1-style Summary + Ledger) */}
+      <div className="hidden print:block p-6 text-slate-900 bg-white space-y-5">
+        <div className="flex items-start justify-between border-b-2 border-slate-800 pb-3">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">AM Jewellery — Customer Statement</h1>
+            <p className="text-sm font-semibold mt-1">
+              {customer.name} ({customer.customerCode})
+              {customer.phone ? ` • ${customer.phone}` : ""}
+            </p>
+            {customer.address && (
+              <p className="text-xs text-slate-600">{customer.address}</p>
+            )}
+          </div>
+          <div className="text-right text-xs">
+            <div className="font-semibold">Date: {new Date().toISOString().slice(0, 10)}</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-4 gap-3 text-center">
+          <div className="border border-slate-300 rounded p-2.5">
+            <div className="text-[11px] uppercase font-bold text-slate-600">Net Pending Gold (Jama)</div>
+            <div className="text-lg font-bold font-mono mt-1">{formatWeight3(summaryCards.goldDue)} g</div>
+          </div>
+          <div className="border border-slate-300 rounded p-2.5">
+            <div className="text-[11px] uppercase font-bold text-slate-600">Total Gold Recovered</div>
+            <div className="text-lg font-bold font-mono mt-1">{formatWeight3(summaryCards.totalGoldReceivedHistorical)} g</div>
+          </div>
+          <div className="border border-slate-300 rounded p-2.5">
+            <div className="text-[11px] uppercase font-bold text-slate-600">Unused Advance Gold</div>
+            <div className="text-lg font-bold font-mono mt-1">{formatWeight3(summaryCards.advanceAvailable)} g</div>
+          </div>
+          <div className="border border-slate-300 rounded p-2.5">
+            <div className="text-[11px] uppercase font-bold text-slate-600">Cash / INR Pending</div>
+            <div className="text-lg font-bold font-mono mt-1">₹{Number(summaryCards.inrDue || 0).toFixed(2)}</div>
+          </div>
+        </div>
+
+        <div>
+          <h2 className="text-sm font-bold uppercase border-b border-slate-300 pb-1 mb-2">
+            Bills Summary ({workspace.bills.length})
+          </h2>
+          <table className="w-full text-xs border-collapse border border-slate-300">
+            <thead>
+              <tr className="bg-slate-100">
+                <th className="border border-slate-300 px-2 py-1 text-left">Bill #</th>
+                <th className="border border-slate-300 px-2 py-1 text-left">Date</th>
+                <th className="border border-slate-300 px-2 py-1 text-left">Status</th>
+                <th className="border border-slate-300 px-2 py-1 text-right">Billed Fine (g)</th>
+                <th className="border border-slate-300 px-2 py-1 text-right">Recovered (g)</th>
+                <th className="border border-slate-300 px-2 py-1 text-right">Pending (g)</th>
+                <th className="border border-slate-300 px-2 py-1 text-right">Cash (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {workspace.bills.map((b) => (
+                <tr key={`print_${b.id}`}>
+                  <td className="border border-slate-300 px-2 py-1 font-mono font-semibold">{b.billNumber}</td>
+                  <td className="border border-slate-300 px-2 py-1 font-mono">{b.date}</td>
+                  <td className="border border-slate-300 px-2 py-1">{b.documentStatus} / {b.status}</td>
+                  <td className="border border-slate-300 px-2 py-1 text-right font-mono">{formatWeight3(b.originalFineCharge)}</td>
+                  <td className="border border-slate-300 px-2 py-1 text-right font-mono">{formatWeight3(b.settledFine)}</td>
+                  <td className="border border-slate-300 px-2 py-1 text-right font-mono font-bold">{formatWeight3(b.remainingFine)}</td>
+                  <td className="border border-slate-300 px-2 py-1 text-right font-mono">₹{Number(b.totalCashRupees || 0).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div>
+          <h2 className="text-sm font-bold uppercase border-b border-slate-300 pb-1 mb-2">
+            Gold Received / Recovery History ({workspace.transactionHistory.goldReceipts.length})
+          </h2>
+          <table className="w-full text-xs border-collapse border border-slate-300">
+            <thead>
+              <tr className="bg-slate-100">
+                <th className="border border-slate-300 px-2 py-1 text-left">Receipt #</th>
+                <th className="border border-slate-300 px-2 py-1 text-left">Date</th>
+                <th className="border border-slate-300 px-2 py-1 text-right">Fine Gold (g)</th>
+                <th className="border border-slate-300 px-2 py-1 text-right">Unallocated Adv (g)</th>
+                <th className="border border-slate-300 px-2 py-1 text-left">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {workspace.transactionHistory.goldReceipts.map((r) => (
+                <tr key={`print_rec_${r.id}`}>
+                  <td className="border border-slate-300 px-2 py-1 font-mono font-semibold">{r.receiptNumber}</td>
+                  <td className="border border-slate-300 px-2 py-1 font-mono">{r.businessDate}</td>
+                  <td className="border border-slate-300 px-2 py-1 text-right font-mono font-bold">{formatWeight3(r.totalFineWeight)}</td>
+                  <td className="border border-slate-300 px-2 py-1 text-right font-mono">{formatWeight3(r.unallocatedFineWeight)}</td>
+                  <td className="border border-slate-300 px-2 py-1">{r.notes || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="space-y-6 print:hidden">
         {/* Clean Header */}
         <div className="flex flex-wrap justify-between items-center gap-3">
           <div>
@@ -1137,6 +1235,13 @@ export default function CustomerProfilePage() {
                 className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-medium text-sm cursor-pointer"
               >
                 {showDirectBillForm ? "Cancel Direct Bill" : "+ Create Direct Bill"}
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-4 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-900 font-medium text-sm cursor-pointer"
+              >
+                Print Statement Sheet
               </button>
               {actor.role === "OWNER_ADMIN" &&
                 Number(summaryCards.advanceAvailable) > 0 && (
@@ -2077,6 +2182,14 @@ export default function CustomerProfilePage() {
                         >
                           View Bill
                         </button>
+                        {b.documentStatus === "POSTED" && (
+                          <Link
+                            href={`/billing?customerId=${encodeURIComponent(customer.id)}&editBillId=${encodeURIComponent(b.id)}`}
+                            className="px-2.5 py-1 text-xs font-medium bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded"
+                          >
+                            Edit
+                          </Link>
+                        )}
                         {b.documentStatus === "POSTED" &&
                           Number(b.remainingFine) > 0 && (
                             <>

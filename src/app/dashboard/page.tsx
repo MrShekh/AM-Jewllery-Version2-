@@ -12,6 +12,9 @@ import {
   Coins,
   Scale,
   Flame,
+  Vault,
+  Hammer,
+  TrendingUp,
 } from "lucide-react";
 import {
   fetchActorCached,
@@ -239,15 +242,17 @@ export default function DashboardPage() {
         {/* Header + Quick Shortcuts */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-lg font-bold text-slate-900">Workshop Home</h1>
-            <p className="text-xs text-slate-500">
-              All gold balances shown in fine gold equivalent (g fine).
+            <h1 className="text-xl font-extrabold tracking-tight text-slate-900">
+              Workshop Home
+            </h1>
+            <p className="text-xs font-medium text-slate-600">
+              Live fine-gold balances across your locker, customers, and karigars.
             </p>
           </div>
           <button
             type="button"
             onClick={() => void loadData(true)}
-            className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-800 hover:bg-slate-50 shadow-2xs cursor-pointer"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
             Refresh
@@ -255,34 +260,34 @@ export default function DashboardPage() {
         </div>
 
         {/* 4 Useful Everyday Shortcuts */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Link
             href="/orders/new"
-            className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs font-semibold text-blue-900 hover:bg-blue-100 transition-colors"
+            className="flex items-center gap-2.5 rounded-lg border-2 border-blue-200 bg-blue-50/80 px-3.5 py-3 text-xs font-bold text-blue-900 hover:bg-blue-100 transition-colors shadow-2xs"
           >
-            <PlusCircle className="h-4 w-4 text-blue-700 shrink-0" />
+            <PlusCircle className="h-5 w-5 text-blue-700 shrink-0" />
             <span>New Order</span>
           </Link>
           <Link
             href="/directory?tab=customers"
-            className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-100 transition-colors"
+            className="flex items-center gap-2.5 rounded-lg border-2 border-emerald-200 bg-emerald-50/80 px-3.5 py-3 text-xs font-bold text-emerald-900 hover:bg-emerald-100 transition-colors shadow-2xs"
           >
-            <Users className="h-4 w-4 text-emerald-700 shrink-0" />
-            <span>Receive Customer Gold</span>
+            <Users className="h-5 w-5 text-emerald-700 shrink-0" />
+            <span>Customer Gold &amp; Bills</span>
           </Link>
           <Link
             href="/recovery"
-            className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 transition-colors"
+            className="flex items-center gap-2.5 rounded-lg border-2 border-amber-200 bg-amber-50/80 px-3.5 py-3 text-xs font-bold text-amber-900 hover:bg-amber-100 transition-colors shadow-2xs"
           >
-            <Coins className="h-4 w-4 text-amber-700 shrink-0" />
+            <Coins className="h-5 w-5 text-amber-700 shrink-0" />
             <span>Recover Karigar Gold</span>
           </Link>
           <Link
             href="/stock"
-            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors"
+            className="flex items-center gap-2.5 rounded-lg border-2 border-slate-200 bg-white px-3.5 py-3 text-xs font-bold text-slate-900 hover:bg-slate-100 transition-colors shadow-2xs"
           >
-            <Scale className="h-4 w-4 text-slate-700 shrink-0" />
-            <span>Add/Purchase Gold</span>
+            <Scale className="h-5 w-5 text-slate-700 shrink-0" />
+            <span>Gold Stock &amp; Convert</span>
           </Link>
         </div>
 
@@ -586,17 +591,18 @@ export default function DashboardPage() {
             {/* 3 Main Balance Cards */}
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               {/* 1. Gold Available with Admin */}
-              <div className="rounded-lg border border-emerald-200 bg-white">
+              <div className="rounded-lg border-2 border-emerald-200 bg-white shadow-2xs">
                 <button
                   type="button"
                   onClick={() => setOpenCard(openCard === "A" ? null : "A")}
                   className="flex w-full items-center justify-between p-4 text-left hover:bg-emerald-50/40 cursor-pointer"
                 >
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-wide text-emerald-800">
-                      Gold Available with Admin
+                    <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wide text-emerald-800">
+                      <Vault className="h-4 w-4 text-emerald-700" />
+                      Gold in Locker (Admin Stock)
                     </div>
-                    <div className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
+                    <div className="mt-1.5 text-2xl font-extrabold tabular-nums text-slate-900">
                       {formatWeight3(summary.groupA_adminStock.totalFine)} g fine
                     </div>
                     <div className="text-[11px] text-slate-500 tabular-nums">
@@ -651,17 +657,18 @@ export default function DashboardPage() {
               </div>
 
               {/* 2. Gold Due from Customers */}
-              <div className="rounded-lg border border-blue-200 bg-white">
+              <div className="rounded-lg border-2 border-blue-200 bg-white shadow-2xs">
                 <button
                   type="button"
                   onClick={() => setOpenCard(openCard === "B" ? null : "B")}
                   className="flex w-full items-center justify-between p-4 text-left hover:bg-blue-50/40 cursor-pointer"
                 >
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-wide text-blue-800">
+                    <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wide text-blue-800">
+                      <TrendingUp className="h-4 w-4 text-blue-700" />
                       Gold Due from Customers
                     </div>
-                    <div className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
+                    <div className="mt-1.5 text-2xl font-extrabold tabular-nums text-slate-900">
                       {formatWeight3(summary.groupB_customerGoldOwed.totalFine)} g fine
                     </div>
                     <div className="text-[11px] text-slate-500">
@@ -718,17 +725,18 @@ export default function DashboardPage() {
               </div>
 
               {/* 3. Gold in Production & Recovery */}
-              <div className="rounded-lg border border-amber-200 bg-white">
+              <div className="rounded-lg border-2 border-amber-200 bg-white shadow-2xs">
                 <button
                   type="button"
                   onClick={() => setOpenCard(openCard === "C" ? null : "C")}
                   className="flex w-full items-center justify-between p-4 text-left hover:bg-amber-50/40 cursor-pointer"
                 >
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-wide text-amber-800">
-                      Gold in Production &amp; Recovery
+                    <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wide text-amber-800">
+                      <Hammer className="h-4 w-4 text-amber-700" />
+                      Production &amp; Karigar Recovery
                     </div>
-                    <div className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
+                    <div className="mt-1.5 text-2xl font-extrabold tabular-nums text-slate-900">
                       {formatWeight3(summary.groupC_productionAndRecovery.totalFine)} g fine
                     </div>
                     <div className="text-[11px] text-slate-500 tabular-nums">

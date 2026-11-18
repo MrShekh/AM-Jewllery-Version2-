@@ -10,6 +10,17 @@ export interface AdDetail {
   adPieces: number;
 }
 
+export interface SettingSummaryForPrint {
+  inWeight?: string;
+  outWeight?: string;
+  extraWeight?: string;
+  lossWeight?: string;
+  adWeight?: string;
+  adPieces?: number;
+  klWeight?: string;
+  klPieces?: number;
+}
+
 export interface ManufacturingWorksheetPreviewProps {
   customerName: string;
   orderNumber: string;
@@ -24,6 +35,7 @@ export interface ManufacturingWorksheetPreviewProps {
   productImage?: string;
   qrCodeOrderId?: string;
   qrCodeBagNumber?: string;
+  settingSummary?: SettingSummaryForPrint;
 }
 
 export const ManufacturingWorksheetPreview: React.FC<
@@ -41,6 +53,7 @@ export const ManufacturingWorksheetPreview: React.FC<
   productImage,
   qrCodeOrderId,
   qrCodeBagNumber,
+  settingSummary,
 }) => {
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
   const [detectedBaseUrl, setDetectedBaseUrl] = useState<string>("");
@@ -246,15 +259,57 @@ export const ManufacturingWorksheetPreview: React.FC<
 
         {renderProcessSection("FILING", "filing")}
         {renderProcessSection("F. POLISH", "fpolish")}
-        {renderProcessSection("SETTING", "setting")}
+        <React.Fragment key="setting">
+          <div className={`${procGridClass} border-b border-black`}>
+            <div className="px-1 border-r border-black font-bold text-[10px] h-6 flex items-center">
+              SETTING
+            </div>
+            <div className="px-1 border-r border-black h-6 flex items-center justify-end font-mono text-[9px]">
+              {Number(settingSummary?.inWeight || 0) > 0
+                ? Number(settingSummary?.inWeight).toFixed(3)
+                : ""}
+            </div>
+            <div className="px-1 border-r border-black h-6 flex items-center justify-end font-mono text-[9px]">
+              {Number(settingSummary?.outWeight || 0) > 0
+                ? Number(settingSummary?.outWeight).toFixed(3)
+                : ""}
+            </div>
+            <div className="px-1 border-r border-black h-6 flex items-center justify-end font-mono text-[9px]">
+              {Number(settingSummary?.extraWeight || 0) > 0
+                ? Number(settingSummary?.extraWeight).toFixed(3)
+                : ""}
+            </div>
+            <div className="px-1 h-6 flex items-center justify-end font-mono text-[9px]">
+              {Number(settingSummary?.lossWeight || 0) > 0
+                ? Number(settingSummary?.lossWeight).toFixed(3)
+                : ""}
+            </div>
+          </div>
+          {renderBlankRow("setting-r2")}
+          <div className={`${procGridClass} border-b border-black bg-gray-50`}>
+            <div className="px-1 border-r border-black font-semibold text-[8.5px] text-gray-700 h-5 flex items-center">
+              REPAIRING
+            </div>
+            <div className="border-r border-black h-5" />
+            <div className="border-r border-black h-5" />
+            <div className="border-r border-black h-5" />
+            <div className="h-5" />
+          </div>
+        </React.Fragment>
 
         {/* AD & KL Blue Rows */}
         <div className={`${procGridClass} border-b border-black bg-blue-100`}>
           <div className="px-1 border-r border-black font-bold text-[10px] h-6 flex items-center">
             AD
           </div>
-          <div className="border-r border-black h-6" />
-          <div className="border-r border-black h-6" />
+          <div className="px-1 border-r border-black h-6 flex items-center justify-end font-mono font-semibold text-[9px]">
+            {Number(settingSummary?.adWeight || 0) > 0
+              ? `${Number(settingSummary?.adWeight).toFixed(3)}g`
+              : ""}
+          </div>
+          <div className="px-1 border-r border-black h-6 flex items-center justify-center font-bold text-[9px] text-blue-900">
+            {settingSummary?.adPieces ? `${settingSummary.adPieces} pcs` : ""}
+          </div>
           <div className="border-r border-black h-6" />
           <div className="h-6" />
         </div>
@@ -262,8 +317,14 @@ export const ManufacturingWorksheetPreview: React.FC<
           <div className="px-1 border-r border-black font-bold text-[10px] h-6 flex items-center">
             KL
           </div>
-          <div className="border-r border-black h-6" />
-          <div className="border-r border-black h-6" />
+          <div className="px-1 border-r border-black h-6 flex items-center justify-end font-mono font-semibold text-[9px]">
+            {Number(settingSummary?.klWeight || 0) > 0
+              ? `${Number(settingSummary?.klWeight).toFixed(3)}g`
+              : ""}
+          </div>
+          <div className="px-1 border-r border-black h-6 flex items-center justify-center font-bold text-[9px] text-purple-900">
+            {settingSummary?.klPieces ? `${settingSummary.klPieces} pcs` : ""}
+          </div>
           <div className="border-r border-black h-6" />
           <div className="h-6" />
         </div>
@@ -315,7 +376,16 @@ export const ManufacturingWorksheetPreview: React.FC<
         {/* Summary Footer */}
         <div className="grid grid-cols-3 bg-yellow-200 font-bold text-[10px]">
           <div className="p-1.5 border-r border-black">FINISH WT:</div>
-          <div className="p-1.5 border-r border-black">AD / KL TOTAL:</div>
+          <div className="p-1.5 border-r border-black">
+            AD / KL TOTAL:
+            {(settingSummary?.adPieces || settingSummary?.klPieces) ? (
+              <span className="ml-1 font-mono text-[9px]">
+                {settingSummary?.adPieces ? `AD:${settingSummary.adPieces}p` : ""}
+                {settingSummary?.adPieces && settingSummary?.klPieces ? " / " : ""}
+                {settingSummary?.klPieces ? `KL:${settingSummary.klPieces}p` : ""}
+              </span>
+            ) : null}
+          </div>
           <div className="p-1.5">TOTAL LOSS:</div>
         </div>
       </div>

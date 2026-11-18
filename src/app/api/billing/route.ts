@@ -2,14 +2,41 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireServerActor } from "@/lib/auth";
 import { handleApiError } from "@/lib/api-response";
 import { erpService } from "@/lib/domain";
+import { prisma } from "@/lib/prisma";
 import { recordBillAdminMakingCharge } from "@/lib/admin-making-charge";
 
 export async function GET(req: NextRequest) {
   try {
     const actor = await requireServerActor(["OWNER_ADMIN", "OPERATOR"]);
     const customerId = req.nextUrl.searchParams.get("customerId") || undefined;
-    const data = await erpService.getBillingWorkspace(actor, { customerId });
-    return NextResponse.json({ ok: true, ...data });
+    const [data, adminEvents] = await Promise.all([
+      erpService.getBillingWorkspace(actor, { customerId }),
+      actor.role === "OWNER_ADMIN"
+        ? prisma.auditEvent.findMany({
+            where: {
+              organizationId: actor.organizationId,
+              entityType: "BILL_ADMIN_MAKING_CHARGE",
+              action: "ADMIN_MAKING_CHARGE_RECORDED",
+            },
+            select: { entityId: true, metadataJson: true },
+          })
+        : Promise.resolve([]),
+    ]);
+    const adminMap = new Map<string, number>();
+    for (const ev of adminEvents) {
+      if (!ev.metadataJson) continue;
+      try {
+        const meta = JSON.parse(ev.metadataJson) as { amountRupees?: number };
+        adminMap.set(ev.entityId, Number(meta.amountRupees || 0));
+      } catch {
+        // ignore
+      }
+    }
+    const billsWithAdmin = (data.bills || []).map((b) => ({
+      ...b,
+      adminMakingChargeRupees: adminMap.get(b.id) ?? 0,
+    }));
+    return NextResponse.json({ ok: true, ...data, bills: billsWithAdmin });
   } catch (err) {
     return handleApiError(err);
   }
