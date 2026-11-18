@@ -125,11 +125,11 @@ export const generateManufacturingWorksheetPDF = (
 
   const processes = [
     { name: "Filing", isBlue: false, isTotal: false },
-    { name: "", isBlue: false, isTotal: false },
+    { name: "Repairing", isBlue: false, isTotal: false },
     { name: "Free Polish", isBlue: false, isTotal: false },
-    { name: "", isBlue: false, isTotal: false },
+    { name: "Repairing", isBlue: false, isTotal: false },
     { name: "Setting", isBlue: false, isTotal: false },
-    { name: "", isBlue: false, isTotal: false },
+    { name: "Repairing", isBlue: false, isTotal: false },
     { name: "Ad 1-10", isBlue: true, isTotal: false },
     { name: "Ad 1-20", isBlue: true, isTotal: false },
     { name: "Ad 1-30", isBlue: true, isTotal: false },
@@ -140,8 +140,10 @@ export const generateManufacturingWorksheetPDF = (
     { name: "Ad 1-80", isBlue: true, isTotal: false },
     { name: "KL", isBlue: false, isTotal: false },
     { name: "total", isBlue: false, isTotal: true },
+    { name: "Noksi", isBlue: false, isTotal: false },
+    { name: "Repairing", isBlue: false, isTotal: false },
     { name: "Polish", isBlue: false, isTotal: false },
-    { name: "", isBlue: false, isTotal: false },
+    { name: "Repairing", isBlue: false, isTotal: false },
     { name: "Total", isBlue: true, isTotal: true },
   ];
 

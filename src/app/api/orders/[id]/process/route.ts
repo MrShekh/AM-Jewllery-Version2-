@@ -117,6 +117,10 @@ export async function POST(
         processType: body.processType as ProcessType,
         karigarId: String(body.karigarId || ""),
         nextKarigarId: body.nextKarigarId || undefined,
+        nextProcessType: body.nextProcessType || undefined,
+        adjustAgainstKarigarBalance: Boolean(body.adjustAgainstKarigarBalance),
+        isRepairing: Boolean(body.isRepairing),
+        settleNoksiImmediately: Boolean(body.settleNoksiImmediately),
         grossInWeight: String(body.grossInWeight || "0"),
         nonGoldInWeight:
           body.nonGoldInWeight !== undefined && body.nonGoldInWeight !== ""

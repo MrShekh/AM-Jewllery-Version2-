@@ -193,6 +193,7 @@ function DirectoryContent() {
     "FILING",
     "FREE_POLISH",
     "SETTING",
+    "NOKSI",
     "FINAL_POLISH",
   ]);
   const [savingKarigar, setSavingKarigar] = useState(false);

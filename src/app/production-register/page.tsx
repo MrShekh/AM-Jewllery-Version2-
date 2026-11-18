@@ -242,6 +242,7 @@ function ProductionRegisterContent() {
   const [showFilingCols, setShowFilingCols] = useState(true);
   const [showFreePolishCols, setShowFreePolishCols] = useState(true);
   const [showSettingCols, setShowSettingCols] = useState(true);
+  const [showNoksiCols, setShowNoksiCols] = useState(true);
   const [showFinalPolishCols, setShowFinalPolishCols] = useState(true);
 
   // Selected Order Drawer
@@ -287,6 +288,12 @@ function ProductionRegisterContent() {
   const [klPieces, setKlPieces] = useState<string>("");
   const [closeProcess, setCloseProcess] = useState<boolean>(true);
   const [showPartialReturn, setShowPartialReturn] = useState<boolean>(false);
+  const [nextProcessType, setNextProcessType] = useState<string>("");
+  const [adjustAgainstKarigarBalance, setAdjustAgainstKarigarBalance] =
+    useState<boolean>(false);
+  const [isRepairing, setIsRepairing] = useState<boolean>(false);
+  const [settleNoksiImmediately, setSettleNoksiImmediately] =
+    useState<boolean>(false);
   const [entryStep, setEntryStep] = useState<"GIVE_WORK" | "RECEIVE_WORK">(
     "GIVE_WORK"
   );
@@ -563,6 +570,10 @@ function ProductionRegisterContent() {
     setExtraMetalTouchPercent("");
     setCloseProcess(true);
     setShowPartialReturn(false);
+    setNextProcessType("");
+    setAdjustAgainstKarigarBalance(false);
+    setIsRepairing(false);
+    setSettleNoksiImmediately(false);
   }
 
   async function handleGiveWork(e: React.FormEvent) {
@@ -780,11 +791,20 @@ function ProductionRegisterContent() {
                 : undefined,
             stoneComponents,
             closeProcess,
+            nextProcessType: closeProcess && nextProcessType ? nextProcessType : undefined,
+            adjustAgainstKarigarBalance,
+            isRepairing,
+            settleNoksiImmediately:
+              activeProcessObj.processType === "NOKSI"
+                ? settleNoksiImmediately
+                : false,
             custodyRetainedMetalWeight: closeProcess
               ? undefined
               : custodyRetainedWeight || undefined,
             businessDate,
-            notes: entryNotes || undefined,
+            notes: isRepairing
+              ? `[REPAIRING] ${entryNotes || ""}`.trim()
+              : entryNotes || undefined,
             idempotencyKey: `ui_proc_${selectedOrderRow.order.id}_${
               activeProcessObj.processType
             }_${Date.now()}`,
@@ -1422,6 +1442,45 @@ function ProductionRegisterContent() {
       });
     }
 
+    if (showNoksiCols) {
+      cols.push({
+        id: "noksi_group",
+        header: "Noksi (Shop | IN | OUT | Chol (g) | Loss)",
+        cell: ({ row }) => {
+          const p = findProc(row.original, "NOKSI");
+          if (!p) return <span className="text-slate-300">N/A</span>;
+          return (
+            <div className="flex items-center justify-end gap-2 text-[11px] tabular-nums">
+              <span className="text-slate-600 truncate max-w-[70px]">
+                {p.karigar?.name || "—"}
+              </span>
+              <span className="text-slate-300">|</span>
+              {renderProcessInButton(row.original, p, p.latestGrossInWeight)}
+              <span className="text-slate-300">|</span>
+              {renderProcessOutButton(row.original, p)}
+              <span className="text-slate-300">|</span>
+              <span
+                className={`font-mono ${
+                  Number(p.extraReturnedMetalWeight || 0) > 0
+                    ? "text-emerald-700 font-semibold"
+                    : "text-slate-400"
+                }`}
+                title="Chol / Extra Metal Returned to Admin (g)"
+              >
+                {fmtCellWeight(p.extraReturnedMetalWeight)}
+              </span>
+              <span className="text-slate-300">|</span>
+              <span className="font-mono font-semibold text-slate-800">
+                {p.status === "CLOSED"
+                  ? fmtCellWeight(p.closedLossWeight)
+                  : "—"}
+              </span>
+            </div>
+          );
+        },
+      });
+    }
+
     if (showFinalPolishCols) {
       cols.push({
         id: "final_group",
@@ -1537,6 +1596,7 @@ function ProductionRegisterContent() {
     showFilingCols,
     showFreePolishCols,
     showSettingCols,
+    showNoksiCols,
     showFinalPolishCols,
     actor?.role,
     rows,
@@ -1795,6 +1855,7 @@ function ProductionRegisterContent() {
                   if (showFilingCols) stages.push("FILING");
                   if (showFreePolishCols) stages.push("FREE_POLISH");
                   if (showSettingCols) stages.push("SETTING");
+                  if (showNoksiCols) stages.push("NOKSI");
                   if (showFinalPolishCols) stages.push("FINAL_POLISH");
                   csvQs.set("stages", stages.join(","));
                   return `/api/reconciliation?${csvQs.toString()}`;
@@ -1952,10 +2013,18 @@ function ProductionRegisterContent() {
               <label className="inline-flex items-center gap-1 cursor-pointer">
                 <input
                   type="checkbox"
+                  checked={showNoksiCols}
+                  onChange={(e) => setShowNoksiCols(e.target.checked)}
+                />
+                <span>4. Noksi</span>
+              </label>
+              <label className="inline-flex items-center gap-1 cursor-pointer">
+                <input
+                  type="checkbox"
                   checked={showFinalPolishCols}
                   onChange={(e) => setShowFinalPolishCols(e.target.checked)}
                 />
-                <span>4. Final Polish</span>
+                <span>5. Final Polish</span>
               </label>
             </div>
             <div className="text-[11px] text-slate-500">
@@ -2872,6 +2941,83 @@ function ProductionRegisterContent() {
                                 className="w-28 px-2 py-1 text-xs bg-white border border-slate-300 rounded-xs font-mono"
                               />
                             </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Noksi outsource info + Any-to-any routing + Repairing & Lock-Fitting adjustment */}
+                      {entryStep === "RECEIVE_WORK" && (
+                        <div className="space-y-2 pt-1">
+                          {activeProcessObj.processType === "NOKSI" && (
+                            <div className="p-2 bg-indigo-50 border border-indigo-200 rounded-xs text-[11px] text-indigo-900 space-y-1.5">
+                              <div>
+                                <strong>Noksi (Outsource):</strong> Enter any remaining chol returned with the order in{" "}
+                                <strong>Extra Metal Returned</strong>.
+                              </div>
+                              {closeProcess && (
+                                <label className="flex items-center gap-2 font-semibold cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={settleNoksiImmediately}
+                                    onChange={(e) =>
+                                      setSettleNoksiImmediately(e.target.checked)
+                                    }
+                                  />
+                                  <span>
+                                    Settle Noksi making/loss immediately (leave unchecked if settling later in Recovery)
+                                  </span>
+                                </label>
+                              )}
+                            </div>
+                          )}
+
+                          {closeProcess && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
+                              <div>
+                                <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                                  Send Next To (Any-to-Any Process)
+                                </label>
+                                <select
+                                  value={nextProcessType}
+                                  onChange={(e) => setNextProcessType(e.target.value)}
+                                  className="w-full px-2 py-1 text-xs bg-white border border-slate-300 rounded-xs"
+                                >
+                                  <option value="">Auto (Next Selected Process)</option>
+                                  <option value="FILING">Filing (or Lock Fitting / Repairing)</option>
+                                  <option value="FREE_POLISH">Free Polish</option>
+                                  <option value="SETTING">Setting</option>
+                                  <option value="NOKSI">Noksi (Outsource)</option>
+                                  <option value="FINAL_POLISH">Final Polish</option>
+                                  <option value="COMPLETE">Ready to Complete Order</option>
+                                </select>
+                              </div>
+                              <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer pt-4">
+                                <input
+                                  type="checkbox"
+                                  checked={isRepairing}
+                                  onChange={(e) => setIsRepairing(e.target.checked)}
+                                />
+                                <span>Mark as Repairing</span>
+                              </label>
+                            </div>
+                          )}
+
+                          {liveRawLoss < -0.0001 && (
+                            <label className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-300 rounded-xs text-[11px] text-amber-950 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={adjustAgainstKarigarBalance}
+                                onChange={(e) =>
+                                  setAdjustAgainstKarigarBalance(e.target.checked)
+                                }
+                                className="mt-0.5"
+                              />
+                              <span>
+                                <strong>Lock-Fitting / Weight Increase (+{formatWeight3(Math.abs(liveRawLoss))} g):</strong>{" "}
+                                Adjust against karigar&apos;s outstanding{" "}
+                                {PROCESS_DISPLAY_LABELS[activeProcessObj.processType]} loss balance (adds into jewellery without increasing Admin Stock).
+                              </span>
+                            </label>
                           )}
                         </div>
                       )}

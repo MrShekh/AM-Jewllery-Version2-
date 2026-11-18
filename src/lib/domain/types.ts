@@ -6,12 +6,14 @@ export type ProcessType =
   | "FILING"
   | "FREE_POLISH"
   | "SETTING"
+  | "NOKSI"
   | "FINAL_POLISH";
 
 export const CANONICAL_PROCESS_SEQUENCE: readonly ProcessType[] = [
   "FILING",
   "FREE_POLISH",
   "SETTING",
+  "NOKSI",
   "FINAL_POLISH",
 ] as const;
 
@@ -19,6 +21,7 @@ export const PROCESS_DISPLAY_LABELS: Record<ProcessType, string> = {
   FILING: "Filing",
   FREE_POLISH: "Free Polish",
   SETTING: "Setting",
+  NOKSI: "Noksi",
   FINAL_POLISH: "Final Polish",
 };
 

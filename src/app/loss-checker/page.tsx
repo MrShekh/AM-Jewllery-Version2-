@@ -260,6 +260,7 @@ export default function QrLossCheckerPage() {
       FILING: { raw: 0, fine: 0 },
       FREE_POLISH: { raw: 0, fine: 0 },
       SETTING: { raw: 0, fine: 0 },
+      NOKSI: { raw: 0, fine: 0 },
       FINAL_POLISH: { raw: 0, fine: 0 },
     };
     let grandRaw = 0;
@@ -288,6 +289,7 @@ export default function QrLossCheckerPage() {
         FILING: number;
         FREE_POLISH: number;
         SETTING: number;
+        NOKSI: number;
         FINAL_POLISH: number;
         totalRaw: number;
         totalFine: number;
@@ -301,6 +303,7 @@ export default function QrLossCheckerPage() {
         FILING: 0,
         FREE_POLISH: 0,
         SETTING: 0,
+        NOKSI: 0,
         FINAL_POLISH: 0,
         totalRaw: 0,
         totalFine: 0,
@@ -327,6 +330,7 @@ export default function QrLossCheckerPage() {
         FILING: number;
         FREE_POLISH: number;
         SETTING: number;
+        NOKSI: number;
         FINAL_POLISH: number;
         totalRaw: number;
         totalFine: number;
@@ -344,6 +348,7 @@ export default function QrLossCheckerPage() {
           FILING: 0,
           FREE_POLISH: 0,
           SETTING: 0,
+          NOKSI: 0,
           FINAL_POLISH: 0,
           totalRaw: 0,
           totalFine: 0,
@@ -533,6 +538,7 @@ export default function QrLossCheckerPage() {
                       <th className="p-1.5 text-right">Filing</th>
                       <th className="p-1.5 text-right">F.Polish</th>
                       <th className="p-1.5 text-right">Setting</th>
+                      <th className="p-1.5 text-right">Noksi</th>
                       <th className="p-1.5 text-right">Final</th>
                       <th className="p-1.5 text-right">Total (Fine)</th>
                     </tr>
@@ -545,6 +551,7 @@ export default function QrLossCheckerPage() {
                         <td className="p-1.5 text-right">{formatWeight3(k.FILING)}</td>
                         <td className="p-1.5 text-right">{formatWeight3(k.FREE_POLISH)}</td>
                         <td className="p-1.5 text-right">{formatWeight3(k.SETTING)}</td>
+                        <td className="p-1.5 text-right">{formatWeight3(k.NOKSI)}</td>
                         <td className="p-1.5 text-right">{formatWeight3(k.FINAL_POLISH)}</td>
                         <td className="p-1.5 text-right font-bold text-blue-800">
                           {formatWeight3(k.totalRaw)}g ({formatWeight3(k.totalFine)}g)
@@ -568,6 +575,7 @@ export default function QrLossCheckerPage() {
                       <th className="p-1.5 text-right">Filing</th>
                       <th className="p-1.5 text-right">F.Polish</th>
                       <th className="p-1.5 text-right">Setting</th>
+                      <th className="p-1.5 text-right">Noksi</th>
                       <th className="p-1.5 text-right">Final</th>
                       <th className="p-1.5 text-right">Total (Fine)</th>
                     </tr>
@@ -575,7 +583,7 @@ export default function QrLossCheckerPage() {
                   <tbody>
                     {karigarBreakdown.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="p-3 text-center text-slate-500">
+                        <td colSpan={7} className="p-3 text-center text-slate-500">
                           No karigar losses recorded in scanned bags yet.
                         </td>
                       </tr>
@@ -586,6 +594,7 @@ export default function QrLossCheckerPage() {
                           <td className="p-1.5 text-right">{formatWeight3(k.FILING)}</td>
                           <td className="p-1.5 text-right">{formatWeight3(k.FREE_POLISH)}</td>
                           <td className="p-1.5 text-right">{formatWeight3(k.SETTING)}</td>
+                          <td className="p-1.5 text-right">{formatWeight3(k.NOKSI)}</td>
                           <td className="p-1.5 text-right">{formatWeight3(k.FINAL_POLISH)}</td>
                           <td className="p-1.5 text-right font-bold text-blue-800">
                             {formatWeight3(k.totalRaw)}g ({formatWeight3(k.totalFine)}g)
@@ -616,6 +625,7 @@ export default function QrLossCheckerPage() {
                   <th className="p-1.5 text-right">Filing</th>
                   <th className="p-1.5 text-right">F.Polish</th>
                   <th className="p-1.5 text-right">Setting</th>
+                  <th className="p-1.5 text-right">Noksi</th>
                   <th className="p-1.5 text-right">Final</th>
                   <th className="p-1.5 text-right">Total Loss</th>
                   <th className="p-1.5 text-right">Action</th>
@@ -624,7 +634,7 @@ export default function QrLossCheckerPage() {
               <tbody>
                 {filteredBags.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="p-6 text-center text-slate-500">
+                    <td colSpan={11} className="p-6 text-center text-slate-500">
                       Scan a bag QR code or enter a Bag # above to start checking losses.
                     </td>
                   </tr>
@@ -644,6 +654,7 @@ export default function QrLossCheckerPage() {
                         <td className="p-1.5 text-right">{lossOf("FILING")}</td>
                         <td className="p-1.5 text-right">{lossOf("FREE_POLISH")}</td>
                         <td className="p-1.5 text-right">{lossOf("SETTING")}</td>
+                        <td className="p-1.5 text-right">{lossOf("NOKSI")}</td>
                         <td className="p-1.5 text-right">{lossOf("FINAL_POLISH")}</td>
                         <td className="p-1.5 text-right font-bold">
                           {b.order.totalRawLossWeight}g ({b.order.totalFineLossWeight}g fine)

@@ -140,7 +140,15 @@ export const ManufacturingWorksheetPreview: React.FC<
         <div className="h-6" />
       </div>
       {renderBlankRow(`${keyPrefix}-r2`)}
-      {renderBlankRow(`${keyPrefix}-r3`)}
+      <div className={`${procGridClass} border-b border-black bg-gray-50`}>
+        <div className="px-1 border-r border-black font-semibold text-[8.5px] text-gray-700 h-5 flex items-center">
+          REPAIRING
+        </div>
+        <div className="border-r border-black h-5" />
+        <div className="border-r border-black h-5" />
+        <div className="border-r border-black h-5" />
+        <div className="h-5" />
+      </div>
     </React.Fragment>
   );
 
@@ -260,6 +268,7 @@ export const ManufacturingWorksheetPreview: React.FC<
           <div className="h-6" />
         </div>
 
+        {renderProcessSection("NOKSI", "noksi")}
         {renderProcessSection("FINAL POLISH", "finalpolish")}
 
         {/* AD Details Header */}

@@ -154,6 +154,10 @@ export interface PostProcessEntryInput {
   processType: ProcessType;
   karigarId: string;
   nextKarigarId?: string;
+  nextProcessType?: ProcessType | "COMPLETE";
+  adjustAgainstKarigarBalance?: boolean;
+  isRepairing?: boolean;
+  settleNoksiImmediately?: boolean;
   grossInWeight: DecimalInput;
   nonGoldInWeight?: DecimalInput;
   grossOutWeight: DecimalInput;
@@ -2531,22 +2535,26 @@ export class ErpDomainService {
       // Different touch: fineLoss = fine(metalIn) - fine(metalOut) - fine(extraMetal) - fine(custodyRetained)
       let rawLoss: Decimal;
       let fineLoss: Decimal;
+      let isLockFittingAdjustment = false;
       if (isSameTouch) {
         rawLoss = roundInternal(
           metalIn.sub(metalOut).sub(extraMetal).sub(custodyRetained)
         );
         if (rawLoss.lt(ZERO)) {
-          throw new ValidationError(
-            `Unexplained weight gain / negative process loss (${rawLoss.toFixed(
-              3
-            )}g) is blocked: metalOut (${metalOut.toFixed(
-              3
-            )}g) + extraMetalReturned (${extraMetal.toFixed(
-              3
-            )}g) + custodyRetained (${custodyRetained.toFixed(
-              3
-            )}g) exceeds metalIn (${metalIn.toFixed(3)}g)`
-          );
+          if (!input.adjustAgainstKarigarBalance || !extraMetal.isZero()) {
+            throw new ValidationError(
+              `Unexplained weight gain / negative process loss (${rawLoss.toFixed(
+                3
+              )}g) is blocked: metalOut (${metalOut.toFixed(
+                3
+              )}g) + extraMetalReturned (${extraMetal.toFixed(
+                3
+              )}g) + custodyRetained (${custodyRetained.toFixed(
+                3
+              )}g) exceeds metalIn (${metalIn.toFixed(3)}g)`
+            );
+          }
+          isLockFittingAdjustment = true;
         }
         fineLoss = calculateFineEquivalent(rawLoss, activeOrder.touchSnapshot);
       } else {
@@ -2566,13 +2574,16 @@ export class ErpDomainService {
           metalInFine.sub(metalOutFine).sub(extraFine).sub(custodyRetainedFine)
         );
         if (fineLoss.lt(ZERO)) {
-          throw new ValidationError(
-            `Unexplained fine weight gain / negative process loss (${fineLoss.toFixed(
-              3
-            )}g fine) is blocked: returned fine + extra fine + custody fine exceeds metalIn fine (${metalInFine.toFixed(
-              3
-            )}g)`
-          );
+          if (!input.adjustAgainstKarigarBalance || !extraMetal.isZero()) {
+            throw new ValidationError(
+              `Unexplained fine weight gain / negative process loss (${fineLoss.toFixed(
+                3
+              )}g fine) is blocked: returned fine + extra fine + custody fine exceeds metalIn fine (${metalInFine.toFixed(
+                3
+              )}g)`
+            );
+          }
+          isLockFittingAdjustment = true;
         }
         rawLoss = roundInternal(fineLoss.div(orderTouchRatio));
       }
@@ -2872,9 +2883,99 @@ export class ErpDomainService {
         });
       }
 
-      // Post Process Loss Record if rawLoss > 0 (or even 0 when closing a process so per-visit loss history is explicit)
+      // Post Process Loss Record OR Lock-Fitting Balance Adjustment
       let lossRecord: ProcessLossRecordEntity | null = null;
-      if (closeProcess || rawLoss.gt(ZERO)) {
+      if (isLockFittingAdjustment && rawLoss.lt(ZERO)) {
+        const weightGain = rawLoss.abs();
+        const fineGain = fineLoss.abs();
+        const [orderLosses, allAllocs, allWriteOffs, allMakingDeds] =
+          await Promise.all([
+            tx.listProcessLossRecords(validActor.organizationId, activeOrder.id),
+            tx.listRecoveryAllocations(validActor.organizationId),
+            tx.listLossWriteOffs(validActor.organizationId),
+            tx.listMakingDeductionAllocations(validActor.organizationId),
+          ]);
+        const unsettledForProc = orderLosses
+          .filter(
+            (lr) =>
+              lr.orderProcessId === currentProc.id &&
+              lr.karigarId === karigar.id &&
+              lr.eligibilityStatus !== "VOIDED"
+          )
+          .map((lr) => ({
+            loss: lr,
+            ...this.computeLossBalances(lr, allAllocs, allWriteOffs, allMakingDeds),
+          }))
+          .filter((item) => item.outstandingFine.gt(ZERO));
+
+        const totalUnsettledFine = unsettledForProc.reduce(
+          (s, item) => roundInternal(s.add(item.outstandingFine)),
+          ZERO
+        );
+        if (totalUnsettledFine.add(new Decimal("0.0001")).lt(fineGain)) {
+          throw new ValidationError(
+            `Cannot adjust +${weightGain.toFixed(3)}g (${fineGain.toFixed(
+              3
+            )}g fine) against ${karigar.name}'s ${currentProc.processType} balance: only ${totalUnsettledFine.toFixed(
+              3
+            )}g fine unsettled loss remains on this process.`
+          );
+        }
+
+        const lossPoolAcct = await this.ensureSystemAccount(
+          tx,
+          validActor.organizationId,
+          `PROCESS_LOSS_${purity.code}`,
+          `Process Loss Account - ${purity.displayLabel}`,
+          "PROCESS_LOSS",
+          purity.id,
+          null
+        );
+        await this.postBalancedJournalEntry(tx, {
+          organizationId: validActor.organizationId,
+          actorId: validActor.userId,
+          transactionType: "FILING_CORRECTION",
+          businessDate,
+          purity,
+          physicalWeight: weightGain,
+          fineEquivalentWeight: fineGain,
+          sourceAccount: lossPoolAcct,
+          destinationAccount: karigarCustodyAcct,
+          sourceReference: `BAG-${activeOrder.bagNumber}-${currentProc.processType}-ADJ`,
+          reason: `Lock-fitting / repairing return (+${weightGain.toFixed(
+            3
+          )}g) into Bag #${activeOrder.bagNumber} reducing ${karigar.name}'s ${currentProc.processType} loss`,
+          orderId: activeOrder.id,
+          orderProcessId: currentProc.id,
+          processVisitId: visit.id,
+          karigarId: karigar.id,
+          idempotencyKey: `loss_adj_jnl_${input.idempotencyKey}`,
+        });
+
+        let remToReduce = fineGain;
+        for (let idx = 0; idx < unsettledForProc.length && remToReduce.gt(ZERO); idx++) {
+          const item = unsettledForProc[idx];
+          const applyFine = Decimal.min(remToReduce, item.outstandingFine);
+          await tx.createLossWriteOff({
+            id: newId("lwo"),
+            organizationId: validActor.organizationId,
+            processLossRecordId: item.loss.id,
+            karigarId: karigar.id,
+            writtenOffFineWeight: roundInternal(applyFine),
+            businessDate,
+            reason: `LOCK_FITTING_RETURN: +${weightGain.toFixed(
+              3
+            )}g returned into order on Visit #${visit.visitNumber}`,
+            status: "ACTIVE",
+            idempotencyKey: `lf_adj_${input.idempotencyKey}_${idx}`,
+            createdById: validActor.userId,
+            createdAt: now,
+            reversedAt: null,
+            reversalReason: null,
+          });
+          remToReduce = roundInternal(remToReduce.sub(applyFine));
+        }
+      } else if (closeProcess || rawLoss.gt(ZERO)) {
         let lossJtxId: string | null = null;
         if (rawLoss.gt(ZERO)) {
           const lossPoolAcct = await this.ensureSystemAccount(
@@ -2929,6 +3030,30 @@ export class ErpDomainService {
           createdAt: now,
           updatedAt: now,
         });
+
+        // Outsourced Noksi loss can be settled immediately at return when chosen, or left ELIGIBLE for Recovery later
+        if (
+          currentProc.processType === "NOKSI" &&
+          input.settleNoksiImmediately &&
+          closeProcess &&
+          fineLoss.gt(ZERO)
+        ) {
+          await tx.createLossWriteOff({
+            id: newId("lwo"),
+            organizationId: validActor.organizationId,
+            processLossRecordId: lossRecord.id,
+            karigarId: karigar.id,
+            writtenOffFineWeight: fineLoss,
+            businessDate,
+            reason: "NOKSI_OUTSOURCE_SETTLED: Outsourced Noksi making/loss settled immediately",
+            status: "ACTIVE",
+            idempotencyKey: `noksi_settled_${input.idempotencyKey}`,
+            createdById: validActor.userId,
+            createdAt: now,
+            reversedAt: null,
+            reversalReason: null,
+          });
+        }
       }
 
       const updatedProc = await tx.updateOrderProcess({
@@ -2982,89 +3107,137 @@ export class ErpDomainService {
         createdAt: now,
       });
 
-      // Rule 8: If this process closed and there is a next selected process,
-      // transfer the returned piece (metalOut + carriedStoneOutWeight) to the next selected process
-      // WITHOUT deducting Admin Stock again!
+      // Rule 8: Any-to-any process routing when this process closes.
+      // If nextProcessType === "COMPLETE", do not hand off to another process (ready for order completion).
+      // If nextProcessType is specified, route to that process (reopening if previously closed, or creating if not yet on order).
+      // If omitted, default to the next sequential process on the order.
       let nextProc: OrderProcessEntity | null = null;
-      if (closeProcess && procIndex + 1 < processes.length) {
-        const rawNext = processes[procIndex + 1];
-        const nextKarigarId = input.nextKarigarId || karigar.id;
-        const nextKarigar = await tx.getKarigarById(
-          validActor.organizationId,
-          nextKarigarId
-        );
-        if (!nextKarigar) {
-          throw new NotFoundError(`Next karigar ${nextKarigarId} not found`);
+      if (closeProcess && input.nextProcessType !== "COMPLETE") {
+        let rawNext: OrderProcessEntity | null = null;
+        if (input.nextProcessType) {
+          const existingTarget = processes.find(
+            (p) => p.processType === input.nextProcessType
+          );
+          if (existingTarget) {
+            rawNext = existingTarget;
+          } else {
+            const canonicalSeq =
+              CANONICAL_PROCESS_SEQUENCE.indexOf(input.nextProcessType) + 1;
+            const maxSeq = processes.reduce(
+              (m, p) => Math.max(m, p.sequenceOrder),
+              0
+            );
+            rawNext = await tx.createOrderProcess({
+              id: newId("oproc"),
+              organizationId: validActor.organizationId,
+              orderId: activeOrder.id,
+              processType: input.nextProcessType,
+              canonicalSequence: canonicalSeq || maxSeq + 1,
+              sequenceOrder: maxSeq + 1,
+              assignedKarigarId: input.nextKarigarId || karigar.id,
+              status: "PENDING",
+              issuedMetalWeight: ZERO,
+              returnedMetalWeight: ZERO,
+              extraReturnedMetalWeight: ZERO,
+              closedLossWeight: ZERO,
+              custodyMetalWeight: ZERO,
+              carriedStoneInWeight: ZERO,
+              addedStoneWeight: ZERO,
+              removedStoneWeight: ZERO,
+              carriedStoneOutWeight: ZERO,
+              latestGrossInWeight: ZERO,
+              latestGrossOutWeight: ZERO,
+              closedAt: null,
+              closedById: null,
+              createdAt: now,
+              updatedAt: now,
+            });
+          }
+        } else if (procIndex + 1 < processes.length) {
+          rawNext = processes[procIndex + 1];
         }
 
-        const nextCustodyAcct = await this.ensureSystemAccount(
-          tx,
-          validActor.organizationId,
-          `KARIGAR_CUSTODY_${nextKarigar.id}`,
-          `Karigar Custody - ${nextKarigar.name} (${nextKarigar.karigarCode})`,
-          "KARIGAR_CUSTODY",
-          null,
-          nextKarigar.id
-        );
+        if (rawNext) {
+          const nextKarigarId = input.nextKarigarId || karigar.id;
+          const nextKarigar = await tx.getKarigarById(
+            validActor.organizationId,
+            nextKarigarId
+          );
+          if (!nextKarigar) {
+            throw new NotFoundError(`Next karigar ${nextKarigarId} not found`);
+          }
 
-        const transferFine = calculateFineEquivalent(
-          metalOut,
-          activeOrder.touchSnapshot
-        );
+          const nextCustodyAcct = await this.ensureSystemAccount(
+            tx,
+            validActor.organizationId,
+            `KARIGAR_CUSTODY_${nextKarigar.id}`,
+            `Karigar Custody - ${nextKarigar.name} (${nextKarigar.karigarCode})`,
+            "KARIGAR_CUSTODY",
+            null,
+            nextKarigar.id
+          );
 
-        const transferJtx = await this.postBalancedJournalEntry(tx, {
-          organizationId: validActor.organizationId,
-          actorId: validActor.userId,
-          transactionType: "PROCESS_CUSTODY_TRANSFER",
-          businessDate,
-          purity,
-          physicalWeight: metalOut,
-          fineEquivalentWeight: transferFine,
-          sourceAccount: karigarCustodyAcct,
-          destinationAccount: nextCustodyAcct,
-          sourceReference: `BAG-${activeOrder.bagNumber}-${currentProc.processType}-TO-${rawNext.processType}`,
-          reason: `Stage transfer ${currentProc.processType} -> ${rawNext.processType} for Bag #${activeOrder.bagNumber}`,
-          orderId: activeOrder.id,
-          orderProcessId: rawNext.id,
-          processVisitId: visit.id,
-          karigarId: nextKarigar.id,
-          idempotencyKey: `xfer_jnl_${input.idempotencyKey}`,
-        });
+          const transferFine = calculateFineEquivalent(
+            metalOut,
+            activeOrder.touchSnapshot
+          );
 
-        await tx.createMetalMovement({
-          id: newId("mmov"),
-          organizationId: validActor.organizationId,
-          orderId: activeOrder.id,
-          orderProcessId: rawNext.id,
-          processVisitId: visit.id,
-          movementType: "PROCESS_TRANSFER",
-          fromProcessType: currentProc.processType,
-          toProcessType: rawNext.processType,
-          karigarId: nextKarigar.id,
-          businessDate,
-          grossWeight: grossOut,
-          nonGoldWeight: nonGoldOut,
-          netMetalWeight: metalOut,
-          touchSnapshot: activeOrder.touchSnapshot,
-          fineEquivalentWeight: transferFine,
-          journalTransactionId: transferJtx.id,
-          idempotencyKey: `mmov_xfer_${input.idempotencyKey}`,
-          notes: `Transferred from ${currentProc.processType} to ${rawNext.processType}`,
-          createdById: validActor.userId,
-          createdAt: now,
-        });
+          const transferJtx = await this.postBalancedJournalEntry(tx, {
+            organizationId: validActor.organizationId,
+            actorId: validActor.userId,
+            transactionType: "PROCESS_CUSTODY_TRANSFER",
+            businessDate,
+            purity,
+            physicalWeight: metalOut,
+            fineEquivalentWeight: transferFine,
+            sourceAccount: karigarCustodyAcct,
+            destinationAccount: nextCustodyAcct,
+            sourceReference: `BAG-${activeOrder.bagNumber}-${currentProc.processType}-TO-${rawNext.processType}`,
+            reason: `Stage transfer ${currentProc.processType} -> ${rawNext.processType} for Bag #${activeOrder.bagNumber}`,
+            orderId: activeOrder.id,
+            orderProcessId: rawNext.id,
+            processVisitId: visit.id,
+            karigarId: nextKarigar.id,
+            idempotencyKey: `xfer_jnl_${input.idempotencyKey}`,
+          });
 
-        nextProc = await tx.updateOrderProcess({
-          ...rawNext,
-          assignedKarigarId: nextKarigar.id,
-          status: input.nextKarigarId ? "IN_PROGRESS" : "PENDING",
-          issuedMetalWeight: metalOut,
-          custodyMetalWeight: metalOut,
-          carriedStoneInWeight: nonGoldOut,
-          carriedStoneOutWeight: nonGoldOut,
-          latestGrossInWeight: grossOut,
-          updatedAt: now,
-        });
+          await tx.createMetalMovement({
+            id: newId("mmov"),
+            organizationId: validActor.organizationId,
+            orderId: activeOrder.id,
+            orderProcessId: rawNext.id,
+            processVisitId: visit.id,
+            movementType: "PROCESS_TRANSFER",
+            fromProcessType: currentProc.processType,
+            toProcessType: rawNext.processType,
+            karigarId: nextKarigar.id,
+            businessDate,
+            grossWeight: grossOut,
+            nonGoldWeight: nonGoldOut,
+            netMetalWeight: metalOut,
+            touchSnapshot: activeOrder.touchSnapshot,
+            fineEquivalentWeight: transferFine,
+            journalTransactionId: transferJtx.id,
+            idempotencyKey: `mmov_xfer_${input.idempotencyKey}`,
+            notes: `Transferred from ${currentProc.processType} to ${rawNext.processType}`,
+            createdById: validActor.userId,
+            createdAt: now,
+          });
+
+          nextProc = await tx.updateOrderProcess({
+            ...rawNext,
+            assignedKarigarId: nextKarigar.id,
+            status: input.nextKarigarId ? "IN_PROGRESS" : "PENDING",
+            issuedMetalWeight: roundInternal(rawNext.issuedMetalWeight.add(metalOut)),
+            custodyMetalWeight: metalOut,
+            carriedStoneInWeight: nonGoldOut,
+            carriedStoneOutWeight: nonGoldOut,
+            latestGrossInWeight: grossOut,
+            closedAt: null,
+            closedById: null,
+            updatedAt: now,
+          });
+        }
       }
 
       const updatedOrder = await tx.updateOrder({
@@ -3188,10 +3361,26 @@ export class ErpDomainService {
           validActor.organizationId,
           { processLossRecordId: visitLoss.id }
         );
-        if (writeOffs.some((w) => w.status === "ACTIVE")) {
+        const nonAutoWriteOffs = writeOffs.filter(
+          (w) =>
+            w.status === "ACTIVE" &&
+            !w.idempotencyKey.startsWith("noksi_settled_") &&
+            !w.idempotencyKey.startsWith("lf_adj_")
+        );
+        if (nonAutoWriteOffs.length > 0) {
           throw new ConflictError(
             "Loss has already been written off; reverse those write-offs explicitly before reversing this process visit"
           );
+        }
+        for (const w of writeOffs) {
+          if (w.status === "ACTIVE" && w.idempotencyKey.startsWith("noksi_settled_")) {
+            await tx.updateLossWriteOff({
+              ...w,
+              status: "REVERSED",
+              reversedAt: new Date(),
+              reversalReason: reason,
+            });
+          }
         }
       }
 
@@ -3326,8 +3515,54 @@ export class ErpDomainService {
         );
       }
 
-      // 2. Reverse process loss if posted
-      if (visitLoss) {
+      // 2. Reverse process loss or lock-fitting balance adjustment if posted
+      if (visit.rawLossWeight.lt(ZERO)) {
+        const allWriteOffs = await tx.listLossWriteOffs(validActor.organizationId);
+        const adjPrefix = `lf_adj_${visit.idempotencyKey}_`;
+        for (const w of allWriteOffs) {
+          if (w.status === "ACTIVE" && w.idempotencyKey.startsWith(adjPrefix)) {
+            await tx.updateLossWriteOff({
+              ...w,
+              status: "REVERSED",
+              reversedAt: now,
+              reversalReason: reason,
+            });
+          }
+        }
+        const weightGain = visit.rawLossWeight.abs();
+        const fineGain = visit.fineLossWeight.abs();
+        const lossPoolAcct = await this.ensureSystemAccount(
+          tx,
+          validActor.organizationId,
+          `PROCESS_LOSS_${purity.code}`,
+          `Process Loss Account - ${purity.displayLabel}`,
+          "PROCESS_LOSS",
+          purity.id,
+          null
+        );
+        const freshKarigar = (await tx.getStockAccountById(
+          validActor.organizationId,
+          karigarCustodyAcct.id
+        ))!;
+        await this.postBalancedJournalEntry(tx, {
+          organizationId: validActor.organizationId,
+          actorId: validActor.userId,
+          transactionType: "CONTROLLED_REVERSAL",
+          businessDate,
+          purity,
+          physicalWeight: weightGain,
+          fineEquivalentWeight: fineGain,
+          sourceAccount: freshKarigar,
+          destinationAccount: lossPoolAcct,
+          sourceReference: `REV-BAG-${order.bagNumber}-${currentProc.processType}-ADJ`,
+          reason: `Reverse lock-fitting adjustment (+${weightGain.toFixed(3)}g): ${reason}`,
+          orderId: order.id,
+          orderProcessId: currentProc.id,
+          processVisitId: visit.id,
+          karigarId: visit.karigarId,
+          idempotencyKey: `rev_loss_${input.idempotencyKey}`,
+        });
+      } else if (visitLoss) {
         if (visit.rawLossWeight.gt(ZERO)) {
           const lossPoolAcct = await this.ensureSystemAccount(
             tx,
@@ -3509,8 +3744,22 @@ export class ErpDomainService {
         throw new ValidationError("Order has no selected processes");
       }
 
+      const allVisits = await tx.listProcessVisits(
+        validActor.organizationId,
+        order.id
+      );
+      const latestClosedVisit = [...allVisits]
+        .filter((v) => v.status === "CLOSED")
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .pop();
+
       for (const p of processes) {
-        if (p.status !== "CLOSED") {
+        const isUnusedPending =
+          p.status === "PENDING" &&
+          p.custodyMetalWeight.isZero() &&
+          p.issuedMetalWeight.isZero() &&
+          Boolean(latestClosedVisit);
+        if (p.status !== "CLOSED" && !isUnusedPending) {
           throw new ValidationError(
             `Cannot complete Bag #${order.bagNumber}: selected process ${p.processType} is in status ${p.status} (must be CLOSED)`
           );
@@ -3523,13 +3772,19 @@ export class ErpDomainService {
           );
         }
       }
-
-      const finalProc = processes[processes.length - 1];
-      const expectedFinishedGross = roundInternal(finalProc.latestGrossOutWeight);
-      const expectedFinishedStone = roundInternal(
-        finalProc.carriedStoneOutWeight
+      const finalProc =
+        (latestClosedVisit
+          ? processes.find((p) => p.id === latestClosedVisit.orderProcessId)
+          : null) ?? processes[processes.length - 1];
+      const expectedFinishedGross = roundInternal(
+        latestClosedVisit ? latestClosedVisit.grossOutWeight : finalProc.latestGrossOutWeight
       );
-      const expectedFinishedNet = roundInternal(finalProc.returnedMetalWeight);
+      const expectedFinishedStone = roundInternal(
+        latestClosedVisit ? latestClosedVisit.nonGoldOutWeight : finalProc.carriedStoneOutWeight
+      );
+      const expectedFinishedNet = roundInternal(
+        latestClosedVisit ? latestClosedVisit.metalOutWeight : finalProc.returnedMetalWeight
+      );
 
       const finishedGross =
         input.finishedGrossWeight !== undefined
@@ -3555,21 +3810,29 @@ export class ErpDomainService {
         validActor.organizationId,
         order.id
       );
-      const sumRawLoss = lossRecords.reduce(
-        (acc, r) => roundInternal(acc.add(r.rawMetalLossWeight)),
+      const sumClosedLoss = processes.reduce(
+        (acc, p) => roundInternal(acc.add(p.closedLossWeight)),
         ZERO
       );
+      const sumExtraOrderEquiv = allVisits
+        .filter((v) => v.status !== "REVERSED" && v.extraMetalReturnedWeight.gt(ZERO))
+        .reduce((acc, v) => {
+          const orderTouchRatio = roundTouch(order.touchSnapshot).div(100);
+          return roundInternal(acc.add(v.extraMetalFineWeight.div(orderTouchRatio)));
+        }, ZERO);
 
       // Whole-order mass conservation check:
-      // initialIssuedMetal == finishedNetMetal + sumRawLoss
-      const totalAccountedMetal = roundInternal(finishedNet.add(sumRawLoss));
-      if (!totalAccountedMetal.eq(order.initialIssuedMetalWeight)) {
+      // initialIssuedMetal == finishedNetMetal + sumClosedLoss + sumExtraReturned
+      const totalAccountedMetal = roundInternal(
+        finishedNet.add(sumClosedLoss).add(sumExtraOrderEquiv)
+      );
+      if (totalAccountedMetal.sub(order.initialIssuedMetalWeight).abs().gt(new Decimal("0.002"))) {
         throw new ValidationError(
           `Order mass reconciliation failed: initialIssuedMetal (${order.initialIssuedMetalWeight.toFixed(
             3
           )}g) != finishedNetMetal (${finishedNet.toFixed(
             3
-          )}g) + totalProcessLoss (${sumRawLoss.toFixed(3)}g)`
+          )}g) + totalProcessLoss (${sumClosedLoss.toFixed(3)}g) + extraReturned (${sumExtraOrderEquiv.toFixed(3)}g)`
         );
       }
 
