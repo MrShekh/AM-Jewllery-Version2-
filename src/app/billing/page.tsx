@@ -610,6 +610,7 @@ function BillingWorkspaceInner() {
       : 0;
     const netCustomerOwesFine = Math.max(0, fineTotal - advUsed);
     const pastJamaFine = Number(activeCustomer?.fineOwed || 0);
+    const pastInrOwed = Number(activeCustomer?.inrOwed || 0);
 
     return {
       fineTotal,
@@ -620,7 +621,9 @@ function BillingWorkspaceInner() {
       advUsed,
       netCustomerOwesFine,
       pastJamaFine,
+      pastInrOwed,
       grandTotalFineWithPast: netCustomerOwesFine + pastJamaFine,
+      grandTotalInrWithPast: inrTotal + pastInrOwed,
     };
   }, [
     billType,
@@ -2377,6 +2380,16 @@ function BillingWorkspaceInner() {
                             {formatWeight3(draftTotals.netCustomerOwesFine)} g
                           </span>
                         </div>
+                        {draftTotals.pastInrOwed > 0 && (
+                          <div className="flex justify-between items-center px-3.5 py-2 border-b border-slate-200 bg-white">
+                            <span className="font-bold text-slate-700 uppercase">
+                              PAST JAMA (INR):
+                            </span>
+                            <span className="font-mono font-semibold text-red-700">
+                              ₹{draftTotals.pastInrOwed.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        )}
                         {draftTotals.inrTotal > 0 && (
                           <div className="flex justify-between items-center px-3.5 py-2 border-b border-slate-200 bg-white">
                             <span className="font-bold text-slate-700 uppercase">
@@ -2384,6 +2397,16 @@ function BillingWorkspaceInner() {
                             </span>
                             <span className="font-mono font-semibold text-slate-900">
                               ₹{draftTotals.inrTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        )}
+                        {draftTotals.grandTotalInrWithPast > 0 && (
+                          <div className="flex justify-between items-center px-3.5 py-2 border-b border-slate-200 bg-slate-100 font-bold">
+                            <span className="text-slate-800 uppercase">
+                              TOTAL DUE (INR):
+                            </span>
+                            <span className="font-mono text-slate-900">
+                              ₹{draftTotals.grandTotalInrWithPast.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                             </span>
                           </div>
                         )}
