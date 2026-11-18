@@ -4106,7 +4106,8 @@ export class ErpDomainService {
         order.id
       );
 
-      // Guard: prevent rolling back a process loss that already has active recovery allocations, making deductions, or write-offs
+      // Guard: prevent rolling back a process loss that already has active recovery allocations, making deductions, or manual write-offs
+      let orderWriteOffs: LossWriteOffEntity[] = [];
       if (lossRecords.length > 0) {
         const [allocs, writeOffs, makingDeds] = await Promise.all([
           tx.listRecoveryAllocations(validActor.organizationId, {}),
@@ -4114,13 +4115,19 @@ export class ErpDomainService {
           tx.listMakingDeductionAllocations(validActor.organizationId, {}),
         ]);
         const lossIds = new Set(lossRecords.map((l) => l.id));
+        orderWriteOffs = writeOffs.filter(
+          (w) => w.status === "ACTIVE" && lossIds.has(w.processLossRecordId)
+        );
+        const hasManualWriteOff = orderWriteOffs.some(
+          (w) =>
+            !w.idempotencyKey.startsWith("lf_adj_") &&
+            !w.idempotencyKey.startsWith("noksi_settled_")
+        );
         const hasActiveSettlement =
           allocs.some(
             (a) => a.status === "ACTIVE" && lossIds.has(a.processLossRecordId)
           ) ||
-          writeOffs.some(
-            (w) => w.status === "ACTIVE" && lossIds.has(w.processLossRecordId)
-          ) ||
+          hasManualWriteOff ||
           makingDeds.some(
             (m) => m.status === "ACTIVE" && lossIds.has(m.processLossRecordId)
           );
@@ -4348,10 +4355,30 @@ export class ErpDomainService {
       }
 
       // 3. Roll back any non-voided Process Loss back to Admin Stock & mark VOIDED
+      const touchRatio = roundTouch(order.touchSnapshot).div(100);
+      for (const w of orderWriteOffs) {
+        await tx.updateLossWriteOff({
+          ...w,
+          status: "REVERSED",
+          reversedAt: now,
+          reversalReason: `Order deleted: ${reason}`,
+        });
+      }
       for (const lr of lossRecords) {
         if (lr.eligibilityStatus !== "VOIDED" && lr.rawMetalLossWeight.gt(ZERO)) {
-          const lossPhys = roundInternal(lr.rawMetalLossWeight);
-          const lossFine = roundInternal(lr.fineEquivalentLossWeight);
+          const lfAdjFine = orderWriteOffs
+            .filter(
+              (w) =>
+                w.processLossRecordId === lr.id &&
+                w.idempotencyKey.startsWith("lf_adj_")
+            )
+            .reduce((s, w) => roundInternal(s.add(w.writtenOffFineWeight)), ZERO);
+          const lossFine = roundInternal(
+            lr.fineEquivalentLossWeight.sub(lfAdjFine)
+          );
+          const lossPhys = lfAdjFine.gt(ZERO)
+            ? roundInternal(lossFine.div(touchRatio))
+            : roundInternal(lr.rawMetalLossWeight);
           const lossExpenseAcct = await this.ensureSystemAccount(
             tx,
             validActor.organizationId,
@@ -4362,55 +4389,57 @@ export class ErpDomainService {
             null
           );
 
-          const jtx = await this.postBalancedJournalEntry(tx, {
-            organizationId: validActor.organizationId,
-            actorId: validActor.userId,
-            transactionType: "CONTROLLED_REVERSAL",
-            businessDate,
-            purity,
-            physicalWeight: lossPhys,
-            fineEquivalentWeight: lossFine,
-            sourceAccount: lossExpenseAcct,
-            destinationAccount: adminPoolAcct,
-            sourceReference: `DEL-BAG-${order.bagNumber}-LOSS-${lr.id}`,
-            reason: `Order Delete Rollback (Process Loss) for Bag #${order.bagNumber} (${lr.processType}): ${reason}`,
-            orderId: order.id,
-            orderProcessId: lr.orderProcessId,
-            karigarId: lr.karigarId,
-            idempotencyKey: `del_loss_${input.idempotencyKey}_${lr.id}`,
-          });
+          if (lossPhys.gt(ZERO)) {
+            const jtx = await this.postBalancedJournalEntry(tx, {
+              organizationId: validActor.organizationId,
+              actorId: validActor.userId,
+              transactionType: "CONTROLLED_REVERSAL",
+              businessDate,
+              purity,
+              physicalWeight: lossPhys,
+              fineEquivalentWeight: lossFine,
+              sourceAccount: lossExpenseAcct,
+              destinationAccount: adminPoolAcct,
+              sourceReference: `DEL-BAG-${order.bagNumber}-LOSS-${lr.id}`,
+              reason: `Order Delete Rollback (Process Loss) for Bag #${order.bagNumber} (${lr.processType}): ${reason}`,
+              orderId: order.id,
+              orderProcessId: lr.orderProcessId,
+              karigarId: lr.karigarId,
+              idempotencyKey: `del_loss_${input.idempotencyKey}_${lr.id}`,
+            });
 
-          await tx.createMetalMovement({
-            id: newId("mmov"),
-            organizationId: validActor.organizationId,
-            orderId: order.id,
-            orderProcessId: lr.orderProcessId,
-            processVisitId: lr.processVisitId,
-            movementType: "REVERSAL",
-            fromProcessType: lr.processType,
-            toProcessType: null,
-            karigarId: lr.karigarId,
-            businessDate,
-            grossWeight: lossPhys,
-            nonGoldWeight: ZERO,
-            netMetalWeight: lossPhys,
-            touchSnapshot: order.touchSnapshot,
-            fineEquivalentWeight: lossFine,
-            journalTransactionId: jtx.id,
-            idempotencyKey: `del_mmov_loss_${input.idempotencyKey}_${lr.id}`,
-            notes: `Rolled back process loss on order delete: ${reason}`,
-            createdById: validActor.userId,
-            createdAt: now,
-          });
+            await tx.createMetalMovement({
+              id: newId("mmov"),
+              organizationId: validActor.organizationId,
+              orderId: order.id,
+              orderProcessId: lr.orderProcessId,
+              processVisitId: lr.processVisitId,
+              movementType: "REVERSAL",
+              fromProcessType: lr.processType,
+              toProcessType: null,
+              karigarId: lr.karigarId,
+              businessDate,
+              grossWeight: lossPhys,
+              nonGoldWeight: ZERO,
+              netMetalWeight: lossPhys,
+              touchSnapshot: order.touchSnapshot,
+              fineEquivalentWeight: lossFine,
+              journalTransactionId: jtx.id,
+              idempotencyKey: `del_mmov_loss_${input.idempotencyKey}_${lr.id}`,
+              notes: `Rolled back process loss on order delete: ${reason}`,
+              createdById: validActor.userId,
+              createdAt: now,
+            });
+
+            rolledBackPhysical = roundInternal(rolledBackPhysical.add(lossPhys));
+            rolledBackFine = roundInternal(rolledBackFine.add(lossFine));
+          }
 
           await tx.updateProcessLossRecord({
             ...lr,
             eligibilityStatus: "VOIDED",
             updatedAt: now,
           });
-
-          rolledBackPhysical = roundInternal(rolledBackPhysical.add(lossPhys));
-          rolledBackFine = roundInternal(rolledBackFine.add(lossFine));
         }
       }
 
