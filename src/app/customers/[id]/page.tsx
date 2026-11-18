@@ -251,6 +251,43 @@ export default function CustomerProfilePage() {
   const [refundReason, setRefundReason] = useState<string>("");
   const [postingRefund, setPostingRefund] = useState(false);
 
+  // Direct Bill Form (without creating orders)
+  interface DirectBillLineDraft {
+    description: string;
+    photoUrl: string;
+    touchPercent: string;
+    grossWeight: string;
+    stoneWeight: string;
+    adWeight: string;
+    wastagePercent: string;
+    makingChargesRupees: string;
+  }
+  const [showDirectBillForm, setShowDirectBillForm] = useState(false);
+  const [directBillDate, setDirectBillDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [directBillNotes, setDirectBillNotes] = useState("");
+  const [directAdminMakingCharge, setDirectAdminMakingCharge] = useState("");
+  const [directAdditionalRupees, setDirectAdditionalRupees] = useState("");
+  const [directAdditionalRupeesNote, setDirectAdditionalRupeesNote] =
+    useState("Additional Charges");
+  const [directApplyAdvance, setDirectApplyAdvance] = useState(false);
+  const [directAdvanceAmount, setDirectAdvanceAmount] = useState("");
+  const [directLines, setDirectLines] = useState<DirectBillLineDraft[]>([
+    {
+      description: "",
+      photoUrl: "",
+      touchPercent: "92",
+      grossWeight: "",
+      stoneWeight: "0",
+      adWeight: "0",
+      wastagePercent: "4",
+      makingChargesRupees: "0",
+    },
+  ]);
+  const [postingDirectBill, setPostingDirectBill] = useState(false);
+  const [uploadingLineIdx, setUploadingLineIdx] = useState<number | null>(null);
+
   const loadWorkspace = useCallback(
     async (force = false) => {
       if (!customerId) return;
@@ -580,11 +617,131 @@ export default function CustomerProfilePage() {
       setSettlingBillId(null);
       setSettleAmountFine("");
       setMessage(`Applied advance to Bill ${bill.billNumber}.`);
-      await loadWorkspace();
+      await loadWorkspace(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to settle bill");
     } finally {
       setPostingSettlement(false);
+    }
+  }
+
+  async function handleDirectPhotoUpload(idx: number, file: File) {
+    setUploadingLineIdx(idx);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/uploads", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Photo upload failed");
+      }
+      setDirectLines((prev) =>
+        prev.map((l, i) => (i === idx ? { ...l, photoUrl: data.url } : l))
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload photo");
+    } finally {
+      setUploadingLineIdx(null);
+    }
+  }
+
+  async function handleCreateDirectBill(e: React.FormEvent) {
+    e.preventDefault();
+    if (!workspace || postingDirectBill) return;
+    setError(null);
+    setMessage(null);
+    setPostingDirectBill(true);
+    try {
+      const validLines = directLines.filter((l) => l.description.trim() !== "");
+      if (validLines.length === 0) {
+        throw new Error("Please enter at least one item name / description.");
+      }
+      const apiLines: Array<Record<string, unknown>> = validLines.map((l) => {
+        const gross = Number(l.grossWeight || 0);
+        const stone = Number(l.stoneWeight || 0);
+        const ad = Number(l.adWeight || 0);
+        const net = Math.max(0, gross + stone + ad);
+        return {
+          lineType: "MANUAL_SERVICE",
+          description: l.description.trim(),
+          photoUrl: l.photoUrl || null,
+          touchPercent: Number(l.touchPercent || 0).toFixed(2),
+          grossWeight: gross.toFixed(3),
+          stoneWeight: stone.toFixed(3),
+          adWeight: ad.toFixed(3),
+          netWeight: net.toFixed(3),
+          makingPercentagePoints: Number(l.wastagePercent || 0).toFixed(2),
+          makingChargesRupees: Number(l.makingChargesRupees || 0).toFixed(2),
+        };
+      });
+
+      if (Number(directAdditionalRupees || 0) > 0) {
+        apiLines.push({
+          lineType: "MANUAL_SERVICE",
+          description:
+            directAdditionalRupeesNote.trim() || "Additional Charges",
+          makingChargesRupees: Number(directAdditionalRupees).toFixed(2),
+        });
+      }
+
+      const res = await fetch("/api/billing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "POST_BILL_AND_DELIVER",
+          customerId,
+          billDate: directBillDate,
+          billType: "MANUAL_COMMERCIAL",
+          notes: directBillNotes.trim() || undefined,
+          adminMakingChargeRupees: Number(directAdminMakingCharge || 0),
+          applyFineAdvance:
+            directApplyAdvance && Number(directAdvanceAmount || 0) > 0,
+          customAdvanceFineAmount:
+            directApplyAdvance && Number(directAdvanceAmount || 0) > 0
+              ? Number(directAdvanceAmount).toFixed(3)
+              : "0",
+          lines: apiLines,
+          idempotencyKey: `direct_bill_${customerId}_${Date.now()}`,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Failed to create direct bill");
+      }
+      setShowDirectBillForm(false);
+      setDirectBillNotes("");
+      setDirectAdminMakingCharge("");
+      setDirectAdditionalRupees("");
+      setDirectApplyAdvance(false);
+      setDirectAdvanceAmount("");
+      setDirectLines([
+        {
+          description: "",
+          photoUrl: "",
+          touchPercent: "92",
+          grossWeight: "",
+          stoneWeight: "0",
+          adWeight: "0",
+          wastagePercent: "4",
+          makingChargesRupees: "0",
+        },
+      ]);
+      setMessage(
+        `Created Direct Bill ${data.billNumber} (${formatWeight3(
+          data.totalFineGold
+        )}g fine, ₹${data.totalCashRupees})`
+      );
+      await loadWorkspace(true);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to create direct bill"
+      );
+    } finally {
+      setPostingDirectBill(false);
     }
   }
 
@@ -971,6 +1128,16 @@ export default function CustomerProfilePage() {
                   ? "Cancel"
                   : "+ Add Advance Gold"}
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDirectBillForm((prev) => !prev);
+                  setShowReceiptForm(false);
+                }}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-medium text-sm cursor-pointer"
+              >
+                {showDirectBillForm ? "Cancel Direct Bill" : "+ Create Direct Bill"}
+              </button>
               {actor.role === "OWNER_ADMIN" &&
                 Number(summaryCards.advanceAvailable) > 0 && (
                   <button
@@ -1110,6 +1277,413 @@ export default function CustomerProfilePage() {
                   {savingConvention ? "Saving..." : "Save Setting"}
                 </button>
               </div>
+            </form>
+          )}
+
+          {/* Direct Bill Form (No Orders Needed) */}
+          {showDirectBillForm && (
+            <form
+              onSubmit={handleCreateDirectBill}
+              className="mt-6 pt-6 border-t border-indigo-200 space-y-4"
+            >
+              <div className="flex flex-wrap justify-between items-center gap-2">
+                <div>
+                  <h3 className="text-base font-bold text-indigo-900">
+                    Create Direct Bill (Without Orders)
+                  </h3>
+                  <p className="text-xs text-gray-600">
+                    Same invoice structure with photo, weights, touch, wastage, and rupees — added directly to customer&apos;s balance.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <label className="font-semibold text-gray-700">Bill Date:</label>
+                  <input
+                    type="date"
+                    value={directBillDate}
+                    onChange={(e) => setDirectBillDate(e.target.value)}
+                    className="px-2.5 py-1.5 border border-gray-300 rounded"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 border-b border-slate-300 text-slate-700">
+                      <th className="p-2 text-left">Photo</th>
+                      <th className="p-2 text-left">Item / Order Name *</th>
+                      <th className="p-2 text-right">Touch %</th>
+                      <th className="p-2 text-right">Gross Wt (g)</th>
+                      <th className="p-2 text-right">+/- Stone (g)</th>
+                      <th className="p-2 text-right">+/- AD (g)</th>
+                      <th className="p-2 text-right">Net Wt (g)</th>
+                      <th className="p-2 text-right">Wastage %</th>
+                      <th className="p-2 text-right">Fine (g)</th>
+                      <th className="p-2 text-right">Rupees (₹)</th>
+                      <th className="p-2 text-center"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {directLines.map((line, idx) => {
+                      const gross = Number(line.grossWeight || 0);
+                      const stone = Number(line.stoneWeight || 0);
+                      const ad = Number(line.adWeight || 0);
+                      const net = Math.max(0, gross + stone + ad);
+                      const touch = Number(line.touchPercent || 0);
+                      const wast = Number(line.wastagePercent || 0);
+                      const fine = (net * (touch + wast)) / 100;
+                      return (
+                        <tr key={idx} className="align-top">
+                          <td className="p-2">
+                            <div className="flex flex-col items-start gap-1">
+                              {line.photoUrl ? (
+                                <img
+                                  src={line.photoUrl}
+                                  alt="Item"
+                                  className="w-10 h-10 object-cover rounded border border-gray-300"
+                                />
+                              ) : null}
+                              <label className="px-2 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded text-[10px] font-semibold cursor-pointer">
+                                {uploadingLineIdx === idx
+                                  ? "Uploading..."
+                                  : line.photoUrl
+                                  ? "Change"
+                                  : "Upload"}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const f = e.target.files?.[0];
+                                    if (f) void handleDirectPhotoUpload(idx, f);
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          </td>
+                          <td className="p-2 min-w-[150px]">
+                            <input
+                              type="text"
+                              value={line.description}
+                              onChange={(e) =>
+                                setDirectLines((prev) =>
+                                  prev.map((l, i) =>
+                                    i === idx ? { ...l, description: e.target.value } : l
+                                  )
+                                )
+                              }
+                              placeholder="e.g. 22K Ring"
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded"
+                              required
+                            />
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={line.touchPercent}
+                              onChange={(e) =>
+                                setDirectLines((prev) =>
+                                  prev.map((l, i) =>
+                                    i === idx ? { ...l, touchPercent: e.target.value } : l
+                                  )
+                                )
+                              }
+                              className="w-16 px-2 py-1.5 border border-gray-300 rounded text-right font-mono"
+                            />
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="number"
+                              step="0.001"
+                              min="0"
+                              value={line.grossWeight}
+                              onChange={(e) =>
+                                setDirectLines((prev) =>
+                                  prev.map((l, i) =>
+                                    i === idx ? { ...l, grossWeight: e.target.value } : l
+                                  )
+                                )
+                              }
+                              placeholder="0.000"
+                              className="w-20 px-2 py-1.5 border border-gray-300 rounded text-right font-mono"
+                            />
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="number"
+                              step="0.001"
+                              value={line.stoneWeight}
+                              onChange={(e) =>
+                                setDirectLines((prev) =>
+                                  prev.map((l, i) =>
+                                    i === idx ? { ...l, stoneWeight: e.target.value } : l
+                                  )
+                                )
+                              }
+                              className="w-20 px-2 py-1.5 border border-amber-300 rounded text-right font-mono"
+                            />
+                            {stone !== 0 && (
+                              <div className="text-[10px] font-mono font-bold text-amber-800 text-right mt-0.5">
+                                {stone > 0 ? "+" : ""}
+                                {Math.round(stone * 1000)} mg
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="number"
+                              step="0.001"
+                              value={line.adWeight}
+                              onChange={(e) =>
+                                setDirectLines((prev) =>
+                                  prev.map((l, i) =>
+                                    i === idx ? { ...l, adWeight: e.target.value } : l
+                                  )
+                                )
+                              }
+                              className="w-20 px-2 py-1.5 border border-amber-300 rounded text-right font-mono"
+                            />
+                            {ad !== 0 && (
+                              <div className="text-[10px] font-mono font-bold text-amber-800 text-right mt-0.5">
+                                {ad > 0 ? "+" : ""}
+                                {Math.round(ad * 1000)} mg
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-2 text-right font-mono font-bold text-emerald-800 pt-3">
+                            {formatWeight3(net)}
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={line.wastagePercent}
+                              onChange={(e) =>
+                                setDirectLines((prev) =>
+                                  prev.map((l, i) =>
+                                    i === idx ? { ...l, wastagePercent: e.target.value } : l
+                                  )
+                                )
+                              }
+                              className="w-16 px-2 py-1.5 border border-gray-300 rounded text-right font-mono"
+                            />
+                          </td>
+                          <td className="p-2 text-right font-mono font-bold text-amber-900 pt-3">
+                            {formatWeight3(fine)}
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={line.makingChargesRupees}
+                              onChange={(e) =>
+                                setDirectLines((prev) =>
+                                  prev.map((l, i) =>
+                                    i === idx
+                                      ? { ...l, makingChargesRupees: e.target.value }
+                                      : l
+                                  )
+                                )
+                              }
+                              className="w-20 px-2 py-1.5 border border-gray-300 rounded text-right font-mono"
+                            />
+                          </td>
+                          <td className="p-2 text-center pt-2.5">
+                            {directLines.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setDirectLines((prev) =>
+                                    prev.filter((_, i) => i !== idx)
+                                  )
+                                }
+                                className="text-red-600 font-bold cursor-pointer"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDirectLines((prev) => [
+                      ...prev,
+                      {
+                        description: "",
+                        photoUrl: "",
+                        touchPercent: "92",
+                        grossWeight: "",
+                        stoneWeight: "0",
+                        adWeight: "0",
+                        wastagePercent: "4",
+                        makingChargesRupees: "0",
+                      },
+                    ])
+                  }
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded text-xs font-semibold cursor-pointer"
+                >
+                  + Add Another Item
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs bg-slate-50 p-3 rounded border border-slate-200">
+                <div>
+                  <label className="block font-semibold text-amber-900 mb-1">
+                    Admin Internal Making Charge (g)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    value={directAdminMakingCharge}
+                    onChange={(e) => setDirectAdminMakingCharge(e.target.value)}
+                    placeholder="0.000"
+                    className="w-full px-2.5 py-1.5 border border-amber-300 rounded bg-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-emerald-900 mb-1">
+                    Additional Rupees (₹)
+                  </label>
+                  <div className="flex gap-1">
+                    <input
+                      type="text"
+                      value={directAdditionalRupeesNote}
+                      onChange={(e) => setDirectAdditionalRupeesNote(e.target.value)}
+                      placeholder="Reason"
+                      className="w-1/2 px-2 py-1.5 border border-emerald-300 rounded bg-white"
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={directAdditionalRupees}
+                      onChange={(e) => setDirectAdditionalRupees(e.target.value)}
+                      placeholder="0.00"
+                      className="w-1/2 px-2 py-1.5 border border-emerald-300 rounded bg-white font-mono"
+                    />
+                  </div>
+                </div>
+                {Number(summaryCards.advanceAvailable) > 0 && (
+                  <div>
+                    <label className="flex items-center gap-1.5 font-semibold text-emerald-800 mb-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={directApplyAdvance}
+                        onChange={(e) => setDirectApplyAdvance(e.target.checked)}
+                      />
+                      <span>Use Advance ({formatWeight3(summaryCards.advanceAvailable)}g)</span>
+                    </label>
+                    {directApplyAdvance && (
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0"
+                        max={summaryCards.advanceAvailable}
+                        value={directAdvanceAmount}
+                        onChange={(e) => setDirectAdvanceAmount(e.target.value)}
+                        placeholder="0.000"
+                        className="w-full px-2.5 py-1.5 border border-emerald-300 rounded bg-white font-mono"
+                      />
+                    )}
+                  </div>
+                )}
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">
+                    Notes (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={directBillNotes}
+                    onChange={(e) => setDirectBillNotes(e.target.value)}
+                    placeholder="Any bill notes..."
+                    className="w-full px-2.5 py-1.5 border border-gray-300 rounded bg-white"
+                  />
+                </div>
+              </div>
+
+              {(() => {
+                const totalBillFine = directLines.reduce((s, l) => {
+                  const net = Math.max(
+                    0,
+                    Number(l.grossWeight || 0) +
+                      Number(l.stoneWeight || 0) +
+                      Number(l.adWeight || 0)
+                  );
+                  return (
+                    s +
+                    (net *
+                      (Number(l.touchPercent || 0) +
+                        Number(l.wastagePercent || 0))) /
+                      100
+                  );
+                }, 0);
+                const totalBillInr =
+                  directLines.reduce(
+                    (s, l) => s + Number(l.makingChargesRupees || 0),
+                    0
+                  ) + Number(directAdditionalRupees || 0);
+                const advUsed = directApplyAdvance
+                  ? Math.min(
+                      Number(summaryCards.advanceAvailable || 0),
+                      Math.max(0, Number(directAdvanceAmount || 0))
+                    )
+                  : 0;
+                const netBillFine = Math.max(0, totalBillFine - advUsed);
+                return (
+                  <div className="flex flex-wrap justify-between items-center gap-3 bg-indigo-50 border border-indigo-200 p-3 rounded text-sm">
+                    <div className="flex flex-wrap gap-4 font-mono">
+                      <span>
+                        Bill Fine:{" "}
+                        <strong className="text-indigo-900">
+                          {formatWeight3(netBillFine)}g
+                        </strong>
+                      </span>
+                      <span>
+                        Past Jama:{" "}
+                        <strong className="text-red-700">
+                          {formatWeight3(summaryCards.goldDue)}g
+                        </strong>
+                      </span>
+                      <span>
+                        Grand Total Fine:{" "}
+                        <strong className="text-blue-900">
+                          {formatWeight3(
+                            Number(summaryCards.goldDue || 0) + netBillFine
+                          )}
+                          g
+                        </strong>
+                      </span>
+                      {totalBillInr > 0 && (
+                        <span>
+                          Rupees:{" "}
+                          <strong>₹{totalBillInr.toFixed(2)}</strong>
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={postingDirectBill}
+                      className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded cursor-pointer"
+                    >
+                      {postingDirectBill
+                        ? "Creating Bill..."
+                        : "Save & Create Direct Bill"}
+                    </button>
+                  </div>
+                );
+              })()}
             </form>
           )}
 

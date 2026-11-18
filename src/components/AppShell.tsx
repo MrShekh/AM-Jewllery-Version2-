@@ -20,6 +20,7 @@ import {
   X,
   Camera,
   CheckCircle2,
+  Flame,
 } from "lucide-react";
 import jsQR from "jsqr";
 import {
@@ -165,6 +166,11 @@ export const AppShell: React.FC<{
   ];
 
   const secondaryItems = [
+    {
+      href: "/casting-loss",
+      label: "Casting Loss",
+      icon: Flame,
+    },
     {
       href: "/loss-checker",
       label: "QR Loss Checker",

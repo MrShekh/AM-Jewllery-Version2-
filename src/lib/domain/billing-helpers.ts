@@ -298,6 +298,10 @@ export function renderBillSnapshotHtml(params: {
         ? `#${escapeHtml(line.bagNumberSnapshot)} - ${escapeHtml(
             line.orderNameSnapshot || line.description
           )} (${line.touchSnapshot.toFixed(2).replace(/\.?0+$/, "")}%)`
+        : line.touchSnapshot.gt(ZERO)
+        ? `${escapeHtml(line.description)} (${line.touchSnapshot
+            .toFixed(2)
+            .replace(/\.?0+$/, "")}%)`
         : escapeHtml(line.description);
 
       const cells: string[] = [];

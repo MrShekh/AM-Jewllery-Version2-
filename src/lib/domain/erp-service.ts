@@ -7667,6 +7667,12 @@ export class ErpDomainService {
       stoneChargeRupees?: DecimalInput;
       rupeeDiscount?: DecimalInput;
       adjustmentReason?: string;
+      photoUrl?: string | null;
+      touchPercent?: DecimalInput;
+      grossWeight?: DecimalInput;
+      stoneWeight?: DecimalInput;
+      adWeight?: DecimalInput;
+      netWeight?: DecimalInput;
     }>,
     excludeBillId?: string
   ): Promise<{
@@ -7879,9 +7885,34 @@ export class ErpDomainService {
             "Description is required on manual bill lines"
           );
         }
+        const gross = roundInternal(inp.grossWeight ?? inp.customGrossWeight ?? ZERO);
+        const stone = roundInternal(inp.stoneWeight ?? inp.customStoneWeight ?? ZERO);
+        const ad = roundInternal(inp.adWeight ?? inp.customAdWeight ?? ZERO);
+        const hasWeightBreakdown =
+          gross.gt(ZERO) ||
+          inp.netWeight !== undefined ||
+          inp.customNetWeight !== undefined;
+        const net = hasWeightBreakdown
+          ? inp.netWeight !== undefined || inp.customNetWeight !== undefined
+            ? roundInternal(inp.netWeight ?? inp.customNetWeight ?? ZERO)
+            : roundInternal(gross.add(stone).add(ad))
+          : ZERO;
+        const touch = roundTouch(inp.touchPercent ?? ZERO);
+        const wastage = roundTouch(inp.makingPercentagePoints ?? ZERO);
+        const metalChargeFine =
+          hasWeightBreakdown && touch.gt(ZERO)
+            ? calculateFineEquivalent(net, touch)
+            : ZERO;
+        const makingChargeFine =
+          hasWeightBreakdown && wastage.gt(ZERO)
+            ? calculateFineEquivalent(net, wastage)
+            : ZERO;
+
         const extraFine = roundInternal(inp.extraFineCharge ?? ZERO);
         const fineDisc = roundInternal(inp.fineDiscount ?? ZERO);
-        const netFine = roundInternal(extraFine.sub(fineDisc));
+        const netFine = roundInternal(
+          metalChargeFine.add(makingChargeFine).add(extraFine).sub(fineDisc)
+        );
         const serviceInr = roundRupees(inp.makingChargesRupees ?? ZERO);
         const stoneInr = roundRupees(inp.stoneChargeRupees ?? ZERO);
         const discInr = roundRupees(inp.rupeeDiscount ?? ZERO);
@@ -7903,20 +7934,20 @@ export class ErpDomainService {
           orderId: null,
           purityId: null,
           bagNumberSnapshot: null,
-          orderNameSnapshot: null,
-          photoUrlSnapshot: null,
+          orderNameSnapshot: hasWeightBreakdown ? desc : null,
+          photoUrlSnapshot: inp.photoUrl?.trim() || null,
           description: desc,
-          grossWeight: ZERO,
-          stoneWeight: ZERO,
-          adKlWeight: ZERO,
-          netWeight: ZERO,
-          touchSnapshot: ZERO,
-          chargeableWeight: ZERO,
+          grossWeight: gross,
+          stoneWeight: stone,
+          adKlWeight: ad,
+          netWeight: net,
+          touchSnapshot: touch,
+          chargeableWeight: net,
           billingBasis: "MANUAL",
-          wastagePercent: ZERO,
-          makingPercentagePoints: ZERO,
-          metalChargeFine: ZERO,
-          makingChargeFine: ZERO,
+          wastagePercent: wastage,
+          makingPercentagePoints: wastage,
+          metalChargeFine,
+          makingChargeFine,
           extraFineCharge: extraFine,
           fineDiscount: fineDisc,
           fineGold: netFine,
@@ -8093,6 +8124,12 @@ export class ErpDomainService {
         stoneChargeRupees?: DecimalInput;
         rupeeDiscount?: DecimalInput;
         adjustmentReason?: string;
+        photoUrl?: string | null;
+        touchPercent?: DecimalInput;
+        grossWeight?: DecimalInput;
+        stoneWeight?: DecimalInput;
+        adWeight?: DecimalInput;
+        netWeight?: DecimalInput;
       }>;
     }
   ): Promise<{ bill: CustomerBillEntity; lines: CustomerBillLineEntity[] }> {
@@ -8251,6 +8288,12 @@ export class ErpDomainService {
         stoneChargeRupees?: DecimalInput;
         rupeeDiscount?: DecimalInput;
         adjustmentReason?: string;
+        photoUrl?: string | null;
+        touchPercent?: DecimalInput;
+        grossWeight?: DecimalInput;
+        stoneWeight?: DecimalInput;
+        adWeight?: DecimalInput;
+        netWeight?: DecimalInput;
       }>;
       idempotencyKey: string;
     }
@@ -10658,6 +10701,12 @@ export class ErpDomainService {
         stoneChargeRupees?: DecimalInput;
         rupeeDiscount?: DecimalInput;
         adjustmentReason?: string;
+        photoUrl?: string | null;
+        touchPercent?: DecimalInput;
+        grossWeight?: DecimalInput;
+        stoneWeight?: DecimalInput;
+        adWeight?: DecimalInput;
+        netWeight?: DecimalInput;
       }>;
     }
   ): Promise<{

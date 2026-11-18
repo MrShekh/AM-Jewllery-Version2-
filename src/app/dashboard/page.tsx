@@ -11,6 +11,7 @@ import {
   Users,
   Coins,
   Scale,
+  Flame,
 } from "lucide-react";
 import {
   fetchActorCached,
@@ -22,6 +23,10 @@ import type {
   AdminMakingChargeSummary,
   MakingChargeFilter,
 } from "@/lib/admin-making-charge";
+import type {
+  CastingLossFilter,
+  CastingLossSummary,
+} from "@/lib/casting-loss";
 import { formatWeight3 } from "@/lib/decimal";
 
 interface DashboardSummary {
@@ -87,6 +92,7 @@ export default function DashboardPage() {
   const cachedDash = getCachedJson<{
     summary: DashboardSummary;
     adminMakingCharge?: AdminMakingChargeSummary | null;
+    castingLoss?: CastingLossSummary | null;
   }>("/api/dashboard");
   const [user, setUser] = useState<AppShellUser | null>(() => getCachedActor());
   const [summary, setSummary] = useState<DashboardSummary | null>(
@@ -96,6 +102,9 @@ export default function DashboardPage() {
     useState<AdminMakingChargeSummary | null>(
       () => cachedDash?.adminMakingCharge || null
     );
+  const [castingLoss, setCastingLoss] = useState<CastingLossSummary | null>(
+    () => cachedDash?.castingLoss || null
+  );
   const [makingFilter, setMakingFilter] = useState<MakingChargeFilter>("today");
   const [makingMonth, setMakingMonth] = useState<string>(() =>
     new Date().toISOString().slice(0, 7)
@@ -104,6 +113,16 @@ export default function DashboardPage() {
     new Date().toISOString().slice(0, 10)
   );
   const [makingTo, setMakingTo] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10)
+  );
+  const [castingFilter, setCastingFilter] = useState<CastingLossFilter>("today");
+  const [castingMonth, setCastingMonth] = useState<string>(() =>
+    new Date().toISOString().slice(0, 7)
+  );
+  const [castingFrom, setCastingFrom] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10)
+  );
+  const [castingTo, setCastingTo] = useState<string>(() =>
     new Date().toISOString().slice(0, 10)
   );
   const [showMakingBills, setShowMakingBills] = useState(false);
@@ -116,13 +135,25 @@ export default function DashboardPage() {
     filter: MakingChargeFilter,
     month: string,
     from: string,
-    to: string
+    to: string,
+    cFilter: CastingLossFilter,
+    cMonth: string,
+    cFrom: string,
+    cTo: string
   ) => {
-    const qs = new URLSearchParams({ makingFilter: filter });
+    const qs = new URLSearchParams({
+      makingFilter: filter,
+      castingFilter: cFilter,
+    });
     if (filter === "month" && month) qs.set("month", month);
     if (filter === "range") {
       if (from) qs.set("from", from);
       if (to) qs.set("to", to);
+    }
+    if (cFilter === "month" && cMonth) qs.set("castingMonth", cMonth);
+    if (cFilter === "range") {
+      if (cFrom) qs.set("castingFrom", cFrom);
+      if (cTo) qs.set("castingTo", cTo);
     }
     return `/api/dashboard?${qs.toString()}`;
   };
@@ -134,17 +165,29 @@ export default function DashboardPage() {
       month?: string;
       from?: string;
       to?: string;
+      castingFilter?: CastingLossFilter;
+      castingMonth?: string;
+      castingFrom?: string;
+      castingTo?: string;
     }
   ) => {
     const activeFilter = override?.filter ?? makingFilter;
     const activeMonth = override?.month ?? makingMonth;
     const activeFrom = override?.from ?? makingFrom;
     const activeTo = override?.to ?? makingTo;
+    const activeCastingFilter = override?.castingFilter ?? castingFilter;
+    const activeCastingMonth = override?.castingMonth ?? castingMonth;
+    const activeCastingFrom = override?.castingFrom ?? castingFrom;
+    const activeCastingTo = override?.castingTo ?? castingTo;
     const dashUrl = buildDashboardUrl(
       activeFilter,
       activeMonth,
       activeFrom,
-      activeTo
+      activeTo,
+      activeCastingFilter,
+      activeCastingMonth,
+      activeCastingFrom,
+      activeCastingTo
     );
 
     if (!summary || force) setLoading(true);
@@ -155,14 +198,20 @@ export default function DashboardPage() {
         fetchCachedJson<{
           summary: DashboardSummary;
           adminMakingCharge?: AdminMakingChargeSummary | null;
+          castingLoss?: CastingLossSummary | null;
           error?: string;
-        }>(dashUrl, { force: force || activeFilter !== "today" }),
+        }>(dashUrl, {
+          force: force || activeFilter !== "today" || activeCastingFilter !== "today",
+        }),
       ]);
       if (actor) setUser(actor);
       if (d.error) throw new Error(d.error);
       setSummary(d.summary);
       if (d.adminMakingCharge !== undefined) {
         setAdminMakingCharge(d.adminMakingCharge);
+      }
+      if (d.castingLoss !== undefined) {
+        setCastingLoss(d.castingLoss);
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load home summary");
@@ -385,6 +434,150 @@ export default function DashboardPage() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Casting Loss Card (Informational Only, Separate from Stock) */}
+            {castingLoss && (
+              <div className="rounded-lg border border-orange-300 bg-white p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href="/casting-loss"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-orange-800 hover:underline"
+                      >
+                        <Flame className="h-3.5 w-3.5 text-orange-600" />
+                        Casting Loss (Fine Converted)
+                      </Link>
+                      <span className="rounded-xs bg-orange-50 border border-orange-200 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700">
+                        Info Only • Separate from Stock
+                      </span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-baseline gap-2.5">
+                      <Link
+                        href="/casting-loss"
+                        className="text-2xl font-bold font-mono tabular-nums text-slate-900 hover:text-orange-700"
+                      >
+                        {formatWeight3(castingLoss.totalFineGrams)} g fine
+                      </Link>
+                      <span className="text-xs font-medium text-slate-600">
+                        ({castingLoss.entryCount}{" "}
+                        {castingLoss.entryCount === 1 ? "entry" : "entries"} •{" "}
+                        {castingLoss.fromDate === castingLoss.toDate
+                          ? castingLoss.fromDate
+                          : `${castingLoss.fromDate} to ${castingLoss.toDate}`}
+                        )
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(
+                      [
+                        ["today", "Today"],
+                        ["month", "Monthly"],
+                        ["range", "Date Range"],
+                      ] as const
+                    ).map(([fId, fLabel]) => (
+                      <button
+                        key={fId}
+                        type="button"
+                        onClick={() => {
+                          setCastingFilter(fId);
+                          void loadData(true, { castingFilter: fId });
+                        }}
+                        className={`px-2.5 py-1 text-xs font-semibold rounded-xs border cursor-pointer ${
+                          castingFilter === fId
+                            ? "bg-orange-600 text-white border-orange-600"
+                            : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                        }`}
+                      >
+                        {fLabel}
+                      </button>
+                    ))}
+
+                    {castingFilter === "month" && (
+                      <input
+                        type="month"
+                        value={castingMonth}
+                        onChange={(e) => {
+                          const nextMonth = e.target.value;
+                          setCastingMonth(nextMonth);
+                          void loadData(true, {
+                            castingFilter: "month",
+                            castingMonth: nextMonth,
+                          });
+                        }}
+                        className="px-2 py-1 text-xs border border-slate-300 rounded-xs bg-white font-mono"
+                      />
+                    )}
+
+                    {castingFilter === "range" && (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="date"
+                          value={castingFrom}
+                          onChange={(e) => {
+                            const nextFrom = e.target.value;
+                            setCastingFrom(nextFrom);
+                            void loadData(true, {
+                              castingFilter: "range",
+                              castingFrom: nextFrom,
+                              castingTo,
+                            });
+                          }}
+                          className="px-2 py-1 text-xs border border-slate-300 rounded-xs bg-white font-mono"
+                        />
+                        <span className="text-xs text-slate-500">to</span>
+                        <input
+                          type="date"
+                          value={castingTo}
+                          onChange={(e) => {
+                            const nextTo = e.target.value;
+                            setCastingTo(nextTo);
+                            void loadData(true, {
+                              castingFilter: "range",
+                              castingFrom,
+                              castingTo: nextTo,
+                            });
+                          }}
+                          className="px-2 py-1 text-xs border border-slate-300 rounded-xs bg-white font-mono"
+                        />
+                      </div>
+                    )}
+
+                    <Link
+                      href="/casting-loss"
+                      className="px-2.5 py-1 text-xs font-semibold text-orange-800 bg-orange-50 border border-orange-200 rounded-xs hover:bg-orange-100"
+                    >
+                      Open Casting Section →
+                    </Link>
+                  </div>
+                </div>
+
+                {castingLoss.byKarat.length > 0 && (
+                  <div className="border-t border-orange-100 pt-2 flex flex-wrap gap-2">
+                    {castingLoss.byKarat.map((k) => (
+                      <Link
+                        key={k.purityId}
+                        href="/casting-loss"
+                        className="inline-flex items-center gap-1.5 rounded-xs border border-orange-200 bg-orange-50/50 px-2.5 py-1 text-xs hover:bg-orange-100/70"
+                      >
+                        <span className="font-bold text-slate-800">
+                          {k.karatLabel}:
+                        </span>
+                        <span className="font-mono text-slate-600">
+                          {formatWeight3(k.totalPhysicalGrams)} g
+                        </span>
+                        <span className="text-slate-400">→</span>
+                        <span className="font-mono font-bold text-orange-700">
+                          {formatWeight3(k.totalFineGrams)} g fine
+                        </span>
+                      </Link>
+                    ))}
                   </div>
                 )}
               </div>
