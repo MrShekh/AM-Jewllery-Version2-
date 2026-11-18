@@ -1633,8 +1633,8 @@ function ProductionRegisterContent() {
     0,
     liveStoneIn + liveAddedStone - savedRemovedStone
   );
-  const liveMetalIn = Math.max(0, Number(grossInWeight || 0) - liveStoneIn);
-  const liveMetalOut = Math.max(0, Number(grossOutWeight || 0) - liveStoneOut);
+  const liveMetalIn = Math.max(0, Number((Number(grossInWeight || 0) - liveStoneIn).toFixed(6)));
+  const liveMetalOut = Math.max(0, Number((Number(grossOutWeight || 0) - liveStoneOut).toFixed(6)));
   const liveExtraMetal = Math.max(0, Number(extraMetalReturnedWeight || 0));
   const liveTouch = selectedOrderRow
     ? Number(selectedOrderRow.order.touchSnapshot || 0)
@@ -1643,23 +1643,27 @@ function ProductionRegisterContent() {
     showExtraTouchOverride && Number(extraMetalTouchPercent || 0) > 0
       ? Number(extraMetalTouchPercent)
       : liveTouch;
-  const liveExtraFine = (liveExtraMetal * liveExtraTouch) / 100;
+  const liveExtraFine = Number(((liveExtraMetal * liveExtraTouch) / 100).toFixed(6));
   const liveCustodyRetained = closeProcess
     ? 0
     : Number(custodyRetainedWeight || 0);
-  const liveFineLoss =
-    liveExtraTouch === liveTouch
+  const liveFineLoss = Number(
+    (liveExtraTouch === liveTouch
       ? ((liveMetalIn - liveMetalOut - liveExtraMetal - liveCustodyRetained) *
           liveTouch) /
         100
       : ((liveMetalIn - liveMetalOut - liveCustodyRetained) * liveTouch) / 100 -
-        liveExtraFine;
-  const liveRawLoss =
-    liveExtraTouch === liveTouch
+        liveExtraFine
+    ).toFixed(6)
+  );
+  const liveRawLoss = Number(
+    (liveExtraTouch === liveTouch
       ? liveMetalIn - liveMetalOut - liveExtraMetal - liveCustodyRetained
       : liveTouch > 0
       ? liveFineLoss / (liveTouch / 100)
-      : 0;
+      : 0
+    ).toFixed(6)
+  );
 
   const allSelectedProcessesClosed =
     selectedOrderRow &&
