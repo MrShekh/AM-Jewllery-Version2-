@@ -7747,7 +7747,8 @@ export class ErpDomainService {
         }
         if (
           order.billingStatus === "BILLED" ||
-          order.deliveryStatus === "DELIVERED" ||
+          (order.deliveryStatus === "DELIVERED" &&
+            order.billingStatus !== "REVERSED") ||
           billedOrderIds.has(order.id)
         ) {
           throw new ConflictError(
@@ -8329,12 +8330,18 @@ export class ErpDomainService {
       let firstJournalTxId: string | null = null;
 
       // Physical delivery: remove actual delivered net metal from FINISHED_GOODS -> CUSTOMER_DELIVERED
+      // (Skip orders already physically DELIVERED whose prior bill was CANCELLED/REVERSED)
       if (billType === "ORDER_DELIVERY" && built.ordersToDeliver.length > 0) {
         const byPurity = new Map<
           string,
           { netWeight: Decimal; fineWeight: Decimal; orders: OrderEntity[] }
         >();
+        const alreadyDeliveredOrders: OrderEntity[] = [];
         for (const item of built.ordersToDeliver) {
+          if (item.order.deliveryStatus === "DELIVERED") {
+            alreadyDeliveredOrders.push(item.order);
+            continue;
+          }
           const cur = byPurity.get(item.order.purityId) ?? {
             netWeight: ZERO,
             fineWeight: ZERO,
@@ -8344,6 +8351,15 @@ export class ErpDomainService {
           cur.fineWeight = roundInternal(cur.fineWeight.add(item.fineWeight));
           cur.orders.push(item.order);
           byPurity.set(item.order.purityId, cur);
+        }
+
+        for (const ord of alreadyDeliveredOrders) {
+          await tx.updateOrder({
+            ...ord,
+            billingStatus: "BILLED",
+            activeBillId: billId,
+            updatedAt: now,
+          });
         }
 
         for (const [purityId, grp] of byPurity.entries()) {
@@ -10888,10 +10904,12 @@ export class ErpDomainService {
             reason = `Incomplete (${o.status})`;
           } else if (
             o.billingStatus === "BILLED" ||
-            o.deliveryStatus === "DELIVERED"
+            (o.deliveryStatus === "DELIVERED" && o.billingStatus !== "REVERSED")
           ) {
             eligibility = "INELIGIBLE";
             reason = "Already billed & delivered";
+          } else if (o.billingStatus === "REVERSED") {
+            reason = "Ready to re-bill (cancelled bill)";
           } else if (
             o.finishedNetMetalWeight === null ||
             o.finishedGrossWeight === null
@@ -13280,6 +13298,24 @@ export class ErpDomainService {
         }
       }
 
+      // C2b. Delivered orders whose bill was cancelled and are awaiting re-billing
+      const deliveredUnbilledOrders = orders.filter(
+        (o) =>
+          o.status === "COMPLETED" &&
+          o.deliveryStatus === "DELIVERED" &&
+          o.billingStatus === "REVERSED"
+      );
+      let deliveredUnbilledFine = ZERO;
+      for (const ord of deliveredUnbilledOrders) {
+        const f = ord.finishedFineWeight
+          ? roundInternal(ord.finishedFineWeight)
+          : calculateFineEquivalent(
+              roundInternal(ord.finishedNetMetalWeight ?? ZERO),
+              ord.touchSnapshot
+            );
+        deliveredUnbilledFine = roundInternal(deliveredUnbilledFine.add(f));
+      }
+
       // C3. Outstanding process losses (unsettled fine loss)
       let outstandingLossFine = ZERO;
       const kMap = new Map(karigars.map((k) => [k.id, k.name]));
@@ -13343,7 +13379,10 @@ export class ErpDomainService {
         adminFineTotal.sub(unusedCustomerGoldCredits)
       );
       const groupCFine = roundInternal(
-        wipFineTotal.add(fgFineTotal).add(outstandingLossFine)
+        wipFineTotal
+          .add(fgFineTotal)
+          .add(outstandingLossFine)
+          .add(deliveredUnbilledFine)
       );
       const totalAccountedGoldFine = roundInternal(
         adminOwnFineTotal.add(customerFineOwed).add(groupCFine)
