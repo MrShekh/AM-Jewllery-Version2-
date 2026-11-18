@@ -1,12 +1,7 @@
 import type { WASocket } from "@whiskeysockets/baileys";
 import path from "path";
 import fs from "fs";
-
-// Load Node-native ESM/CJS modules via dynamic import so Next.js Webpack never bundles ws / baileys / pino
-// and ESM-only sub-dependencies (like whatsapp-rust-bridge) resolve their "import" export condition cleanly
-const nativeImport = new Function("specifier", "return import(specifier)") as (
-  specifier: string
-) => Promise<any>;
+import os from "os";
 
 export interface WhatsAppState {
   status: "disconnected" | "connecting" | "qr" | "connected";
@@ -45,7 +40,9 @@ if (!globalForWa.__amJewelleryWaSingletonV3) {
 }
 
 const singleton = globalForWa.__amJewelleryWaSingletonV3;
-const AUTH_DIR = path.join(process.cwd(), "storage", "whatsapp-auth");
+const AUTH_DIR = process.env.VERCEL
+  ? path.join(os.tmpdir(), "whatsapp-auth")
+  : path.join(process.cwd(), "storage", "whatsapp-auth");
 
 export async function ensureWhatsAppClient(forceReset = false): Promise<WhatsAppState> {
   if (forceReset) {
@@ -84,12 +81,12 @@ export async function ensureWhatsAppClient(forceReset = false): Promise<WhatsApp
   singleton.state.lastError = null;
 
   try {
-    const baileys = await nativeImport("@whiskeysockets/baileys");
+    const baileys: any = await import("@whiskeysockets/baileys");
     const makeWASocket = baileys.makeWASocket || baileys.default;
     const { DisconnectReason, fetchLatestBaileysVersion, useMultiFileAuthState } = baileys;
-    const qrMod = await nativeImport("qrcode");
+    const qrMod: any = await import("qrcode");
     const QRCode = qrMod.default || qrMod;
-    const pinoMod = await nativeImport("pino");
+    const pinoMod: any = await import("pino");
     const pino = pinoMod.default || pinoMod;
 
     fs.mkdirSync(AUTH_DIR, { recursive: true });

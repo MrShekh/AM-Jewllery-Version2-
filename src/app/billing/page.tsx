@@ -789,7 +789,7 @@ function BillingWorkspaceInner() {
           `Posted & Delivered Bill ${data.billNumber} (${formatWeight3(data.totalFineGold)}g fine, ₹${data.totalCashRupees})`
         );
       }
-      await loadWorkspace();
+      await loadWorkspace(true);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Action failed");
     } finally {
@@ -825,7 +825,7 @@ function BillingWorkspaceInner() {
       setGoldAmountReceived("");
       setGoldRef("");
       setGoldNotes("");
-      await loadWorkspace();
+      await loadWorkspace(true);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Failed to record fine gold");
     } finally {
@@ -862,7 +862,7 @@ function BillingWorkspaceInner() {
       setCashAmount("");
       setCashRef("");
       setCashNotes("");
-      await loadWorkspace();
+      await loadWorkspace(true);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Failed to record cash");
     } finally {
@@ -892,7 +892,7 @@ function BillingWorkspaceInner() {
       setSuccessMsg(
         `Bill ${bill.billNumber} cancelled (${data.creditNoteNumber}). Released ${data.releasedAllocations} allocation(s) to customer credit.`
       );
-      await loadWorkspace();
+      await loadWorkspace(true);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Cancel failed");
     }
@@ -929,7 +929,7 @@ function BillingWorkspaceInner() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save template");
       setSuccessMsg("Saved bill template");
-      await loadWorkspace();
+      await loadWorkspace(true);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Save template failed");
     }
@@ -1197,7 +1197,7 @@ function BillingWorkspaceInner() {
     } else {
       setManualAllocAmount("");
       setSuccessMsg("Allocated payment to bill.");
-      await loadWorkspace();
+      await loadWorkspace(true);
     }
   };
 
@@ -1213,7 +1213,7 @@ function BillingWorkspaceInner() {
     if (!res.ok) setErrorMsg(data.error || "Undo failed");
     else {
       setSuccessMsg("Allocation undone.");
-      await loadWorkspace();
+      await loadWorkspace(true);
     }
   };
 
@@ -1229,7 +1229,7 @@ function BillingWorkspaceInner() {
     if (!res.ok) setErrorMsg(data.error || "Reversal failed");
     else {
       setSuccessMsg("Gold receipt reversed.");
-      await loadWorkspace();
+      await loadWorkspace(true);
     }
   };
 
@@ -1245,7 +1245,7 @@ function BillingWorkspaceInner() {
     if (!res.ok) setErrorMsg(data.error || "Reversal failed");
     else {
       setSuccessMsg("Cash receipt reversed.");
-      await loadWorkspace();
+      await loadWorkspace(true);
     }
   };
 
@@ -2113,6 +2113,17 @@ function BillingWorkspaceInner() {
                         >
                           Cancel Edit
                         </button>
+                      </div>
+                    )}
+
+                    {errorMsg && (
+                      <div className="p-2 bg-red-50 border border-red-300 rounded-xs text-[11px] text-red-800 font-semibold">
+                        {errorMsg}
+                      </div>
+                    )}
+                    {successMsg && (
+                      <div className="p-2 bg-emerald-50 border border-emerald-300 rounded-xs text-[11px] text-emerald-800 font-semibold">
+                        {successMsg}
                       </div>
                     )}
 

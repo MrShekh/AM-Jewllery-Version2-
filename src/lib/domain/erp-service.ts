@@ -7867,8 +7867,8 @@ export class ErpDomainService {
           deliveredFineMetal.add(actualDeliveredFine)
         );
       } else {
-        // MANUAL_COMMERCIAL line (does NOT touch stock or invent finished goods)
-        if (billType !== "MANUAL_COMMERCIAL") {
+        // MANUAL_SERVICE (e.g. Additional Rupees on ORDER_DELIVERY) or MANUAL_COMMERCIAL lines
+        if (billType !== "MANUAL_COMMERCIAL" && lineType !== "MANUAL_SERVICE") {
           throw new ValidationError(
             "Manual commercial lines are only allowed on MANUAL_COMMERCIAL bills"
           );
