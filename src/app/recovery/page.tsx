@@ -705,7 +705,7 @@ function RecoveryContent() {
             >
               {karigarSummaries.map((k) => (
                 <option key={k.karigarId} value={k.karigarId}>
-                  {k.karigarName} ({k.karigarCode}) — {Number(k.outstandingFine).toFixed(3)}g fine due
+                  {k.karigarName} ({k.karigarCode}) — {formatWeight3(k.outstandingFine)}g fine due
                 </option>
               ))}
             </select>
@@ -754,10 +754,10 @@ function RecoveryContent() {
                 Gold with karigar
               </div>
               <div className="text-sm font-mono font-bold text-amber-950 mt-0.5 tabular-nums">
-                {activeKarigar.custodyFineWeight} g fine
+                {formatWeight3(activeKarigar.custodyFineWeight)} g fine
               </div>
               <div className="text-[10px] font-mono text-amber-800">
-                {activeKarigar.custodyPhysicalWeight} g physical (Open Custody, Not Loss)
+                {formatWeight3(activeKarigar.custodyPhysicalWeight)} g physical (Open Custody, Not Loss)
               </div>
             </div>
             <div className="bg-blue-50 border border-blue-300 rounded-xs p-2.5">
@@ -765,10 +765,10 @@ function RecoveryContent() {
                 Loss remaining to recover
               </div>
               <div className="text-sm font-mono font-bold text-blue-950 mt-0.5 tabular-nums">
-                {activeKarigar.outstandingFine} g fine
+                {formatWeight3(activeKarigar.outstandingFine)} g fine
               </div>
               <div className="text-[10px] text-blue-800">
-                Unallocated credit: {activeKarigar.unallocatedCreditFine} g fine
+                Unallocated credit: {formatWeight3(activeKarigar.unallocatedCreditFine)} g fine
               </div>
             </div>
             <div className="bg-emerald-50 border border-emerald-300 rounded-xs p-2.5">
@@ -777,11 +777,11 @@ function RecoveryContent() {
               </div>
               <div className="text-sm font-mono font-bold text-emerald-950 mt-0.5 tabular-nums">
                 {periodRecon
-                  ? `${periodRecon.physicalReceiptsFine} g fine`
-                  : `${activeKarigar.recoveredFine} g fine`}
+                  ? `${formatWeight3(periodRecon.physicalReceiptsFine)} g fine`
+                  : `${formatWeight3(activeKarigar.recoveredFine)} g fine`}
               </div>
               <div className="text-[10px] text-emerald-800">
-                Making allowed: {activeKarigar.makingAllowedFine} g fine
+                Making allowed: {formatWeight3(activeKarigar.makingAllowedFine)} g fine
               </div>
             </div>
           </div>
@@ -1334,18 +1334,18 @@ function RecoveryContent() {
                         {formatKolkataDateDDMMYYYY(l.completionDate)}
                       </td>
                       <td className="p-2 text-right">{l.touchPercent}%</td>
-                      <td className="p-2 text-right">{l.originalFineLoss}</td>
+                      <td className="p-2 text-right">{formatWeight3(l.originalFineLoss)}</td>
                       <td className="p-2 text-right text-amber-800">
-                        {l.makingAllowedFine}
+                        {formatWeight3(l.makingAllowedFine)}
                       </td>
                       <td className="p-2 text-right text-emerald-700">
-                        {l.recoveredFine}
+                        {formatWeight3(l.recoveredFine)}
                       </td>
                       <td className="p-2 text-right text-slate-600">
-                        {l.writtenOffFine}
+                        {formatWeight3(l.writtenOffFine)}
                       </td>
                       <td className="p-2 text-right font-bold text-blue-900">
-                        {l.outstandingFine}
+                        {formatWeight3(l.outstandingFine)}
                       </td>
                       {actor.role === "OWNER_ADMIN" && (
                         <td className="p-2 text-right font-sans">
@@ -1688,7 +1688,7 @@ function RecoveryContent() {
                     Opening Outstanding
                   </div>
                   <div className="font-bold">
-                    {periodRecon.openingOutstandingFine}g
+                    {formatWeight3(periodRecon.openingOutstandingFine)}g
                   </div>
                 </div>
                 <div className="p-2 bg-slate-50 border border-slate-200 rounded-xs">
@@ -1696,7 +1696,7 @@ function RecoveryContent() {
                     + Newly Eligible
                   </div>
                   <div className="font-bold">
-                    {periodRecon.newlyEligibleLossFine}g
+                    {formatWeight3(periodRecon.newlyEligibleLossFine)}g
                   </div>
                 </div>
                 <div className="p-2 bg-slate-50 border border-slate-200 rounded-xs">
@@ -1704,7 +1704,7 @@ function RecoveryContent() {
                     − Making Deductions
                   </div>
                   <div className="font-bold text-amber-800">
-                    {periodRecon.makingDeductionsFine}g
+                    {formatWeight3(periodRecon.makingDeductionsFine)}g
                   </div>
                 </div>
                 <div className="p-2 bg-slate-50 border border-slate-200 rounded-xs">
@@ -1712,21 +1712,21 @@ function RecoveryContent() {
                     − Gold Recovered
                   </div>
                   <div className="font-bold text-emerald-700">
-                    {periodRecon.recoveryAllocationsFine}g
+                    {formatWeight3(periodRecon.recoveryAllocationsFine)}g
                   </div>
                 </div>
                 <div className="p-2 bg-slate-50 border border-slate-200 rounded-xs">
                   <div className="text-[10px] font-sans text-slate-500">
                     − Accepted Shortage
                   </div>
-                  <div className="font-bold">{periodRecon.writeOffsFine}g</div>
+                  <div className="font-bold">{formatWeight3(periodRecon.writeOffsFine)}g</div>
                 </div>
                 <div className="p-2 bg-blue-50 border border-blue-300 rounded-xs">
                   <div className="text-[10px] font-sans text-blue-900">
                     = Closing Outstanding
                   </div>
                   <div className="font-bold text-blue-950">
-                    {periodRecon.closingOutstandingFine}g
+                    {formatWeight3(periodRecon.closingOutstandingFine)}g
                   </div>
                 </div>
                 <div className="p-2 bg-emerald-50 border border-emerald-300 rounded-xs">
@@ -1734,7 +1734,7 @@ function RecoveryContent() {
                     Physical Receipts
                   </div>
                   <div className="font-bold text-emerald-950">
-                    {periodRecon.physicalReceiptsFine}g
+                    {formatWeight3(periodRecon.physicalReceiptsFine)}g
                   </div>
                 </div>
               </div>
@@ -1774,10 +1774,10 @@ function RecoveryContent() {
                                 <td className="p-1.5 font-sans font-semibold">
                                   {r.receiptNumber}
                                 </td>
-                                <td className="p-1.5 text-right">{r.recoveredFineWeight}</td>
-                                <td className="p-1.5 text-right">{r.allocatedFineWeight}</td>
+                                <td className="p-1.5 text-right">{formatWeight3(r.recoveredFineWeight)}</td>
+                                <td className="p-1.5 text-right">{formatWeight3(r.allocatedFineWeight)}</td>
                                 <td className="p-1.5 text-right font-bold text-amber-800">
-                                  {r.unallocatedFineWeight}
+                                  {formatWeight3(r.unallocatedFineWeight)}
                                 </td>
                                 <td className="p-1.5 text-right font-sans space-x-2">
                                   {Number(r.unallocatedFineWeight) > 0 && (
