@@ -13479,10 +13479,25 @@ export class ErpDomainService {
       for (const ord of orders) {
         if (ord.status === "COMPLETED" || ord.status === "CANCELLED") continue;
         const ordProcs = processes.filter((p) => p.orderId === ord.id);
-        const custPhys = ordProcs.reduce(
+        let custPhys = ordProcs.reduce(
           (s, p) => roundInternal(s.add(p.custodyMetalWeight)),
           ZERO
         );
+        // When the final stage (e.g. FINAL_POLISH) is CLOSED, process.custodyMetalWeight becomes 0,
+        // but the finished piece (returnedMetalWeight) remains in custody until completeOrder moves it to FINISHED_GOODS.
+        if (custPhys.lte(ZERO) && ord.status === "IN_PROCESS") {
+          const lastClosed = [...ordProcs]
+            .filter((p) => p.status === "CLOSED" && p.returnedMetalWeight.gt(ZERO))
+            .sort(
+              (a, b) =>
+                (a.closedAt?.getTime() || a.updatedAt.getTime()) -
+                (b.closedAt?.getTime() || b.updatedAt.getTime())
+            )
+            .pop();
+          if (lastClosed) {
+            custPhys = roundInternal(lastClosed.returnedMetalWeight);
+          }
+        }
         if (custPhys.gt(ZERO)) {
           const custFine = calculateFineEquivalent(custPhys, ord.touchSnapshot);
           wipPhysicalTotal = roundInternal(wipPhysicalTotal.add(custPhys));
