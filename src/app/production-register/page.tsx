@@ -1291,14 +1291,7 @@ function ProductionRegisterContent() {
             Number(row.original.filingValidIssuedWeight || 0) > 0
               ? row.original.filingValidIssuedWeight
               : p.latestGrossInWeight;
-          const laterStarted = (row.original.processes ?? []).some(
-            (other) =>
-              other.canonicalSequence > p.canonicalSequence &&
-              other.status !== "PENDING"
-          );
           const canAddFilingGold =
-            p.status !== "CLOSED" &&
-            !laterStarted &&
             row.original.order.status !== "COMPLETED" &&
             row.original.order.status !== "CANCELLED";
           return (
@@ -2512,12 +2505,8 @@ function ProductionRegisterContent() {
                                       : `Previous issues (${(selectedOrderRow.filingIssues ?? []).length})`}
                                   </button>
                                 )}
-                                {!selectedOrderRow.processes.some(
-                                  (other) =>
-                                    other.canonicalSequence >
-                                      activeProcessObj.canonicalSequence &&
-                                    other.status !== "PENDING"
-                                ) && (
+                                {selectedOrderRow.order.status !== "COMPLETED" &&
+                                  selectedOrderRow.order.status !== "CANCELLED" && (
                                   <button
                                     type="button"
                                     onClick={openAddFilingGoldForm}

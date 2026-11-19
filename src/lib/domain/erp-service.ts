@@ -1916,21 +1916,6 @@ export class ErpDomainService {
         );
       }
       const filingProc = processes[filingIndex];
-      if (filingProc.status === "CLOSED") {
-        throw new ConflictError(
-          `Filing process for Bag #${order.bagNumber} is already CLOSED. Reopen Filing via controlled correction before issuing additional gold.`
-        );
-      }
-
-      // Block additions if any later process has already started
-      const laterStarted = processes
-        .slice(filingIndex + 1)
-        .some((p) => p.status !== "PENDING");
-      if (laterStarted) {
-        throw new ConflictError(
-          `Cannot add gold to Filing after a later process has started for Bag #${order.bagNumber}. Use a controlled correction workflow.`
-        );
-      }
 
       const resolvedKarigarId =
         input.karigarId?.trim() || filingProc.assignedKarigarId;
@@ -2075,7 +2060,12 @@ export class ErpDomainService {
       const updatedFilingProc = await tx.updateOrderProcess({
         ...filingProc,
         assignedKarigarId: karigar.id,
-        status: filingProc.status === "PENDING" ? "IN_PROGRESS" : filingProc.status,
+        status:
+          filingProc.status === "PENDING"
+            ? "IN_PROGRESS"
+            : filingProc.status === "CLOSED"
+            ? "PARTIAL_RETURN"
+            : filingProc.status,
         issuedMetalWeight: cumulativeFilingIn,
         custodyMetalWeight: roundInternal(
           filingProc.custodyMetalWeight.add(additionalWeight)
@@ -2083,6 +2073,8 @@ export class ErpDomainService {
         latestGrossInWeight: roundInternal(
           cumulativeFilingIn.add(filingProc.carriedStoneInWeight)
         ),
+        closedAt: filingProc.status === "CLOSED" ? null : filingProc.closedAt,
+        closedById: filingProc.status === "CLOSED" ? null : filingProc.closedById,
         updatedAt: now,
       });
 
@@ -2675,8 +2667,11 @@ export class ErpDomainService {
         });
       }
 
-      // Validate that metalIn matches the custody available in this process
-      if (!metalIn.eq(currentProc.custodyMetalWeight)) {
+      // Independent stage weight support:
+      // - Stage 0 (FILING / first process): metalIn must reconcile with issued custody on that stage.
+      // - Subsequent stages (FREE_POLISH, SETTING, NOKSI, FINAL_POLISH): user can enter any metalIn >= 0
+      //   (even if different from the previous stage's OUT, or when splitting/re-working parts).
+      if (procIndex === 0 && !metalIn.eq(currentProc.custodyMetalWeight)) {
         throw new ValidationError(
           `Process ${currentProc.processType} custody mismatch: expected metalIn ${currentProc.custodyMetalWeight.toFixed(
             3
@@ -3459,19 +3454,23 @@ export class ErpDomainService {
             createdAt: now,
           });
 
-          nextProc = await tx.updateOrderProcess({
-            ...rawNext,
-            assignedKarigarId: nextKarigar.id,
-            status: input.nextKarigarId ? "IN_PROGRESS" : "PENDING",
-            issuedMetalWeight: roundInternal(rawNext.issuedMetalWeight.add(metalOut)),
-            custodyMetalWeight: metalOut,
-            carriedStoneInWeight: nonGoldOut,
-            carriedStoneOutWeight: nonGoldOut,
-            latestGrossInWeight: grossOut,
-            closedAt: null,
-            closedById: null,
-            updatedAt: now,
-          });
+          if (rawNext.status === "PENDING" || Boolean(input.nextProcessType)) {
+            nextProc = await tx.updateOrderProcess({
+              ...rawNext,
+              assignedKarigarId: nextKarigar.id,
+              status: input.nextKarigarId ? "IN_PROGRESS" : "PENDING",
+              issuedMetalWeight: roundInternal(rawNext.issuedMetalWeight.add(metalOut)),
+              custodyMetalWeight: metalOut,
+              carriedStoneInWeight: nonGoldOut,
+              carriedStoneOutWeight: nonGoldOut,
+              latestGrossInWeight: grossOut,
+              closedAt: null,
+              closedById: null,
+              updatedAt: now,
+            });
+          } else {
+            nextProc = rawNext;
+          }
         }
       }
 
@@ -4021,26 +4020,6 @@ export class ErpDomainService {
         latestClosedVisit ? latestClosedVisit.metalOutWeight : finalProc.returnedMetalWeight
       );
 
-      const finishedGross =
-        input.finishedGrossWeight !== undefined
-          ? roundInternal(input.finishedGrossWeight)
-          : expectedFinishedGross;
-      const finishedStone =
-        input.finishedStoneWeight !== undefined
-          ? roundInternal(input.finishedStoneWeight)
-          : expectedFinishedStone;
-      const finishedNet = roundInternal(finishedGross.sub(finishedStone));
-
-      if (!finishedNet.eq(expectedFinishedNet)) {
-        throw new ValidationError(
-          `Finished net metal weight (${finishedNet.toFixed(
-            3
-          )}g) does not reconcile with final process metal output (${expectedFinishedNet.toFixed(
-            3
-          )}g)`
-        );
-      }
-
       const lossRecords = await tx.listProcessLossRecords(
         validActor.organizationId,
         order.id
@@ -4055,6 +4034,20 @@ export class ErpDomainService {
           const orderTouchRatio = roundTouch(order.touchSnapshot).div(100);
           return roundInternal(acc.add(v.extraMetalFineWeight.div(orderTouchRatio)));
         }, ZERO);
+
+      const expectedByMassBalance = roundInternal(
+        order.initialIssuedMetalWeight.sub(sumClosedLoss).sub(sumExtraOrderEquiv)
+      );
+
+      const finishedGross =
+        input.finishedGrossWeight !== undefined
+          ? roundInternal(input.finishedGrossWeight)
+          : roundInternal(expectedByMassBalance.add(expectedFinishedStone));
+      const finishedStone =
+        input.finishedStoneWeight !== undefined
+          ? roundInternal(input.finishedStoneWeight)
+          : expectedFinishedStone;
+      const finishedNet = roundInternal(finishedGross.sub(finishedStone));
 
       // Whole-order mass conservation check:
       // initialIssuedMetal == finishedNetMetal + sumClosedLoss + sumExtraReturned
@@ -13953,25 +13946,17 @@ export class ErpDomainService {
       for (const ord of orders) {
         if (ord.status === "COMPLETED" || ord.status === "CANCELLED") continue;
         const ordProcs = processes.filter((p) => p.orderId === ord.id);
-        let custPhys = ordProcs.reduce(
-          (s, p) => roundInternal(s.add(p.custodyMetalWeight)),
+        const sumExtraPhys = ordProcs.reduce(
+          (s, p) => roundInternal(s.add(p.extraReturnedMetalWeight)),
           ZERO
         );
-        // When the final stage (e.g. FINAL_POLISH) is CLOSED, process.custodyMetalWeight becomes 0,
-        // but the finished piece (returnedMetalWeight) remains in custody until completeOrder moves it to FINISHED_GOODS.
-        if (custPhys.lte(ZERO) && ord.status === "IN_PROCESS") {
-          const lastClosed = [...ordProcs]
-            .filter((p) => p.status === "CLOSED" && p.returnedMetalWeight.gt(ZERO))
-            .sort(
-              (a, b) =>
-                (a.closedAt?.getTime() || a.updatedAt.getTime()) -
-                (b.closedAt?.getTime() || b.updatedAt.getTime())
-            )
-            .pop();
-          if (lastClosed) {
-            custPhys = roundInternal(lastClosed.returnedMetalWeight);
-          }
-        }
+        // Order WIP = Total Filing IN - Extra Metal Returned - Total Closed Loss.
+        // Guaranteed exact conservation with zero double counting across independent stages.
+        const custPhys = roundInternal(
+          ord.initialIssuedMetalWeight
+            .sub(sumExtraPhys)
+            .sub(ord.totalRawLossWeight)
+        );
         if (custPhys.gt(ZERO)) {
           const custFine = calculateFineEquivalent(custPhys, ord.touchSnapshot);
           wipPhysicalTotal = roundInternal(wipPhysicalTotal.add(custPhys));

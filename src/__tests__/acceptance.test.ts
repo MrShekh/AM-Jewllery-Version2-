@@ -671,23 +671,22 @@ describe("AM Jewellers ERP V2 - Increment 1 Acceptance & Accounting Suite", () =
     expect(closeRes.visit.rawLossWeight.toFixed(3)).toBe("0.300");
     expect(closeRes.visit.fineLossWeight.toFixed(3)).toBe("0.276");
 
-    // Cannot add gold after Filing is closed without controlled reopening
-    await expect(
-      service.addFilingGoldIssue(admin, {
-        orderId: order.id,
-        additionalWeight: "2.000",
-        idempotencyKey: "fil_issue_after_close",
-      })
-    ).rejects.toThrow(ConflictError);
+    // Additional gold can be added to Filing even after Filing is closed (e.g. extra piece/repair)
+    const addAfterClose = await service.addFilingGoldIssue(admin, {
+      orderId: order.id,
+      additionalWeight: "2.000",
+      idempotencyKey: "fil_issue_after_close",
+    });
+    expect(addAfterClose.cumulativeFilingIn.toFixed(3)).toBe("17.000");
 
-    // Delete order with full gold rollback (14.700g custody + 0.300g loss = 15.000g back to Admin Stock)
+    // Delete order with full gold rollback (16.700g custody + 0.300g loss = 17.000g back to Admin Stock)
     const delRes = await service.deleteOrderWithRollback(admin, {
       orderId: order.id,
       reason: "Customer cancelled mid-process",
       idempotencyKey: "del_mid_1",
     });
     expect(delRes.order.status).toBe("CANCELLED");
-    expect(delRes.rolledBackPhysicalWeight.toFixed(3)).toBe("15.000");
+    expect(delRes.rolledBackPhysicalWeight.toFixed(3)).toBe("17.000");
 
     recon = await service.getDailyReconciliation(admin);
     expect(recon.byPurity[0].adminPhysicalWeight).toBe("100.000");
