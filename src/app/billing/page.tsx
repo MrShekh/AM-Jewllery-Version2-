@@ -14,6 +14,8 @@ import {
   getCachedJson,
 } from "@/lib/client-cache";
 import { formatWeight3 } from "@/lib/decimal";
+import { safeParseJsonResponse } from "@/lib/image-upload";
+import { buildWhatsAppSendUrl } from "@/lib/whatsapp-link";
 
 interface CustomerSummary {
   customerId: string;
@@ -383,7 +385,7 @@ function BillingWorkspaceInner() {
     try {
       const res = await fetch("/api/whatsapp");
       if (res.ok) {
-        const data = await res.json();
+        const data = await safeParseJsonResponse<typeof waState>(res);
         setWaState(data);
         return data;
       }
@@ -816,7 +818,14 @@ function BillingWorkspaceInner() {
           idempotencyKey: `bill_${action}_${Date.now()}`,
         }),
       });
-      const data = await res.json();
+      const data = await safeParseJsonResponse<{
+        error?: string;
+        previewHtml?: string;
+        billId?: string;
+        billNumber?: string;
+        totalFineGold?: string;
+        totalCashRupees?: string;
+      }>(res);
       if (!res.ok) throw new Error(data.error || "Billing action failed");
 
       setLivePreviewHtml(data.previewHtml || null);
@@ -869,7 +878,12 @@ function BillingWorkspaceInner() {
           idempotencyKey: `cgr_${Date.now()}`,
         }),
       });
-      const data = await res.json();
+      const data = await safeParseJsonResponse<{
+        error?: string;
+        receiptNumber?: string;
+        totalFineWeight?: string;
+        unallocatedFineWeight?: string;
+      }>(res);
       if (!res.ok) throw new Error(data.error || "Failed to record fine gold receipt");
       setSuccessMsg(
         `Confirmed ${data.receiptNumber}: Credited ${data.totalFineWeight}g fine (unallocated advance: ${data.unallocatedFineWeight}g)`
@@ -906,7 +920,12 @@ function BillingWorkspaceInner() {
           idempotencyKey: `ccr_${Date.now()}`,
         }),
       });
-      const data = await res.json();
+      const data = await safeParseJsonResponse<{
+        error?: string;
+        receiptNumber?: string;
+        amountRupees?: string;
+        unallocatedRupees?: string;
+      }>(res);
       if (!res.ok) throw new Error(data.error || "Failed to record cash receipt");
       setSuccessMsg(
         `Recorded ${data.receiptNumber}: ₹${data.amountRupees} (unallocated: ₹${data.unallocatedRupees})`
@@ -939,7 +958,11 @@ function BillingWorkspaceInner() {
           reason,
         }),
       });
-      const data = await res.json();
+      const data = await safeParseJsonResponse<{
+        error?: string;
+        creditNoteNumber?: string;
+        releasedAllocations?: number;
+      }>(res);
       if (!res.ok) throw new Error(data.error || "Cancellation failed");
       setSuccessMsg(
         `Bill ${bill.billNumber} cancelled (${data.creditNoteNumber}). Released ${data.releasedAllocations} allocation(s) to customer credit.`
@@ -978,7 +1001,14 @@ function BillingWorkspaceInner() {
           },
         }),
       });
-      const data = await res.json();
+      const data = await safeParseJsonResponse<{
+        error?: string;
+        previewHtml?: string;
+        billId?: string;
+        billNumber?: string;
+        totalFineGold?: string;
+        totalCashRupees?: string;
+      }>(res);
       if (!res.ok) throw new Error(data.error || "Failed to save template");
       setSuccessMsg("Saved bill template");
       await loadWorkspace(true);
@@ -1149,7 +1179,7 @@ function BillingWorkspaceInner() {
         }
 
         if (!baileyReady) {
-          // 1-Click WhatsApp Web/App fallback (works from 9107047429 without QR scan)
+          // 1-Click WhatsApp Web (opens directly in Firefox WhatsApp Web logged into 9107047429)
           let shareUrl = "";
           try {
             const tokRes = await fetch("/api/billing", {
@@ -1157,7 +1187,9 @@ function BillingWorkspaceInner() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ action: "CREATE_SHARE_TOKEN", billId: b.id }),
             });
-            const tokData = await tokRes.json();
+            const tokData = await safeParseJsonResponse<{
+              shareToken?: { url?: string };
+            }>(tokRes);
             if (tokRes.ok && tokData.shareToken?.url) {
               shareUrl = tokData.shareToken.url;
             }
@@ -1178,10 +1210,10 @@ function BillingWorkspaceInner() {
               : []),
             ...(shareUrl ? [`View Bill: ${shareUrl}`] : []),
           ];
-          const waUrl = `https://wa.me/${waDigits}?text=${encodeURIComponent(lines.join("\n"))}`;
+          const waUrl = buildWhatsAppSendUrl(rawPhone, lines.join("\n"));
           window.open(waUrl, "_blank", "noopener,noreferrer");
           setSuccessMsg(
-            `Opened WhatsApp for ${b.customerName} (${waDigits}) & downloaded ${b.billNumber}.pdf — attach or send the link directly!`
+            `Opened WhatsApp Web for ${b.customerName} (${waDigits}) & downloaded ${b.billNumber}.pdf — press Send or drag the PDF into the chat!`
           );
           setShareModalBill(null);
           setSendingWaBillId(null);

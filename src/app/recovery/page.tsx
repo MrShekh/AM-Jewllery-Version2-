@@ -13,6 +13,7 @@ import {
   getTodayBusinessDateString,
 } from "@/lib/date-and-export";
 import { formatWeight3 } from "@/lib/decimal";
+import { buildWhatsAppSendUrl } from "@/lib/whatsapp-link";
 import {
   fetchActorCached,
   fetchCachedJson,
@@ -1600,7 +1601,7 @@ function RecoveryContent() {
                         `Carried Forward: ${formatWeight3(printableSettlement.carriedShortageFine)} g fine`,
                       ];
                       window.open(
-                        `https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`,
+                        buildWhatsAppSendUrl(null, lines.join("\n")),
                         "_blank",
                         "noopener,noreferrer"
                       );

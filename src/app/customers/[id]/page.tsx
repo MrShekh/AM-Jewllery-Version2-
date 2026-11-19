@@ -15,6 +15,7 @@ import {
   compressImageFileForUpload,
   safeParseJsonResponse,
 } from "@/lib/image-upload";
+import { buildWhatsAppSendUrl } from "@/lib/whatsapp-link";
 
 type OrderTab = "ALL" | "ONGOING" | "COMPLETED" | "DELIVERED" | "CANCELLED";
 
@@ -667,13 +668,6 @@ export default function CustomerProfilePage() {
     r: ProfileWorkspace["transactionHistory"]["goldReceipts"][number]
   ) {
     if (!workspace) return;
-    const rawPhone = (workspace.customer.phone || "").replace(/[^0-9]/g, "");
-    const waDigits =
-      rawPhone.length === 10
-        ? `91${rawPhone}`
-        : rawPhone.length >= 10
-        ? rawPhone
-        : "";
     const lines = [
       `*AM Jewellery — Gold Receipt*`,
       `Receipt #: ${r.receiptNumber} (${r.businessDate})`,
@@ -685,9 +679,7 @@ export default function CustomerProfilePage() {
       `Remaining Gold Due: ${formatWeight3(workspace.summaryCards.goldDue)} g fine`,
       ...(r.notes ? [`Note: ${r.notes}`] : []),
     ];
-    const url = waDigits
-      ? `https://wa.me/${waDigits}?text=${encodeURIComponent(lines.join("\n"))}`
-      : `https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`;
+    const url = buildWhatsAppSendUrl(workspace.customer.phone, lines.join("\n"));
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
