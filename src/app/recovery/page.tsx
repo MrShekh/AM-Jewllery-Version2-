@@ -1586,6 +1586,31 @@ function RecoveryContent() {
                 <div className="flex items-center gap-2 no-print">
                   <button
                     type="button"
+                    onClick={() => {
+                      const lines = [
+                        `*AM Jewellery — Karigar Recovery Receipt*`,
+                        `Sheet #: ${printableSettlement.settlementNumber} (${formatKolkataDateDDMMYYYY(
+                          printableSettlement.businessDate
+                        )})`,
+                        `Karigar: ${printableSettlement.karigarName}`,
+                        `Total Loss: ${formatWeight3(printableSettlement.grossSelectedFine)} g fine`,
+                        `Making Allowed: ${formatWeight3(printableSettlement.makingDeductionFine)} g fine`,
+                        `Gold Recovered: ${formatWeight3(printableSettlement.receivedFine)} g fine`,
+                        `Accepted Shortage: ${formatWeight3(printableSettlement.acceptedShortageFine)} g fine`,
+                        `Carried Forward: ${formatWeight3(printableSettlement.carriedShortageFine)} g fine`,
+                      ];
+                      window.open(
+                        `https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`,
+                        "_blank",
+                        "noopener,noreferrer"
+                      );
+                    }}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xs cursor-pointer"
+                  >
+                    Send WhatsApp
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => window.print()}
                     className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white font-semibold rounded-xs cursor-pointer"
                   >

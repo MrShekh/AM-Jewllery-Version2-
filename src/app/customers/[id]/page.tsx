@@ -11,6 +11,10 @@ import {
   getCachedJson,
 } from "@/lib/client-cache";
 import { formatWeight3 } from "@/lib/decimal";
+import {
+  compressImageFileForUpload,
+  safeParseJsonResponse,
+} from "@/lib/image-upload";
 
 type OrderTab = "ALL" | "ONGOING" | "COMPLETED" | "DELIVERED" | "CANCELLED";
 
@@ -632,24 +636,59 @@ export default function CustomerProfilePage() {
     setUploadingLineIdx(idx);
     setError(null);
     try {
+      const compressed = await compressImageFileForUpload(file);
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", compressed);
       const res = await fetch("/api/uploads", {
         method: "POST",
         body: formData,
       });
-      const data = await res.json();
+      const data = await safeParseJsonResponse<{
+        ok?: boolean;
+        publicUrl?: string;
+        url?: string;
+        error?: string;
+      }>(res);
       if (!res.ok || !data.ok) {
         throw new Error(data.error || "Photo upload failed");
       }
+      const uploadedUrl = data.publicUrl || data.url || "";
       setDirectLines((prev) =>
-        prev.map((l, i) => (i === idx ? { ...l, photoUrl: data.url } : l))
+        prev.map((l, i) => (i === idx ? { ...l, photoUrl: uploadedUrl } : l))
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to upload photo");
     } finally {
       setUploadingLineIdx(null);
     }
+  }
+
+  function sendCustomerReceiptWhatsApp(
+    r: ProfileWorkspace["transactionHistory"]["goldReceipts"][number]
+  ) {
+    if (!workspace) return;
+    const rawPhone = (workspace.customer.phone || "").replace(/[^0-9]/g, "");
+    const waDigits =
+      rawPhone.length === 10
+        ? `91${rawPhone}`
+        : rawPhone.length >= 10
+        ? rawPhone
+        : "";
+    const lines = [
+      `*AM Jewellery — Gold Receipt*`,
+      `Receipt #: ${r.receiptNumber} (${r.businessDate})`,
+      `Customer: ${workspace.customer.name}`,
+      `Fine Gold Received: +${formatWeight3(r.totalFineWeight)} g fine`,
+      ...(Number(r.unallocatedFineWeight) > 0
+        ? [`Advance Balance Left: ${formatWeight3(r.unallocatedFineWeight)} g fine`]
+        : []),
+      `Remaining Gold Due: ${formatWeight3(workspace.summaryCards.goldDue)} g fine`,
+      ...(r.notes ? [`Note: ${r.notes}`] : []),
+    ];
+    const url = waDigits
+      ? `https://wa.me/${waDigits}?text=${encodeURIComponent(lines.join("\n"))}`
+      : `https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`;
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   async function handleCreateDirectBill(e: React.FormEvent) {
@@ -2330,6 +2369,13 @@ export default function CustomerProfilePage() {
                     >
                       Print Receipt
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => sendCustomerReceiptWhatsApp(r)}
+                      className="px-2 py-0.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded cursor-pointer"
+                    >
+                      WhatsApp
+                    </button>
                     {actor.role === "OWNER_ADMIN" && r.status === "POSTED" && (
                       <button
                         type="button"
@@ -2787,6 +2833,13 @@ export default function CustomerProfilePage() {
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 print:hidden">
+              <button
+                type="button"
+                onClick={() => sendCustomerReceiptWhatsApp(printingReceipt)}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded cursor-pointer"
+              >
+                Send WhatsApp
+              </button>
               <button
                 type="button"
                 onClick={() => window.print()}

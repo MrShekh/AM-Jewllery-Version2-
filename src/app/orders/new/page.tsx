@@ -19,6 +19,10 @@ import {
 } from "@/lib/domain/types";
 import { getTodayBusinessDateString } from "@/lib/date-and-export";
 import {
+  compressImageFileForUpload,
+  safeParseJsonResponse,
+} from "@/lib/image-upload";
+import {
   fetchActorCached,
   fetchCachedJson,
   getCachedActor,
@@ -134,18 +138,25 @@ export default function NewOrderPage() {
     setUploadingPhoto(true);
     setError(null);
     try {
+      const compressed = await compressImageFileForUpload(file);
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", compressed);
       const res = await fetch("/api/uploads", {
         method: "POST",
         body: fd,
       });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
+      const data = await safeParseJsonResponse<{
+        ok?: boolean;
+        publicUrl?: string;
+        error?: string;
+      }>(res);
+      if (!res.ok || !data.ok || !data.publicUrl) {
         setError(data.error || "Failed to upload photo");
       } else {
         setPhotoUrl(data.publicUrl);
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload photo");
     } finally {
       setUploadingPhoto(false);
     }
