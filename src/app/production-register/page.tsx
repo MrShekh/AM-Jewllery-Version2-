@@ -1102,6 +1102,19 @@ function ProductionRegisterContent() {
     [jobCardTracking]
   );
 
+  const getEffectivePrintCount = useCallback(
+    (r: RegisterOrderRow) => {
+      const tracked = jobCardTracking[r.order.id]?.printCount || 0;
+      if (tracked > 0) return tracked;
+      // Orders already in production (Filing/Polish/Setting/Completed) have already had their job cards printed
+      if (r.order.status !== "CREATED" && r.order.status !== "CANCELLED") {
+        return 1;
+      }
+      return 0;
+    },
+    [jobCardTracking]
+  );
+
   const locationCounts = useMemo(() => {
     const counts = {
       ALL: rows.length,
@@ -1115,8 +1128,7 @@ function ProductionRegisterContent() {
       COMPLETED: 0,
     };
     for (const r of rows) {
-      const tr = jobCardTracking[r.order.id];
-      if ((tr?.printCount || 0) > 0) counts.PRINTED += 1;
+      if (getEffectivePrintCount(r) > 0) counts.PRINTED += 1;
       else counts.NOT_PRINTED += 1;
       const loc = getOrderLocation(r);
       if (loc.type in counts) {
@@ -1124,18 +1136,18 @@ function ProductionRegisterContent() {
       }
     }
     return counts;
-  }, [rows, jobCardTracking, getOrderLocation]);
+  }, [rows, getEffectivePrintCount, getOrderLocation]);
 
   const displayRows = useMemo(() => {
     if (locationFilter === "ALL") return rows;
     if (locationFilter === "NOT_PRINTED") {
-      return rows.filter((r) => (jobCardTracking[r.order.id]?.printCount || 0) === 0);
+      return rows.filter((r) => getEffectivePrintCount(r) === 0);
     }
     if (locationFilter === "PRINTED") {
-      return rows.filter((r) => (jobCardTracking[r.order.id]?.printCount || 0) > 0);
+      return rows.filter((r) => getEffectivePrintCount(r) > 0);
     }
     return rows.filter((r) => getOrderLocation(r).type === locationFilter);
-  }, [rows, locationFilter, jobCardTracking, getOrderLocation]);
+  }, [rows, locationFilter, getEffectivePrintCount, getOrderLocation]);
 
   const markOrdersPrinted = useCallback(async (orderIds: string[]) => {
     if (orderIds.length === 0) return;
@@ -1301,8 +1313,7 @@ function ProductionRegisterContent() {
         header: "Location & Print",
         cell: ({ row }) => {
           const loc = getOrderLocation(row.original);
-          const tr = jobCardTracking[row.original.order.id];
-          const pCount = tr?.printCount || 0;
+          const pCount = getEffectivePrintCount(row.original);
           const locClass =
             loc.type === "COMPLETED"
               ? "bg-emerald-50 text-emerald-800 border-emerald-300"
@@ -1782,6 +1793,7 @@ function ProductionRegisterContent() {
     selectedPrintOrderIds,
     jobCardTracking,
     getOrderLocation,
+    getEffectivePrintCount,
   ]);
 
   const table = useReactTable({
@@ -2412,7 +2424,7 @@ function ProductionRegisterContent() {
                   }}
                   className="px-3 py-1.5 text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white rounded-xs cursor-pointer"
                 >
-                  Print Job Card ({jobCardTracking[selectedOrderRow.order.id]?.printCount || 0}×)
+                  Print Job Card ({getEffectivePrintCount(selectedOrderRow)}×)
                 </button>
                 {actor.role === "OWNER_ADMIN" &&
                   selectedOrderRow.order.status !== "CANCELLED" && (
@@ -2448,7 +2460,7 @@ function ProductionRegisterContent() {
                   {getOrderLocation(selectedOrderRow).label}
                 </span>
                 <span className="px-2 py-0.5 rounded-xs font-mono font-semibold bg-white border border-slate-300 text-slate-700">
-                  Printed: {jobCardTracking[selectedOrderRow.order.id]?.printCount || 0}×
+                  Printed: {getEffectivePrintCount(selectedOrderRow)}×
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
