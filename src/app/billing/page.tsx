@@ -1160,6 +1160,27 @@ function BillingWorkspaceInner() {
       }
 
       const waDigits = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
+      // Open synchronously on click WITHOUT noopener,noreferrer so we can assign waWin.location.href after creating the share link
+      const waWin = window.open("about:blank", "_blank");
+
+      // Create a public shareable bill link (which includes Print / Save PDF)
+      let shareUrl: string | null = null;
+      try {
+        const tokenRes = await fetch("/api/billing", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "CREATE_SHARE_TOKEN", billId: b.id }),
+        });
+        if (tokenRes.ok) {
+          const tokenData = await tokenRes.json().catch(() => null);
+          if (tokenData?.shareToken?.url) {
+            shareUrl = String(tokenData.shareToken.url);
+          }
+        }
+      } catch {
+        // Non-fatal: still send WhatsApp summary even if share token request fails
+      }
+
       const baseLines = [
         `*AM Jewellery — Bill ${b.billNumber}* (${b.billDate})`,
         `Customer: ${b.customerName}`,
@@ -1170,23 +1191,51 @@ function BillingWorkspaceInner() {
         ...(Number(b.totalCashRupees || 0) > 0
           ? [`Cash / Making: ₹${Number(b.totalCashRupees).toFixed(2)}`]
           : []),
+        ...(shareUrl ? [`View / Download Bill PDF: ${shareUrl}`] : []),
       ];
-      const immediateWaUrl = buildWhatsAppSendUrl(rawPhone, baseLines.join("\n"));
+      const waUrl = buildWhatsAppSendUrl(rawPhone, baseLines.join("\n"));
 
-      // Open WhatsApp Web synchronously with the real URL on the click event (no await before window.open)
-      const waWin = window.open(immediateWaUrl, "_blank", "noopener,noreferrer");
+      if (waWin && !waWin.closed) {
+        waWin.location.href = waUrl;
+      }
       setWaFallbackLink({
-        url: immediateWaUrl,
+        url: waUrl,
         label: `Open WhatsApp Chat for ${b.customerName} (${waDigits}) →`,
       });
+
+      // Download the PDF locally AND copy the rendered bill image to clipboard so the user can Ctrl+V paste or attach the PDF in Chrome WhatsApp Web
+      let copiedImageToClipboard = false;
+      try {
+        const canvas = await renderBillToCanvas(b);
+        if (canvas && navigator.clipboard && typeof ClipboardItem !== "undefined") {
+          const pngBlob = await new Promise<Blob | null>((resolve) =>
+            canvas.toBlob((blob) => resolve(blob), "image/png")
+          );
+          if (pngBlob) {
+            await navigator.clipboard.write([
+              new ClipboardItem({ "image/png": pngBlob }),
+            ]);
+            copiedImageToClipboard = true;
+          }
+        }
+      } catch {
+        // Clipboard image copy may be blocked if focus moved to WhatsApp tab; PDF download still runs
+      }
+
+      try {
+        await handleDownloadBillPdf(b);
+      } catch {
+        // Non-fatal
+      }
+
       setSuccessMsg(
         waWin
-          ? `Opened WhatsApp Web for ${b.customerName} (${waDigits}) — just press Enter in WhatsApp Web to send Bill ${b.billNumber}!`
+          ? `Opened WhatsApp Web for ${b.customerName} (${waDigits}) with the Bill Link${copiedImageToClipboard ? " and copied Bill image to clipboard (press Ctrl+V in WhatsApp to attach, or attach the downloaded PDF)" : ` and downloaded ${b.billNumber}.pdf`}. Press Enter in WhatsApp Web to send!`
           : `Popup blocked by browser — click the green "Open WhatsApp Chat" button below to open ${b.customerName}'s chat.`
       );
       setShareModalBill(null);
     },
-    [customerSummaries]
+    [customerSummaries, handleDownloadBillPdf, renderBillToCanvas]
   );
 
   // Poll WhatsApp status while QR modal is open or connecting, and auto-send pending bill once connected
