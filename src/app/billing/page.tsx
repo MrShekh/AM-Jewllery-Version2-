@@ -1155,24 +1155,19 @@ function BillingWorkspaceInner() {
       }
 
       setSendingWaBillId(b.id);
+      // Open window synchronously on click so Firefox never blocks the WhatsApp Web tab after await
+      const waWin = window.open("about:blank", "_blank");
       try {
-        // Check WhatsApp Baileys status; if unavailable (e.g. serverless hosting), use 1-Click WhatsApp Web/App (no QR needed)
+        // Check WhatsApp Baileys status; if unavailable (e.g. serverless hosting), use 1-Click WhatsApp Web (no QR needed)
         let baileyReady = false;
         try {
           const statusRes = await fetch("/api/whatsapp");
-          const statusData = statusRes.ok ? await statusRes.json() : null;
+          const statusData = statusRes.ok
+            ? await safeParseJsonResponse<typeof waState>(statusRes)
+            : null;
           if (statusData) setWaState(statusData);
           if (statusData?.isReady) {
             baileyReady = true;
-          } else {
-            const connectRes = await fetch("/api/whatsapp", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "CONNECT" }),
-            });
-            const connectData = connectRes.ok ? await connectRes.json() : null;
-            if (connectData) setWaState(connectData);
-            if (connectData?.isReady) baileyReady = true;
           }
         } catch {
           baileyReady = false;
@@ -1196,7 +1191,6 @@ function BillingWorkspaceInner() {
           } catch {
             // Optional share link
           }
-          await handleDownloadBillPdf(b);
           const waDigits = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
           const lines = [
             `*AM Jewellery — Bill ${b.billNumber}* (${b.billDate})`,
@@ -1208,17 +1202,22 @@ function BillingWorkspaceInner() {
             ...(Number(b.totalCashRupees || 0) > 0
               ? [`Cash / Making: ₹${Number(b.totalCashRupees).toFixed(2)}`]
               : []),
-            ...(shareUrl ? [`View Bill: ${shareUrl}`] : []),
+            ...(shareUrl ? [`View / Download Bill: ${shareUrl}`] : []),
           ];
           const waUrl = buildWhatsAppSendUrl(rawPhone, lines.join("\n"));
-          window.open(waUrl, "_blank", "noopener,noreferrer");
+          if (waWin) {
+            waWin.location.href = waUrl;
+          } else {
+            window.open(waUrl, "_blank", "noopener,noreferrer");
+          }
           setSuccessMsg(
-            `Opened WhatsApp Web for ${b.customerName} (${waDigits}) & downloaded ${b.billNumber}.pdf — press Send or drag the PDF into the chat!`
+            `Opened WhatsApp Web for ${b.customerName} (${waDigits}) with Bill ${b.billNumber} link!`
           );
           setShareModalBill(null);
           setSendingWaBillId(null);
           return;
         }
+        if (waWin) waWin.close();
 
         // Generate the exact visual PDF of the bill
         const pdfBlob = await buildBillPdfBlob(b);
