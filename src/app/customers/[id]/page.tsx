@@ -240,6 +240,9 @@ export default function CustomerProfilePage() {
 
   // Bill Viewer (Original Issued Document vs Live Status)
   const [viewingBill, setViewingBill] = useState<BillRow | null>(null);
+  const [printingReceipt, setPrintingReceipt] = useState<
+    ProfileWorkspace["transactionHistory"]["goldReceipts"][number] | null
+  >(null);
   const [billViewTab, setBillViewTab] = useState<
     "ISSUED_DOCUMENT" | "LIVE_STATUS"
   >("ISSUED_DOCUMENT");
@@ -2320,6 +2323,13 @@ export default function CustomerProfilePage() {
                   </div>
                   <div className="text-right flex items-center gap-3">
                     <p className="text-xs text-gray-500">{r.businessDate}</p>
+                    <button
+                      type="button"
+                      onClick={() => setPrintingReceipt(r)}
+                      className="px-2 py-0.5 text-xs font-semibold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded cursor-pointer"
+                    >
+                      Print Receipt
+                    </button>
                     {actor.role === "OWNER_ADMIN" && r.status === "POSTED" && (
                       <button
                         type="button"
@@ -2715,6 +2725,86 @@ export default function CustomerProfilePage() {
           </div>
         )}
       </div>
+
+      {/* Printable Customer Payment / Advance Receipt Modal */}
+      {printingReceipt && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 print:static print:bg-white print:p-0">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-300 print:shadow-none print:border-2 print:border-black">
+            <div className="flex items-center justify-between border-b-2 border-slate-800 pb-2">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">
+                  AM Jewellery — Gold Receipt
+                </h3>
+                <p className="text-xs font-mono text-slate-600">
+                  {printingReceipt.receiptNumber} • {printingReceipt.businessDate}
+                </p>
+              </div>
+              <span className="px-2 py-0.5 text-[11px] font-bold rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                {Number(printingReceipt.unallocatedFineWeight) > 0
+                  ? "PAYMENT + ADVANCE"
+                  : "PAYMENT RECEIPT"}
+              </span>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-slate-600">Customer:</span>
+                <span className="font-bold text-slate-900">
+                  {customer.name} ({customer.customerCode})
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Fine Gold Received:</span>
+                <span className="font-mono font-extrabold text-emerald-700 text-base">
+                  +{formatWeight3(printingReceipt.totalFineWeight)} g fine
+                </span>
+              </div>
+              {Number(printingReceipt.totalGrossWeight) > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Gross Weight:</span>
+                  <span className="font-mono text-slate-800">
+                    {formatWeight3(printingReceipt.totalGrossWeight)} g
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-slate-600">Unallocated Advance Left:</span>
+                <span className="font-mono font-semibold text-blue-800">
+                  {formatWeight3(printingReceipt.unallocatedFineWeight)} g fine
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-slate-200 pt-2">
+                <span className="text-slate-600">Customer Remaining Due:</span>
+                <span className="font-mono font-bold text-amber-800">
+                  {formatWeight3(summaryCards.goldDue)} g fine
+                </span>
+              </div>
+              {printingReceipt.notes && (
+                <div className="text-xs text-slate-600 bg-slate-50 p-2 rounded border border-slate-200">
+                  <strong>Note:</strong> {printingReceipt.notes}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 print:hidden">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded cursor-pointer"
+              >
+                Print Receipt
+              </button>
+              <button
+                type="button"
+                onClick={() => setPrintingReceipt(null)}
+                className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-xs font-semibold rounded cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }

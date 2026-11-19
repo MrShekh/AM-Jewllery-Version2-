@@ -746,6 +746,63 @@ function RecoveryContent() {
           </div>
         )}
 
+        {/* 5-Card Loss, Making, Recovered, Pending & Carry Forward Summary */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+          <div className="bg-white border border-slate-300 rounded-xs p-3">
+            <div className="text-[11px] font-bold uppercase text-slate-500">
+              Total Loss
+            </div>
+            <div className="mt-1 text-lg font-extrabold font-mono text-slate-900">
+              {formatWeight3(
+                Number(periodRecon?.openingOutstandingFine || 0) +
+                  Number(periodRecon?.newlyEligibleLossFine || 0)
+              )}{" "}
+              g
+            </div>
+          </div>
+          <div className="bg-white border border-amber-300 rounded-xs p-3">
+            <div className="text-[11px] font-bold uppercase text-amber-800">
+              Making Charge
+            </div>
+            <div className="mt-1 text-lg font-extrabold font-mono text-amber-800">
+              {formatWeight3(periodRecon?.makingDeductionsFine || "0")} g
+            </div>
+          </div>
+          <div className="bg-white border border-emerald-300 rounded-xs p-3">
+            <div className="text-[11px] font-bold uppercase text-emerald-800">
+              Recovered Gold
+            </div>
+            <div className="mt-1 text-lg font-extrabold font-mono text-emerald-700">
+              {formatWeight3(periodRecon?.physicalReceiptsFine || "0")} g
+            </div>
+          </div>
+          <div className="bg-white border border-red-300 rounded-xs p-3">
+            <div className="text-[11px] font-bold uppercase text-red-800">
+              Pending Loss
+            </div>
+            <div className="mt-1 text-lg font-extrabold font-mono text-red-700">
+              {formatWeight3(activeKarigar?.outstandingFine || "0")} g
+            </div>
+          </div>
+          <div className="bg-white border border-blue-300 rounded-xs p-3">
+            <div className="text-[11px] font-bold uppercase text-blue-800">
+              Carry Forward
+            </div>
+            <div className="mt-1 text-lg font-extrabold font-mono text-blue-800">
+              {formatWeight3(
+                settlements
+                  .filter(
+                    (s) =>
+                      s.status === "POSTED" &&
+                      (!karigarFilter || s.karigarId === karigarFilter)
+                  )
+                  .reduce((sum, s) => sum + Number(s.carriedShortageFine || 0), 0)
+              )}{" "}
+              g
+            </div>
+          </div>
+        </div>
+
         {/* 3 Small Summary Cards (Fine Grams) */}
         {activeKarigar && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">

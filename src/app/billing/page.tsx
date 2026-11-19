@@ -1126,28 +1126,66 @@ function BillingWorkspaceInner() {
 
       setSendingWaBillId(b.id);
       try {
-        // Check WhatsApp connection status first
-        const statusRes = await fetch("/api/whatsapp");
-        const statusData = statusRes.ok ? await statusRes.json() : null;
-        if (statusData) setWaState(statusData);
-
-        if (!statusData?.isReady) {
-          // Try auto-reconnecting saved session first before showing QR modal
-          const connectRes = await fetch("/api/whatsapp", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "CONNECT" }),
-          });
-          const connectData = connectRes.ok ? await connectRes.json() : null;
-          if (connectData) setWaState(connectData);
-
-          if (!connectData?.isReady) {
-            // Only open QR modal if no saved session is connected yet
-            setPendingWaBill(b);
-            setWaQrModalOpen(true);
-            setSendingWaBillId(null);
-            return;
+        // Check WhatsApp Baileys status; if unavailable (e.g. serverless hosting), use 1-Click WhatsApp Web/App (no QR needed)
+        let baileyReady = false;
+        try {
+          const statusRes = await fetch("/api/whatsapp");
+          const statusData = statusRes.ok ? await statusRes.json() : null;
+          if (statusData) setWaState(statusData);
+          if (statusData?.isReady) {
+            baileyReady = true;
+          } else {
+            const connectRes = await fetch("/api/whatsapp", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "CONNECT" }),
+            });
+            const connectData = connectRes.ok ? await connectRes.json() : null;
+            if (connectData) setWaState(connectData);
+            if (connectData?.isReady) baileyReady = true;
           }
+        } catch {
+          baileyReady = false;
+        }
+
+        if (!baileyReady) {
+          // 1-Click WhatsApp Web/App fallback (works from 9107047429 without QR scan)
+          let shareUrl = "";
+          try {
+            const tokRes = await fetch("/api/billing", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "CREATE_SHARE_TOKEN", billId: b.id }),
+            });
+            const tokData = await tokRes.json();
+            if (tokRes.ok && tokData.shareToken?.url) {
+              shareUrl = tokData.shareToken.url;
+            }
+          } catch {
+            // Optional share link
+          }
+          await handleDownloadBillPdf(b);
+          const waDigits = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
+          const lines = [
+            `*AM Jewellery — Bill ${b.billNumber}* (${b.billDate})`,
+            `Customer: ${b.customerName}`,
+            `Total Fine Gold: ${formatWeight3(b.totalFineGold)} g`,
+            ...(Number(b.fineOutstanding || 0) > 0
+              ? [`Pending Fine Gold: ${formatWeight3(b.fineOutstanding)} g`]
+              : []),
+            ...(Number(b.totalCashRupees || 0) > 0
+              ? [`Cash / Making: ₹${Number(b.totalCashRupees).toFixed(2)}`]
+              : []),
+            ...(shareUrl ? [`View Bill: ${shareUrl}`] : []),
+          ];
+          const waUrl = `https://wa.me/${waDigits}?text=${encodeURIComponent(lines.join("\n"))}`;
+          window.open(waUrl, "_blank", "noopener,noreferrer");
+          setSuccessMsg(
+            `Opened WhatsApp for ${b.customerName} (${waDigits}) & downloaded ${b.billNumber}.pdf — attach or send the link directly!`
+          );
+          setShareModalBill(null);
+          setSendingWaBillId(null);
+          return;
         }
 
         // Generate the exact visual PDF of the bill

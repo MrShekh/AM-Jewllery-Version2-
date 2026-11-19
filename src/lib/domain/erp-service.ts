@@ -2513,13 +2513,12 @@ export class ErpDomainService {
         );
       }
 
-      // Verify prior selected processes are closed before posting to a downstream process
-      for (let i = 0; i < procIndex; i++) {
-        if (processes[i].status !== "CLOSED") {
-          throw new ValidationError(
-            `Cannot post to ${currentProc.processType} before prior selected process ${processes[i].processType} is CLOSED`
-          );
-        }
+      // Stages are independent: allow posting to any downstream stage (e.g. skipping NOKSI or running after 2nd Filing)
+      // as long as initial metal has already been issued to the order.
+      if (procIndex > 0 && order.initialIssuedMetalWeight.lte(ZERO)) {
+        throw new ValidationError(
+          `Please issue initial gold in ${processes[0].processType} before posting to ${currentProc.processType}`
+        );
       }
 
       const grossIn = roundInternal(input.grossInWeight);

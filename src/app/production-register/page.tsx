@@ -21,6 +21,7 @@ import {
   PROCESS_DISPLAY_LABELS,
   ProcessType,
 } from "@/lib/domain/types";
+import type { JobCardHolderType, JobCardTrackingInfo } from "@/lib/job-card-tracking";
 import {
   formatKolkataDateDDMMYYYY,
   formatMonthKeyLabel,
@@ -244,6 +245,22 @@ function ProductionRegisterContent() {
   const [showSettingCols, setShowSettingCols] = useState(true);
   const [showNoksiCols, setShowNoksiCols] = useState(true);
   const [showFinalPolishCols, setShowFinalPolishCols] = useState(true);
+  const [jobCardTracking, setJobCardTracking] = useState<
+    Record<string, JobCardTrackingInfo>
+  >({});
+  const [locationFilter, setLocationFilter] = useState<
+    | "ALL"
+    | "NOT_PRINTED"
+    | "PRINTED"
+    | "CAD_DESIGNER"
+    | "FILING"
+    | "FREE_POLISH"
+    | "SETTING"
+    | "FINAL_POLISH"
+    | "COMPLETED"
+  >("ALL");
+  const [cadDesignerName, setCadDesignerName] = useState("");
+  const [savingHolder, setSavingHolder] = useState(false);
 
   // Selected Order Drawer
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(
@@ -343,7 +360,15 @@ function ProductionRegisterContent() {
 
       const ordersUrl = `/api/orders?${qs.toString()}`;
 
-      const [resolvedActor, ordData, karData, purData, custData, sheetsData] = await Promise.all([
+      const [
+        resolvedActor,
+        ordData,
+        karData,
+        purData,
+        custData,
+        sheetsData,
+        trackData,
+      ] = await Promise.all([
         fetchActorCached(),
         fetchCachedJson<{
           ok?: boolean;
@@ -378,6 +403,10 @@ function ProductionRegisterContent() {
             closedAt: string;
           }>;
         }>("/api/orders/sheets", { force }),
+        fetchCachedJson<{
+          ok?: boolean;
+          tracking?: Record<string, JobCardTrackingInfo>;
+        }>("/api/orders/tracking", { force }),
       ]);
 
       if (!resolvedActor) {
@@ -407,6 +436,9 @@ function ProductionRegisterContent() {
       }
       if (sheetsData.ok && sheetsData.sheets) {
         setSavedSheets(sheetsData.sheets);
+      }
+      if (trackData?.ok && trackData.tracking) {
+        setJobCardTracking(trackData.tracking);
       }
     },
     [
@@ -1031,6 +1063,127 @@ function ProductionRegisterContent() {
 
 
 
+  const getOrderLocation = useCallback(
+    (r: RegisterOrderRow) => {
+      const tr = jobCardTracking[r.order.id];
+      if (r.order.status === "COMPLETED" || r.order.status === "DELIVERED") {
+        return { type: "COMPLETED" as const, label: "Completed / Ready" };
+      }
+      if (r.order.status === "CANCELLED") {
+        return { type: "OFFICE" as const, label: "Cancelled" };
+      }
+      const activeStage = r.processes.find(
+        (p) => p.status !== "CLOSED" && Number(p.latestGrossInWeight || 0) > 0
+      );
+      if (activeStage) {
+        return {
+          type: activeStage.processType as
+            | "FILING"
+            | "FREE_POLISH"
+            | "SETTING"
+            | "FINAL_POLISH",
+          label: `${PROCESS_DISPLAY_LABELS[activeStage.processType]}: ${
+            activeStage.karigar?.name || "Karigar"
+          }`,
+        };
+      }
+      if (tr?.holderType === "CAD_DESIGNER") {
+        return {
+          type: "CAD_DESIGNER" as const,
+          label: `CAD: ${tr.holderName || "Designer"}`,
+        };
+      }
+      const anyClosed = r.processes.some((p) => p.status === "CLOSED");
+      return {
+        type: "OFFICE" as const,
+        label: anyClosed ? "In Office (Between Stages)" : "In Office (New)",
+      };
+    },
+    [jobCardTracking]
+  );
+
+  const locationCounts = useMemo(() => {
+    const counts = {
+      ALL: rows.length,
+      NOT_PRINTED: 0,
+      PRINTED: 0,
+      CAD_DESIGNER: 0,
+      FILING: 0,
+      FREE_POLISH: 0,
+      SETTING: 0,
+      FINAL_POLISH: 0,
+      COMPLETED: 0,
+    };
+    for (const r of rows) {
+      const tr = jobCardTracking[r.order.id];
+      if ((tr?.printCount || 0) > 0) counts.PRINTED += 1;
+      else counts.NOT_PRINTED += 1;
+      const loc = getOrderLocation(r);
+      if (loc.type in counts) {
+        counts[loc.type as keyof typeof counts] += 1;
+      }
+    }
+    return counts;
+  }, [rows, jobCardTracking, getOrderLocation]);
+
+  const displayRows = useMemo(() => {
+    if (locationFilter === "ALL") return rows;
+    if (locationFilter === "NOT_PRINTED") {
+      return rows.filter((r) => (jobCardTracking[r.order.id]?.printCount || 0) === 0);
+    }
+    if (locationFilter === "PRINTED") {
+      return rows.filter((r) => (jobCardTracking[r.order.id]?.printCount || 0) > 0);
+    }
+    return rows.filter((r) => getOrderLocation(r).type === locationFilter);
+  }, [rows, locationFilter, jobCardTracking, getOrderLocation]);
+
+  const markOrdersPrinted = useCallback(async (orderIds: string[]) => {
+    if (orderIds.length === 0) return;
+    try {
+      const res = await fetch("/api/orders/tracking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "MARK_PRINTED", orderIds }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok && data.tracking) {
+        setJobCardTracking(data.tracking);
+      }
+    } catch {
+      // Non-blocking
+    }
+  }, []);
+
+  const handleAssignJobCardHolder = useCallback(
+    async (
+      orderId: string,
+      holderType: JobCardHolderType,
+      holderName: string
+    ) => {
+      setSavingHolder(true);
+      try {
+        const res = await fetch("/api/orders/tracking", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "SET_HOLDER",
+            orderId,
+            holderType,
+            holderName,
+          }),
+        });
+        const data = await res.json();
+        if (res.ok && data.ok && data.info) {
+          setJobCardTracking((prev) => ({ ...prev, [orderId]: data.info }));
+          setCadDesignerName("");
+        }
+      } finally {
+        setSavingHolder(false);
+      }
+    },
+    []
+  );
+
   // Headless Table Columns (@tanstack/react-table)
   const columns = useMemo<ColumnDef<RegisterOrderRow>[]>(() => {
     const findProc = (r: RegisterOrderRow, pt: ProcessType) =>
@@ -1145,44 +1298,38 @@ function ProductionRegisterContent() {
       },
       {
         id: "status",
-        header: "Status",
+        header: "Location & Print",
         cell: ({ row }) => {
-          const st = row.original.order.status;
-          const openWithKarigar = row.original.processes.some(
-            (p) =>
-              p.status !== "CLOSED" && Number(p.latestGrossInWeight || 0) > 0
-          );
-          const anyClosed = row.original.processes.some(
-            (p) => p.status === "CLOSED"
-          );
-          const displayStatus =
-            st === "COMPLETED"
-              ? "Completed"
-              : st === "DELIVERED"
-              ? "Delivered"
-              : st === "CANCELLED"
-              ? "Cancelled"
-              : st === "CREATED"
-              ? "Not Started"
-              : openWithKarigar
-              ? "With Karigar"
-              : anyClosed
-              ? "Work Received"
-              : "Not Started";
-          const badgeClass =
-            st === "COMPLETED" || st === "DELIVERED"
+          const loc = getOrderLocation(row.original);
+          const tr = jobCardTracking[row.original.order.id];
+          const pCount = tr?.printCount || 0;
+          const locClass =
+            loc.type === "COMPLETED"
               ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-              : st === "IN_PROCESS"
-              ? "bg-blue-50 text-blue-800 border-blue-300"
-              : st === "CREATED"
+              : loc.type === "CAD_DESIGNER"
+              ? "bg-purple-50 text-purple-800 border-purple-300"
+              : loc.type === "OFFICE"
               ? "bg-slate-100 text-slate-700 border-slate-300"
-              : "bg-amber-50 text-amber-800 border-amber-300";
+              : "bg-blue-50 text-blue-800 border-blue-300";
           return (
-            <span
-              className={`px-1.5 py-0.5 text-[10px] font-sans font-semibold border rounded-xs ${badgeClass}`}
-            >
-              {displayStatus}
-            </span>
+            <div className="space-y-1">
+              <span
+                className={`inline-block px-1.5 py-0.5 text-[10px] font-sans font-bold border rounded-xs ${locClass}`}
+              >
+                {loc.label}
+              </span>
+              <div>
+                <span
+                  className={`inline-block px-1.5 py-0.5 text-[10px] font-mono font-semibold rounded-xs border ${
+                    pCount > 0
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-amber-50 text-amber-800 border-amber-300"
+                  }`}
+                >
+                  {pCount > 0 ? `Printed ${pCount}×` : "Not Printed"}
+                </span>
+              </div>
+            </div>
           );
         },
       },
@@ -1633,10 +1780,12 @@ function ProductionRegisterContent() {
     actor?.role,
     rows,
     selectedPrintOrderIds,
+    jobCardTracking,
+    getOrderLocation,
   ]);
 
   const table = useReactTable({
-    data: rows,
+    data: displayRows,
     columns,
     getCoreRowModel: getCoreRowModel(),
   });
@@ -1823,13 +1972,25 @@ function ProductionRegisterContent() {
         {/* Top Toolbar */}
         <div className="bg-white border border-slate-200 rounded-xs p-3 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <h1 className="text-base font-bold text-slate-900">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-base font-extrabold text-slate-900">
                 Production Register
               </h1>
+              <span className="px-2 py-0.5 bg-slate-900 text-white text-xs font-bold font-mono rounded-xs">
+                Total Orders: {rows.length}
+              </span>
+              <span className="text-xs font-medium text-slate-600 font-mono">
+                {new Date().toLocaleString("en-IN", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
               <Link
                 href="/orders/new"
-                className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded-xs"
+                className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold rounded-xs"
               >
                 + New Order
               </Link>
@@ -1839,6 +2000,7 @@ function ProductionRegisterContent() {
                     type="button"
                     onClick={() => {
                       setPrintMode("BATCH");
+                      void markOrdersPrinted(selectedPrintOrderIds);
                       setTimeout(() => window.print(), 250);
                     }}
                     className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xs cursor-pointer"
@@ -1976,6 +2138,36 @@ function ProductionRegisterContent() {
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Quick Job Card Print & Karigar/Designer Location Filter Pills */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100 text-xs">
+            {(
+              [
+                ["ALL", `All (${locationCounts.ALL})`],
+                ["NOT_PRINTED", `Not Printed (${locationCounts.NOT_PRINTED})`],
+                ["PRINTED", `Printed (${locationCounts.PRINTED})`],
+                ["CAD_DESIGNER", `CAD Designer (${locationCounts.CAD_DESIGNER})`],
+                ["FILING", `Filing (${locationCounts.FILING})`],
+                ["FREE_POLISH", `Free Polish (${locationCounts.FREE_POLISH})`],
+                ["SETTING", `Setting (${locationCounts.SETTING})`],
+                ["FINAL_POLISH", `Final Polish (${locationCounts.FINAL_POLISH})`],
+                ["COMPLETED", `Completed (${locationCounts.COMPLETED})`],
+              ] as const
+            ).map(([fKey, fLabel]) => (
+              <button
+                key={fKey}
+                type="button"
+                onClick={() => setLocationFilter(fKey)}
+                className={`px-2.5 py-1 rounded-xs font-bold border cursor-pointer ${
+                  locationFilter === fKey
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                {fLabel}
+              </button>
+            ))}
           </div>
 
           {/* Excel-like Saved Sheet Tabs */}
@@ -2208,11 +2400,12 @@ function ProductionRegisterContent() {
                   type="button"
                   onClick={() => {
                     setPrintMode("SINGLE");
+                    void markOrdersPrinted([selectedOrderRow.order.id]);
                     setTimeout(() => window.print(), 80);
                   }}
                   className="px-3 py-1.5 text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white rounded-xs cursor-pointer"
                 >
-                  Print Job Card
+                  Print Job Card ({jobCardTracking[selectedOrderRow.order.id]?.printCount || 0}×)
                 </button>
                 {actor.role === "OWNER_ADMIN" &&
                   selectedOrderRow.order.status !== "CANCELLED" && (
@@ -2236,6 +2429,56 @@ function ProductionRegisterContent() {
                   className="ml-2 px-2.5 py-1.5 text-xs font-semibold text-slate-600 border border-slate-300 rounded-xs hover:bg-slate-100 cursor-pointer"
                 >
                   Close
+                </button>
+              </div>
+            </div>
+
+            {/* Job Card Location & CAD Designer Tracker Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-xs px-3 py-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-bold text-slate-700">Job Card Location:</span>
+                <span className="px-2 py-0.5 rounded-xs font-bold bg-blue-100 text-blue-900">
+                  {getOrderLocation(selectedOrderRow).label}
+                </span>
+                <span className="px-2 py-0.5 rounded-xs font-mono font-semibold bg-white border border-slate-300 text-slate-700">
+                  Printed: {jobCardTracking[selectedOrderRow.order.id]?.printCount || 0}×
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <input
+                  type="text"
+                  placeholder="CAD Designer name..."
+                  value={cadDesignerName}
+                  onChange={(e) => setCadDesignerName(e.target.value)}
+                  className="px-2 py-1 text-xs bg-white border border-slate-300 rounded-xs w-40"
+                />
+                <button
+                  type="button"
+                  disabled={savingHolder}
+                  onClick={() =>
+                    void handleAssignJobCardHolder(
+                      selectedOrderRow.order.id,
+                      "CAD_DESIGNER",
+                      cadDesignerName.trim() || "CAD Designer"
+                    )
+                  }
+                  className="px-2.5 py-1 bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold rounded-xs cursor-pointer"
+                >
+                  Send to CAD Designer
+                </button>
+                <button
+                  type="button"
+                  disabled={savingHolder}
+                  onClick={() =>
+                    void handleAssignJobCardHolder(
+                      selectedOrderRow.order.id,
+                      "OFFICE",
+                      "Office"
+                    )
+                  }
+                  className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-semibold rounded-xs cursor-pointer"
+                >
+                  Back to Office
                 </button>
               </div>
             </div>
