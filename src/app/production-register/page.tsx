@@ -1849,7 +1849,14 @@ function ProductionRegisterContent() {
   const allSelectedProcessesClosed =
     selectedOrderRow &&
     selectedOrderRow.processes.length > 0 &&
-    selectedOrderRow.processes.every((p) => p.status === "CLOSED");
+    selectedOrderRow.processes.some((p) => p.status === "CLOSED") &&
+    selectedOrderRow.processes.every(
+      (p) =>
+        p.status === "CLOSED" ||
+        (p.status === "PENDING" &&
+          Number(p.custodyMetalWeight || 0) === 0 &&
+          Number(p.latestGrossInWeight || 0) === 0)
+    );
 
   return (
     <AppShell actor={actor}>
