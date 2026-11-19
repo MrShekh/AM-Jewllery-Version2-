@@ -379,6 +379,10 @@ function BillingWorkspaceInner() {
   });
   const [waQrModalOpen, setWaQrModalOpen] = useState(false);
   const [sendingWaBillId, setSendingWaBillId] = useState<string | null>(null);
+  const [waFallbackLink, setWaFallbackLink] = useState<{
+    url: string;
+    label: string;
+  } | null>(null);
   const [pendingWaBill, setPendingWaBill] = useState<BillRow | null>(null);
 
   const refreshWaStatus = useCallback(async () => {
@@ -1140,6 +1144,7 @@ function BillingWorkspaceInner() {
     async (b: BillRow) => {
       setErrorMsg(null);
       setSuccessMsg(null);
+      setWaFallbackLink(null);
 
       const cust = customerSummaries.find(
         (c) =>
@@ -1154,112 +1159,34 @@ function BillingWorkspaceInner() {
         return;
       }
 
-      setSendingWaBillId(b.id);
-      // Open window synchronously on click so Firefox never blocks the WhatsApp Web tab after await
-      const waWin = window.open("about:blank", "_blank");
-      try {
-        // Check WhatsApp Baileys status; if unavailable (e.g. serverless hosting), use 1-Click WhatsApp Web (no QR needed)
-        let baileyReady = false;
-        try {
-          const statusRes = await fetch("/api/whatsapp");
-          const statusData = statusRes.ok
-            ? await safeParseJsonResponse<typeof waState>(statusRes)
-            : null;
-          if (statusData) setWaState(statusData);
-          if (statusData?.isReady) {
-            baileyReady = true;
-          }
-        } catch {
-          baileyReady = false;
-        }
+      const waDigits = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
+      const baseLines = [
+        `*AM Jewellery — Bill ${b.billNumber}* (${b.billDate})`,
+        `Customer: ${b.customerName}`,
+        `Total Fine Gold: ${formatWeight3(b.totalFineGold)} g`,
+        ...(Number(b.fineOutstanding || 0) > 0
+          ? [`Pending Fine Gold: ${formatWeight3(b.fineOutstanding)} g`]
+          : []),
+        ...(Number(b.totalCashRupees || 0) > 0
+          ? [`Cash / Making: ₹${Number(b.totalCashRupees).toFixed(2)}`]
+          : []),
+      ];
+      const immediateWaUrl = buildWhatsAppSendUrl(rawPhone, baseLines.join("\n"));
 
-        if (!baileyReady) {
-          // 1-Click WhatsApp Web (opens directly in Firefox WhatsApp Web logged into 9107047429)
-          let shareUrl = "";
-          try {
-            const tokRes = await fetch("/api/billing", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "CREATE_SHARE_TOKEN", billId: b.id }),
-            });
-            const tokData = await safeParseJsonResponse<{
-              shareToken?: { url?: string };
-            }>(tokRes);
-            if (tokRes.ok && tokData.shareToken?.url) {
-              shareUrl = tokData.shareToken.url;
-            }
-          } catch {
-            // Optional share link
-          }
-          const waDigits = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
-          const lines = [
-            `*AM Jewellery — Bill ${b.billNumber}* (${b.billDate})`,
-            `Customer: ${b.customerName}`,
-            `Total Fine Gold: ${formatWeight3(b.totalFineGold)} g`,
-            ...(Number(b.fineOutstanding || 0) > 0
-              ? [`Pending Fine Gold: ${formatWeight3(b.fineOutstanding)} g`]
-              : []),
-            ...(Number(b.totalCashRupees || 0) > 0
-              ? [`Cash / Making: ₹${Number(b.totalCashRupees).toFixed(2)}`]
-              : []),
-            ...(shareUrl ? [`View / Download Bill: ${shareUrl}`] : []),
-          ];
-          const waUrl = buildWhatsAppSendUrl(rawPhone, lines.join("\n"));
-          if (waWin) {
-            waWin.location.href = waUrl;
-          } else {
-            window.open(waUrl, "_blank", "noopener,noreferrer");
-          }
-          setSuccessMsg(
-            `Opened WhatsApp Web for ${b.customerName} (${waDigits}) with Bill ${b.billNumber} link!`
-          );
-          setShareModalBill(null);
-          setSendingWaBillId(null);
-          return;
-        }
-        if (waWin) waWin.close();
-
-        // Generate the exact visual PDF of the bill
-        const pdfBlob = await buildBillPdfBlob(b);
-        if (!pdfBlob) {
-          throw new Error("Could not render invoice PDF for WhatsApp.");
-        }
-        const pdfBase64 = await blobToBase64(pdfBlob);
-
-        // Send the PDF file directly to customer's WhatsApp number via backend socket
-        const sendRes = await fetch("/api/whatsapp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "SEND_BILL",
-            phone: rawPhone,
-            customerName: b.customerName,
-            billNumber: b.billNumber,
-            pdfBase64,
-          }),
-        });
-        const sendData = await sendRes.json();
-        if (!sendRes.ok) {
-          if (sendData?.needsQr) {
-            setPendingWaBill(b);
-            setWaQrModalOpen(true);
-            await refreshWaStatus();
-            return;
-          }
-          throw new Error(sendData?.error || "Failed to send bill PDF on WhatsApp");
-        }
-
-        setSuccessMsg(
-          `✅ Bill ${b.billNumber} PDF sent directly to ${b.customerName} (${sendData.phone}) on WhatsApp!`
-        );
-        setShareModalBill(null);
-      } catch (err: any) {
-        setErrorMsg(err?.message || "Failed to send PDF on WhatsApp");
-      } finally {
-        setSendingWaBillId(null);
-      }
+      // Open WhatsApp Web synchronously with the real URL on the click event (no await before window.open)
+      const waWin = window.open(immediateWaUrl, "_blank", "noopener,noreferrer");
+      setWaFallbackLink({
+        url: immediateWaUrl,
+        label: `Open WhatsApp Chat for ${b.customerName} (${waDigits}) →`,
+      });
+      setSuccessMsg(
+        waWin
+          ? `Opened WhatsApp Web for ${b.customerName} (${waDigits}) — just press Enter in WhatsApp Web to send Bill ${b.billNumber}!`
+          : `Popup blocked by browser — click the green "Open WhatsApp Chat" button below to open ${b.customerName}'s chat.`
+      );
+      setShareModalBill(null);
     },
-    [customerSummaries, refreshWaStatus]
+    [customerSummaries]
   );
 
   // Poll WhatsApp status while QR modal is open or connecting, and auto-send pending bill once connected
@@ -2368,8 +2295,20 @@ function BillingWorkspaceInner() {
                       </div>
                     )}
                     {successMsg && (
-                      <div className="p-2 bg-emerald-50 border border-emerald-300 rounded-xs text-[11px] text-emerald-800 font-semibold">
-                        {successMsg}
+                      <div className="p-2 bg-emerald-50 border border-emerald-300 rounded-xs text-[11px] text-emerald-800 font-semibold space-y-1.5">
+                        <div>{successMsg}</div>
+                        {waFallbackLink && (
+                          <div>
+                            <a
+                              href={waFallbackLink.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-block px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xs font-bold"
+                            >
+                              {waFallbackLink.label}
+                            </a>
+                          </div>
+                        )}
                       </div>
                     )}
 
