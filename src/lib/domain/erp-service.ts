@@ -9634,13 +9634,20 @@ export class ErpDomainService {
             4
           )}g fine)`;
 
+    const journalPhysicalWeight = physicalWeightProvided
+      ? grossWeight
+      : conv.finePurity.isFineCategory ||
+          conv.finePurity.touchPercent.eq(new Decimal(100))
+        ? creditedFine
+        : grossWeight;
+
     const jtx = await this.postBalancedJournalEntry(tx, {
       organizationId: validActor.organizationId,
       actorId: validActor.userId,
       transactionType: "CUSTOMER_GOLD_RECEIPT",
       businessDate,
       purity: conv.finePurity,
-      physicalWeight: grossWeight,
+      physicalWeight: journalPhysicalWeight,
       fineEquivalentWeight: creditedFine,
       sourceAccount: inflowAcct,
       destinationAccount: destAcct,

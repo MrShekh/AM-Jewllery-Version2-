@@ -123,7 +123,7 @@ describe("Customer Profile, Fine Gold Receipt, Advance, Statement & Corrections 
       (a) => a.accountCode === "ADMIN_POOL_ADMIN_FINE_GOLD"
     )!;
     expect(adminFineAcct.cachedFineBalance.toFixed(4)).toBe("55.0000");
-    expect(adminFineAcct.cachedPhysicalBalance.toFixed(3)).toBe("0.000");
+    expect(adminFineAcct.cachedPhysicalBalance.toFixed(3)).toBe("55.000");
   });
 
   it("Test B (Mode A): Customer has 5g advance; create a new 20g fine bill and apply advance -> 5g applied, remaining bill due = 15g, customer due = 15g, customer advance = 0g, no new stock inflow created", async () => {
