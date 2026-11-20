@@ -15,6 +15,7 @@ import {
   getCachedActor,
   getCachedJson,
 } from "@/lib/client-cache";
+import { StockBoxQrModal } from "@/components/stock/StockBoxQrModal";
 
 interface JournalHistoryRow {
   id: string;
@@ -85,6 +86,8 @@ export default function StockPage() {
   const [showPurityForm, setShowPurityForm] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [showTechDetails, setShowTechDetails] = useState(false);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [qrModalPurityId, setQrModalPurityId] = useState<string | null>(null);
 
   // Form 1: Add / Remove Gold
   const [addDate, setAddDate] = useState(getTodayBusinessDateString());
@@ -615,6 +618,16 @@ export default function StockPage() {
               >
                 {showPurityForm ? "Cancel" : "+ Karat"}
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setQrModalPurityId(null);
+                  setQrModalOpen(true);
+                }}
+                className="px-3 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 font-medium text-sm cursor-pointer"
+              >
+                🏷️ Box QR Labels
+              </button>
             </div>
           )}
         </div>
@@ -664,11 +677,25 @@ export default function StockPage() {
                   Admin&apos;s own fine gold — can be converted to any karat
                 </p>
               </div>
-              {directFinePhysical > 0 && (
-                <span className="text-xs bg-white/20 px-2.5 py-1 rounded-md font-medium">
-                  Physical in Locker: {formatWeight3(directFinePhysical)}g
-                </span>
-              )}
+              <div className="flex flex-col items-end gap-1.5">
+                {directFinePhysical > 0 && (
+                  <span className="text-xs bg-white/20 px-2.5 py-1 rounded-md font-medium">
+                    Physical in Locker: {formatWeight3(directFinePhysical)}g
+                  </span>
+                )}
+                {finePurity && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQrModalPurityId(finePurity.purityId);
+                      setQrModalOpen(true);
+                    }}
+                    className="text-[11px] bg-white/20 hover:bg-white/30 px-2 py-0.5 rounded font-medium cursor-pointer"
+                  >
+                    🏷️ Box QR
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1279,13 +1306,25 @@ export default function StockPage() {
                   key={row.purityId}
                   className="bg-gradient-to-br from-amber-50 to-yellow-100 p-4 rounded-lg border-2 border-amber-200"
                 >
-                  <p className="text-sm text-gray-700 font-medium">
-                    {row.displayLabel}{" "}
-                    <span className="text-xs text-gray-500">
-                      ({Number(row.touchPercent).toFixed(1).replace(/\.0$/, "")}
-                      %)
-                    </span>
-                  </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm text-gray-700 font-medium">
+                      {row.displayLabel}{" "}
+                      <span className="text-xs text-gray-500">
+                        ({Number(row.touchPercent).toFixed(1).replace(/\.0$/, "")}
+                        %)
+                      </span>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQrModalPurityId(row.purityId);
+                        setQrModalOpen(true);
+                      }}
+                      className="text-[11px] px-2 py-0.5 bg-white border border-amber-300 text-amber-900 rounded hover:bg-amber-100 font-medium cursor-pointer"
+                    >
+                      🏷️ QR
+                    </button>
+                  </div>
                   <p className="text-3xl font-bold text-amber-800 mt-1">
                     {formatWeight3(weight)}g
                   </p>
@@ -1580,6 +1619,12 @@ export default function StockPage() {
             </div>
           </div>
         )}
+        <StockBoxQrModal
+          open={qrModalOpen}
+          onClose={() => setQrModalOpen(false)}
+          purities={selectablePurities}
+          initialPurityId={qrModalPurityId}
+        />
       </div>
     </AppShell>
   );
