@@ -11424,13 +11424,20 @@ export class ErpDomainService {
           null
         );
 
+        const reversalPhysicalWeight =
+          line.grossWeight.gt(ZERO)
+            ? line.grossWeight
+            : purity.isFineCategory || purity.touchPercent.eq(new Decimal(100))
+              ? line.fineWeight
+              : line.grossWeight;
+
         await this.postBalancedJournalEntry(tx, {
           organizationId: validActor.organizationId,
           actorId: validActor.userId,
           transactionType: "CUSTOMER_GOLD_RECEIPT_REVERSAL",
           businessDate,
           purity,
-          physicalWeight: line.grossWeight,
+          physicalWeight: reversalPhysicalWeight,
           fineEquivalentWeight: line.fineWeight,
           sourceAccount: adminAcct,
           destinationAccount: inflowAcct,
