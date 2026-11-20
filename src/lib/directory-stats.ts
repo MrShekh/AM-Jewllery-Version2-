@@ -7,11 +7,26 @@ export interface CustomerDirectorySummary {
   totalActiveOrders: number;
   totalCompletedReady: number;
   totalOrdersAllTime: number;
+  totalPendingFineGold: string;
+  totalAdvanceFineGold: string;
+  totalRecoveredFineGold: string;
+  totalPendingCashRupees: string;
 }
 
 export interface CustomerRowStats {
   activeOrders: number;
   totalOrders: number;
+  pendingFineGold: string;
+  advanceFineGold: string;
+  recoveredFineGold: string;
+  pendingCashRupees: string;
+}
+
+export interface CustomerAdvanceBreakdownRow {
+  customerId: string;
+  customerName: string;
+  customerCode: string;
+  advanceFine: string;
 }
 
 export interface KarigarDirectorySummary {
@@ -35,36 +50,134 @@ export async function getCustomerDirectoryStats(organizationId: string): Promise
   summary: CustomerDirectorySummary;
   byCustomer: Record<string, CustomerRowStats>;
 }> {
-  const [totalCustomers, orders] = await Promise.all([
-    prisma.customer.count({ where: { organizationId } }),
-    prisma.order.findMany({
-      where: { organizationId, status: { not: "CANCELLED" } },
-      select: {
-        customerId: true,
-        status: true,
-        deliveryStatus: true,
-      },
-    }),
-  ]);
+  const [totalCustomers, orders, bills, allocations, receipts] =
+    await Promise.all([
+      prisma.customer.count({ where: { organizationId } }),
+      prisma.order.findMany({
+        where: { organizationId, status: { not: "CANCELLED" } },
+        select: {
+          customerId: true,
+          status: true,
+          deliveryStatus: true,
+        },
+      }),
+      prisma.customerBill.findMany({
+        where: { organizationId, status: "POSTED" },
+        select: {
+          id: true,
+          customerId: true,
+          totalFineGold: true,
+          totalCashRupees: true,
+        },
+      }),
+      prisma.customerPaymentAllocation.findMany({
+        where: { organizationId, status: "ACTIVE" },
+        select: {
+          customerId: true,
+          billId: true,
+          allocatedFineWeight: true,
+          allocatedRupees: true,
+        },
+      }),
+      prisma.customerGoldReceipt.findMany({
+        where: { organizationId, status: "POSTED" },
+        select: {
+          customerId: true,
+          totalFineWeight: true,
+          unallocatedFineWeight: true,
+          refundedFineWeight: true,
+        },
+      }),
+    ]);
 
   let totalActiveOrders = 0;
   let totalCompletedReady = 0;
-  const byCustomer: Record<string, CustomerRowStats> = {};
+  const accum: Record<
+    string,
+    {
+      activeOrders: number;
+      totalOrders: number;
+      pendingFine: number;
+      advanceFine: number;
+      recoveredFine: number;
+      pendingCash: number;
+    }
+  > = {};
+
+  const ensureCust = (customerId: string) => {
+    if (!accum[customerId]) {
+      accum[customerId] = {
+        activeOrders: 0,
+        totalOrders: 0,
+        pendingFine: 0,
+        advanceFine: 0,
+        recoveredFine: 0,
+        pendingCash: 0,
+      };
+    }
+    return accum[customerId];
+  };
 
   for (const o of orders) {
-    if (!byCustomer[o.customerId]) {
-      byCustomer[o.customerId] = { activeOrders: 0, totalOrders: 0 };
-    }
-    byCustomer[o.customerId].totalOrders += 1;
+    const entry = ensureCust(o.customerId);
+    entry.totalOrders += 1;
 
     const isDelivered = o.deliveryStatus === "DELIVERED";
     if (!isDelivered) {
       totalActiveOrders += 1;
-      byCustomer[o.customerId].activeOrders += 1;
+      entry.activeOrders += 1;
     }
     if (o.status === "COMPLETED" && !isDelivered) {
       totalCompletedReady += 1;
     }
+  }
+
+  const allocByBill = new Map<string, { fine: number; cash: number }>();
+  for (const a of allocations) {
+    const prev = allocByBill.get(a.billId) || { fine: 0, cash: 0 };
+    prev.fine += Number(a.allocatedFineWeight || 0);
+    prev.cash += Number(a.allocatedRupees || 0);
+    allocByBill.set(a.billId, prev);
+  }
+
+  let totalPendingFineGold = 0;
+  let totalPendingCashRupees = 0;
+  for (const b of bills) {
+    const alloc = allocByBill.get(b.id) || { fine: 0, cash: 0 };
+    const billPendingFine = Math.max(0, Number(b.totalFineGold || 0) - alloc.fine);
+    const billPendingCash = Math.max(0, Number(b.totalCashRupees || 0) - alloc.cash);
+    const entry = ensureCust(b.customerId);
+    entry.pendingFine += billPendingFine;
+    entry.pendingCash += billPendingCash;
+    totalPendingFineGold += billPendingFine;
+    totalPendingCashRupees += billPendingCash;
+  }
+
+  let totalAdvanceFineGold = 0;
+  let totalRecoveredFineGold = 0;
+  for (const r of receipts) {
+    const unalloc = Math.max(0, Number(r.unallocatedFineWeight || 0));
+    const netRecovered = Math.max(
+      0,
+      Number(r.totalFineWeight || 0) - Number(r.refundedFineWeight || 0)
+    );
+    const entry = ensureCust(r.customerId);
+    entry.advanceFine += unalloc;
+    entry.recoveredFine += netRecovered;
+    totalAdvanceFineGold += unalloc;
+    totalRecoveredFineGold += netRecovered;
+  }
+
+  const byCustomer: Record<string, CustomerRowStats> = {};
+  for (const [custId, v] of Object.entries(accum)) {
+    byCustomer[custId] = {
+      activeOrders: v.activeOrders,
+      totalOrders: v.totalOrders,
+      pendingFineGold: v.pendingFine.toFixed(3),
+      advanceFineGold: v.advanceFine.toFixed(3),
+      recoveredFineGold: v.recoveredFine.toFixed(3),
+      pendingCashRupees: v.pendingCash.toFixed(2),
+    };
   }
 
   return {
@@ -73,9 +186,58 @@ export async function getCustomerDirectoryStats(organizationId: string): Promise
       totalActiveOrders,
       totalCompletedReady,
       totalOrdersAllTime: orders.length,
+      totalPendingFineGold: totalPendingFineGold.toFixed(3),
+      totalAdvanceFineGold: totalAdvanceFineGold.toFixed(3),
+      totalRecoveredFineGold: totalRecoveredFineGold.toFixed(3),
+      totalPendingCashRupees: totalPendingCashRupees.toFixed(2),
     },
     byCustomer,
   };
+}
+
+export async function getCustomerAdvanceBreakdown(
+  organizationId: string
+): Promise<CustomerAdvanceBreakdownRow[]> {
+  const receipts = await prisma.customerGoldReceipt.findMany({
+    where: {
+      organizationId,
+      status: "POSTED",
+      unallocatedFineWeight: { gt: 0 },
+    },
+    select: {
+      customerId: true,
+      unallocatedFineWeight: true,
+      customer: { select: { name: true, customerCode: true } },
+    },
+  });
+
+  const map = new Map<
+    string,
+    { customerName: string; customerCode: string; advanceFine: number }
+  >();
+  for (const r of receipts) {
+    const amt = Number(r.unallocatedFineWeight || 0);
+    if (amt <= 0) continue;
+    const prev = map.get(r.customerId);
+    if (prev) {
+      prev.advanceFine += amt;
+    } else {
+      map.set(r.customerId, {
+        customerName: r.customer.name,
+        customerCode: r.customer.customerCode,
+        advanceFine: amt,
+      });
+    }
+  }
+
+  return Array.from(map.entries())
+    .map(([customerId, v]) => ({
+      customerId,
+      customerName: v.customerName,
+      customerCode: v.customerCode,
+      advanceFine: v.advanceFine.toFixed(3),
+    }))
+    .sort((a, b) => Number(b.advanceFine) - Number(a.advanceFine));
 }
 
 export async function getKarigarDirectoryStats(organizationId: string): Promise<{

@@ -2,17 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireServerActor } from "@/lib/auth";
 import { handleApiError } from "@/lib/api-response";
 import { erpService } from "@/lib/domain";
+import { getCustomerAdvanceBreakdown } from "@/lib/directory-stats";
 
 export async function GET(req: NextRequest) {
   try {
     const actor = await requireServerActor();
     const search = req.nextUrl.searchParams.get("search") || undefined;
-    const [reconciliation, history, sales, conversions, dashboard] = await Promise.all([
+    const [
+      reconciliation,
+      history,
+      sales,
+      conversions,
+      dashboard,
+      customerAdvanceBreakdown,
+    ] = await Promise.all([
       erpService.getDailyReconciliation(actor),
       erpService.listJournalHistory(actor, search),
       erpService.listStockSales(actor),
       erpService.listStockConversions(actor),
       erpService.getDashboardSummary(actor),
+      getCustomerAdvanceBreakdown(actor.organizationId),
     ]);
 
     return NextResponse.json({
@@ -21,6 +30,7 @@ export async function GET(req: NextRequest) {
       sales,
       conversions,
       customerAdvanceFine: dashboard.totals.unusedCustomerGoldCredits,
+      customerAdvanceBreakdown,
       history: history.map((h) => ({
         ...h,
         touchSnapshot: h.touchSnapshot.toFixed(4).replace(/\.?0+$/, ""),

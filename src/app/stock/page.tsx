@@ -16,6 +16,7 @@ import {
   getCachedJson,
 } from "@/lib/client-cache";
 import { StockBoxQrModal } from "@/components/stock/StockBoxQrModal";
+import type { CustomerAdvanceBreakdownRow } from "@/lib/directory-stats";
 
 interface JournalHistoryRow {
   id: string;
@@ -126,6 +127,10 @@ export default function StockPage() {
     useState<JournalHistoryRow | null>(null);
   const [reversalReason, setReversalReason] = useState("");
   const [customerAdvanceFine, setCustomerAdvanceFine] = useState<number>(0);
+  const [customerAdvanceBreakdown, setCustomerAdvanceBreakdown] = useState<
+    CustomerAdvanceBreakdownRow[]
+  >([]);
+  const [showAdvanceBreakdown, setShowAdvanceBreakdown] = useState(false);
 
   const loadData = useCallback(
     async (force = false) => {
@@ -137,6 +142,7 @@ export default function StockPage() {
           history?: JournalHistoryRow[];
           sales?: StockSaleRow[];
           customerAdvanceFine?: string;
+          customerAdvanceBreakdown?: CustomerAdvanceBreakdownRow[];
         }>("/api/stock", { force }),
       ]);
       if (!resolvedActor) {
@@ -150,6 +156,7 @@ export default function StockPage() {
         setHistory(stkData.history || []);
         setSales(stkData.sales || []);
         setCustomerAdvanceFine(Number(stkData.customerAdvanceFine || 0));
+        setCustomerAdvanceBreakdown(stkData.customerAdvanceBreakdown || []);
 
         const purities: PurityStockRow[] = stkData.reconciliation?.byPurity || [];
         const nonFinePurities = purities.filter(
@@ -701,13 +708,48 @@ export default function StockPage() {
 
           {/* Amber Card: Customer Advance (Held for Future Orders) */}
           <div className="bg-gradient-to-br from-amber-500 to-orange-700 text-white p-6 rounded-xl shadow-lg">
-            <p className="text-sm opacity-90">Customer Advance (Fine Gold)</p>
-            <p className="text-3xl font-bold mt-1">
-              {formatWeight3(customerAdvanceFine)}g
-            </p>
+            <div className="flex flex-wrap justify-between items-start gap-2">
+              <div>
+                <p className="text-sm opacity-90">Customer Advance (Fine Gold)</p>
+                <p className="text-3xl font-bold mt-1">
+                  {formatWeight3(customerAdvanceFine)}g
+                </p>
+              </div>
+              {customerAdvanceBreakdown.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanceBreakdown((prev) => !prev)}
+                  className="text-xs bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded-md font-medium cursor-pointer"
+                >
+                  {showAdvanceBreakdown
+                    ? "Hide Customers ▲"
+                    : `View Customers (${customerAdvanceBreakdown.length}) ▼`}
+                </button>
+              )}
+            </div>
             <p className="text-xs opacity-80 mt-2">
               Unused customer advance gold held in locker for future orders (excluded from Admin Stock until billed)
             </p>
+            {showAdvanceBreakdown && customerAdvanceBreakdown.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-white/25 space-y-1.5 max-h-44 overflow-y-auto">
+                {customerAdvanceBreakdown.map((row) => (
+                  <div
+                    key={row.customerId}
+                    className="flex items-center justify-between text-xs bg-black/15 px-2.5 py-1.5 rounded"
+                  >
+                    <a
+                      href={`/customers/${row.customerId}`}
+                      className="font-medium hover:underline truncate mr-2"
+                    >
+                      {row.customerName}
+                    </a>
+                    <span className="font-mono font-bold whitespace-nowrap">
+                      {row.advanceFine} g
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

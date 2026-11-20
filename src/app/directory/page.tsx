@@ -77,6 +77,10 @@ function DirectoryContent() {
         totalActiveOrders: 0,
         totalCompletedReady: 0,
         totalOrdersAllTime: 0,
+        totalPendingFineGold: "0.000",
+        totalAdvanceFineGold: "0.000",
+        totalRecoveredFineGold: "0.000",
+        totalPendingCashRupees: "0.00",
       }
   );
   const [byCustomer, setByCustomer] = useState<Record<string, CustomerRowStats>>(
@@ -102,6 +106,9 @@ function DirectoryContent() {
   );
 
   const [searchCustomer, setSearchCustomer] = useState("");
+  const [customerFilter, setCustomerFilter] = useState<
+    "ALL" | "PENDING" | "ADVANCE"
+  >("ALL");
   const [searchKarigar, setSearchKarigar] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -236,14 +243,24 @@ function DirectoryContent() {
 
   const filteredCustomers = useMemo(() => {
     const q = searchCustomer.trim().toLowerCase();
-    if (!q) return customers;
-    return customers.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.customerCode.toLowerCase().includes(q) ||
-        (c.phone || "").toLowerCase().includes(q)
-    );
-  }, [customers, searchCustomer]);
+    return customers.filter((c) => {
+      if (q) {
+        const matchesQuery =
+          c.name.toLowerCase().includes(q) ||
+          c.customerCode.toLowerCase().includes(q) ||
+          (c.phone || "").toLowerCase().includes(q);
+        if (!matchesQuery) return false;
+      }
+      const stats = byCustomer[c.id];
+      if (customerFilter === "PENDING") {
+        return Number(stats?.pendingFineGold || 0) > 0 || Number(stats?.pendingCashRupees || 0) > 0;
+      }
+      if (customerFilter === "ADVANCE") {
+        return Number(stats?.advanceFineGold || 0) > 0;
+      }
+      return true;
+    });
+  }, [customers, searchCustomer, customerFilter, byCustomer]);
 
   const filteredKarigars = useMemo(() => {
     const q = searchKarigar.trim().toLowerCase();
@@ -423,7 +440,7 @@ function DirectoryContent() {
 
         {/* Customers KPI Cards */}
         {activeTab === "customers" && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
             <div className="bg-white border border-slate-200 rounded-xs p-3">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Total Customers
@@ -432,40 +449,62 @@ function DirectoryContent() {
                 {customerSummary.totalCustomers || customers.length}
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5">
-                Registered accounts
-              </div>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-xs p-3">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Total Active Orders
-              </div>
-              <div className="mt-1 text-xl font-bold font-mono text-blue-700">
-                {customerSummary.totalActiveOrders}
-              </div>
-              <div className="text-[11px] text-slate-500 mt-0.5">
-                In production / pending delivery
+                {customerSummary.totalActiveOrders} active orders
               </div>
             </div>
             <div className="bg-white border border-slate-200 rounded-xs p-3">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Ready for Delivery
               </div>
-              <div className="mt-1 text-xl font-bold font-mono text-emerald-700">
+              <div className="mt-1 text-xl font-bold font-mono text-blue-700">
                 {customerSummary.totalCompletedReady}
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5">
-                Completed bags awaiting dispatch
+                {customerSummary.totalOrdersAllTime} total orders
+              </div>
+            </div>
+            <div className="bg-rose-50 border border-rose-200 rounded-xs p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-rose-700">
+                Pending Gold (Due)
+              </div>
+              <div className="mt-1 text-xl font-bold font-mono text-rose-700">
+                {customerSummary.totalPendingFineGold || "0.000"} g
+              </div>
+              <div className="text-[11px] text-rose-600 mt-0.5">
+                Unpaid billed fine gold
+              </div>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xs p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+                Advance Gold Held
+              </div>
+              <div className="mt-1 text-xl font-bold font-mono text-amber-800">
+                {customerSummary.totalAdvanceFineGold || "0.000"} g
+              </div>
+              <div className="text-[11px] text-amber-700 mt-0.5">
+                Unallocated customer advance
+              </div>
+            </div>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xs p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
+                Recovered Gold
+              </div>
+              <div className="mt-1 text-xl font-bold font-mono text-emerald-700">
+                {customerSummary.totalRecoveredFineGold || "0.000"} g
+              </div>
+              <div className="text-[11px] text-emerald-700 mt-0.5">
+                Total gold received
               </div>
             </div>
             <div className="bg-white border border-slate-200 rounded-xs p-3">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Total Orders (All Time)
+                Pending Cash
               </div>
               <div className="mt-1 text-xl font-bold font-mono text-slate-900">
-                {customerSummary.totalOrdersAllTime}
+                ₹{customerSummary.totalPendingCashRupees || "0.00"}
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5">
-                Excludes cancelled orders
+                Unpaid making / cash
               </div>
             </div>
           </div>
@@ -525,10 +564,47 @@ function DirectoryContent() {
           {/* Customers Panel */}
           {activeTab === "customers" && (
           <div className="bg-white border border-slate-200 rounded-xs p-4 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-              <h2 className="text-sm font-bold text-slate-900">
-                Customers ({customers.length})
-              </h2>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-sm font-bold text-slate-900">
+                  Customers ({filteredCustomers.length})
+                </h2>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setCustomerFilter("ALL")}
+                    className={`px-2 py-0.5 text-[11px] font-semibold rounded-xs cursor-pointer ${
+                      customerFilter === "ALL"
+                        ? "bg-slate-800 text-white"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomerFilter("PENDING")}
+                    className={`px-2 py-0.5 text-[11px] font-semibold rounded-xs cursor-pointer ${
+                      customerFilter === "PENDING"
+                        ? "bg-rose-600 text-white"
+                        : "bg-rose-50 text-rose-700 hover:bg-rose-100"
+                    }`}
+                  >
+                    Has Pending
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomerFilter("ADVANCE")}
+                    className={`px-2 py-0.5 text-[11px] font-semibold rounded-xs cursor-pointer ${
+                      customerFilter === "ADVANCE"
+                        ? "bg-amber-600 text-white"
+                        : "bg-amber-50 text-amber-800 hover:bg-amber-100"
+                    }`}
+                  >
+                    Has Advance
+                  </button>
+                </div>
+              </div>
               <input
                 type="search"
                 value={searchCustomer}
@@ -597,8 +673,11 @@ function DirectoryContent() {
                     <th className="p-2 text-left font-semibold">Code</th>
                     <th className="p-2 text-left font-semibold">Customer Name</th>
                     <th className="p-2 text-left font-semibold">Phone</th>
-                    <th className="p-2 text-left font-semibold">Address</th>
-                    <th className="p-2 text-right font-semibold">Active / Total Orders</th>
+                    <th className="p-2 text-right font-semibold">Orders</th>
+                    <th className="p-2 text-right font-semibold">Pending Gold</th>
+                    <th className="p-2 text-right font-semibold">Advance Gold</th>
+                    <th className="p-2 text-right font-semibold">Recovered Gold</th>
+                    <th className="p-2 text-right font-semibold">Pending Cash</th>
                     <th className="p-2 text-right font-semibold">Actions</th>
                   </tr>
                 </thead>
@@ -606,15 +685,19 @@ function DirectoryContent() {
                   {filteredCustomers.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={9}
                         className="p-4 text-center text-slate-500"
                       >
-                        No customers created yet. Add your first customer above.
+                        No customers match the current filter.
                       </td>
                     </tr>
                   ) : (
                     filteredCustomers.map((c) => {
                       const stats = byCustomer[c.id];
+                      const pendingGold = Number(stats?.pendingFineGold || 0);
+                      const advanceGold = Number(stats?.advanceFineGold || 0);
+                      const recoveredGold = Number(stats?.recoveredFineGold || 0);
+                      const pendingCash = Number(stats?.pendingCashRupees || 0);
                       return (
                       <tr
                         key={c.id}
@@ -630,12 +713,14 @@ function DirectoryContent() {
                           >
                             {c.name}
                           </Link>
+                          {c.address && (
+                            <div className="text-[10px] font-normal text-slate-500">
+                              {c.address}
+                            </div>
+                          )}
                         </td>
                         <td className="p-2 font-mono text-slate-700">
                           {c.phone || "-"}
-                        </td>
-                        <td className="p-2 text-slate-600">
-                          {c.address || "-"}
                         </td>
                         <td className="p-2 text-right font-mono text-slate-800">
                           <span className="font-bold text-blue-700">
@@ -643,6 +728,42 @@ function DirectoryContent() {
                           </span>
                           <span className="text-slate-400"> / </span>
                           <span>{stats?.totalOrders ?? 0}</span>
+                        </td>
+                        <td className="p-2 text-right font-mono">
+                          {pendingGold > 0 ? (
+                            <span className="inline-block px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 font-bold">
+                              {pendingGold.toFixed(3)} g
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">0.000 g</span>
+                          )}
+                        </td>
+                        <td className="p-2 text-right font-mono">
+                          {advanceGold > 0 ? (
+                            <span className="inline-block px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 font-bold">
+                              {advanceGold.toFixed(3)} g
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">0.000 g</span>
+                          )}
+                        </td>
+                        <td className="p-2 text-right font-mono">
+                          {recoveredGold > 0 ? (
+                            <span className="text-emerald-700 font-semibold">
+                              {recoveredGold.toFixed(3)} g
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">0.000 g</span>
+                          )}
+                        </td>
+                        <td className="p-2 text-right font-mono">
+                          {pendingCash > 0 ? (
+                            <span className="text-rose-700 font-semibold">
+                              ₹{pendingCash.toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">₹0.00</span>
+                          )}
                         </td>
                         <td className="p-2 text-right space-x-1.5">
                           <Link
