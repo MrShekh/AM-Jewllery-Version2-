@@ -255,6 +255,9 @@ export function renderBillSnapshotHtml(params: {
   const sigSafe = sanitizeImageUrl(template.signatureUrl);
 
   const pastFine = roundInternal(bill.historicalFineBalance);
+  const previousAdvanceFine = roundInternal(
+    bill.previousAdvanceFineSnapshot ?? ZERO
+  );
   const currentFine = roundInternal(bill.totalFineGold);
   const existingAdvanceFine = roundInternal(
     bill.appliedAdvanceFineSnapshot ?? appliedFineCredit
@@ -507,6 +510,13 @@ export function renderBillSnapshotHtml(params: {
 
     <div style="width:310px;">
       <div style="border:1px solid #e2e8f0;font-size:12px;">
+        ${
+          previousAdvanceFine.gt(ZERO)
+            ? `<div style="display:flex;justify-content:space-between;padding:7px 12px;border-bottom:1px solid #e2e8f0;background:#f0fdf4;color:#15803d;"><span style="font-weight:700;">PREVIOUS ADVANCE:</span><span style="font-family:monospace;font-weight:600;">${previousAdvanceFine.toFixed(
+                3
+              )} g</span></div>`
+            : ""
+        }
         <div style="display:flex;justify-content:space-between;padding:7px 12px;border-bottom:1px solid #e2e8f0;background:#f8fafc;">
           <span style="font-weight:700;color:#475569;">PREVIOUS OUTSTANDING:</span>
           <span style="font-family:monospace;font-weight:600;color:${

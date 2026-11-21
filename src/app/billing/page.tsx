@@ -2652,6 +2652,16 @@ function BillingWorkspaceInner() {
                     {/* Right-Aligned Totals Box & Signature (Matching Reference Invoice) */}
                     <div className="flex flex-col items-end space-y-5 pt-1">
                       <div className="w-full sm:w-80 border border-slate-200 text-xs">
+                        {draftTotals.availAdv > 0 && (
+                          <div className="flex justify-between items-center px-3.5 py-2 border-b border-slate-200 bg-emerald-50/60">
+                            <span className="font-bold text-emerald-800 uppercase">
+                              PREVIOUS ADVANCE:
+                            </span>
+                            <span className="font-mono font-semibold text-emerald-800">
+                              {formatWeight3(draftTotals.availAdv)} g
+                            </span>
+                          </div>
+                        )}
                         {draftTotals.pastJamaFine > 0 && (
                           <div className="flex justify-between items-center px-3.5 py-2 border-b border-slate-200 bg-white">
                             <span className="font-bold text-slate-700 uppercase">
