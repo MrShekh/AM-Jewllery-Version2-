@@ -507,6 +507,7 @@ function BillingWorkspaceInner() {
   }, [loadWorkspace]);
 
   const [customAdvanceGoldUsed, setCustomAdvanceGoldUsed] = useState("0");
+  const [advanceManuallyEdited, setAdvanceManuallyEdited] = useState(false);
 
   // Pre-select orders passed via ?orderIds=...
   useEffect(() => {
@@ -665,6 +666,33 @@ function BillingWorkspaceInner() {
     applyFineAdvance,
     customAdvanceGoldUsed,
     additionalRupees,
+  ]);
+
+  // Reset manual advance override whenever customer changes
+  useEffect(() => {
+    setAdvanceManuallyEdited(false);
+  }, [customerId]);
+
+  // Auto-fill Advance Gold to Use with min(availableAdvance, billFineTotal) unless manually overridden
+  useEffect(() => {
+    if (editingBillId) return;
+    if (!applyFineAdvance) {
+      setCustomAdvanceGoldUsed("0");
+      return;
+    }
+    if (!advanceManuallyEdited) {
+      const suggested = Math.min(
+        draftTotals.availAdv,
+        Math.max(0, draftTotals.fineTotal)
+      );
+      setCustomAdvanceGoldUsed(suggested > 0 ? suggested.toFixed(3) : "0");
+    }
+  }, [
+    editingBillId,
+    applyFineAdvance,
+    advanceManuallyEdited,
+    draftTotals.availAdv,
+    draftTotals.fineTotal,
   ]);
 
   const startEditPostedBill = (b: BillRow) => {
@@ -1551,7 +1579,13 @@ function BillingWorkspaceInner() {
                   <input
                     type="checkbox"
                     checked={applyFineAdvance}
-                    onChange={(e) => setApplyFineAdvance(e.target.checked)}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setApplyFineAdvance(checked);
+                      if (checked) {
+                        setAdvanceManuallyEdited(false);
+                      }
+                    }}
                   />
                   <span>Apply Fine Advance</span>
                 </label>
@@ -2198,16 +2232,33 @@ function BillingWorkspaceInner() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
-                          Advance Gold to Use (g fine)
-                        </label>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <label className="block text-[11px] font-semibold text-slate-700">
+                            Advance Gold to Use (g fine)
+                          </label>
+                          {draftTotals.availAdv > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setApplyFineAdvance(true);
+                                setAdvanceManuallyEdited(false);
+                              }}
+                              className="text-[10px] text-indigo-700 hover:underline font-semibold cursor-pointer"
+                            >
+                              Auto / Max
+                            </button>
+                          )}
+                        </div>
                         <input
                           type="number"
                           step="0.001"
                           min="0"
                           max={draftTotals.availAdv}
                           value={customAdvanceGoldUsed}
-                          onChange={(e) => setCustomAdvanceGoldUsed(e.target.value)}
+                          onChange={(e) => {
+                            setAdvanceManuallyEdited(true);
+                            setCustomAdvanceGoldUsed(e.target.value);
+                          }}
                           className="w-full px-2.5 py-1.5 border border-slate-300 rounded-xs bg-white font-mono"
                           placeholder="0.000"
                         />
