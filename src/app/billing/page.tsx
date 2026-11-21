@@ -685,7 +685,7 @@ function BillingWorkspaceInner() {
         draftTotals.availAdv,
         Math.max(0, draftTotals.fineTotal)
       );
-      setCustomAdvanceGoldUsed(suggested > 0 ? suggested.toFixed(3) : "0");
+      setCustomAdvanceGoldUsed(suggested > 0 ? formatWeight3(suggested) : "0");
     }
   }, [
     editingBillId,
@@ -2333,12 +2333,20 @@ function BillingWorkspaceInner() {
                         </span>
                       </div>
                       {draftTotals.advUsed > 0 && (
-                        <div className="flex justify-between text-red-700">
-                          <span>Less: Advance Gold Used:</span>
-                          <span className="font-mono font-semibold">
-                            -{formatWeight3(draftTotals.advUsed)} g fine
-                          </span>
-                        </div>
+                        <>
+                          <div className="flex justify-between text-emerald-700">
+                            <span>Less: Advance Gold Used (of {formatWeight3(draftTotals.availAdv)} g):</span>
+                            <span className="font-mono font-semibold">
+                              -{formatWeight3(draftTotals.advUsed)} g fine
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-emerald-800 text-[11px]">
+                            <span>Remaining Customer Advance:</span>
+                            <span className="font-mono font-semibold">
+                              {formatWeight3(Math.max(0, draftTotals.availAdv - draftTotals.advUsed))} g fine
+                            </span>
+                          </div>
+                        </>
                       )}
                       <div className="flex justify-between font-bold text-sm border-t border-slate-200 pt-1.5">
                         <span className="text-slate-900">Customer Owes (Current Order):</span>
@@ -2656,12 +2664,22 @@ function BillingWorkspaceInner() {
                         )}
                         <div className="flex justify-between items-center px-3.5 py-2.5 border-b border-slate-200 bg-white">
                           <span className="font-bold text-slate-700 uppercase">
-                            TOTAL (FINE GOLD):
+                            CURRENT BILL (FINE):
                           </span>
                           <span className="font-mono font-semibold text-slate-900">
-                            {formatWeight3(draftTotals.netCustomerOwesFine)} g
+                            {formatWeight3(draftTotals.fineTotal)} g
                           </span>
                         </div>
+                        {draftTotals.advUsed > 0 && (
+                          <div className="flex justify-between items-center px-3.5 py-2 border-b border-slate-200 bg-white text-emerald-700">
+                            <span className="font-bold uppercase">
+                              ADVANCE APPLIED:
+                            </span>
+                            <span className="font-mono font-semibold">
+                              -{formatWeight3(draftTotals.advUsed)} g
+                            </span>
+                          </div>
+                        )}
                         {draftTotals.pastInrOwed > 0 && (
                           <div className="flex justify-between items-center px-3.5 py-2 border-b border-slate-200 bg-white">
                             <span className="font-bold text-slate-700 uppercase">
@@ -2698,6 +2716,14 @@ function BillingWorkspaceInner() {
                             {formatWeight3(draftTotals.grandTotalFineWithPast)} g
                           </span>
                         </div>
+                        {Math.max(0, draftTotals.availAdv - draftTotals.advUsed) > 0 && (
+                          <div className="flex justify-between items-center px-3.5 py-2 border-t border-slate-200 bg-emerald-50 text-emerald-800 font-bold">
+                            <span className="uppercase">REMAINING ADVANCE:</span>
+                            <span className="font-mono">
+                              {formatWeight3(Math.max(0, draftTotals.availAdv - draftTotals.advUsed))} g
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Signature Area */}
