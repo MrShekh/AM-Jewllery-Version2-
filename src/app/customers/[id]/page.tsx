@@ -938,7 +938,7 @@ export default function CustomerProfilePage() {
       } else {
         const receiptInfo = {
           refundNumber: String(data.refundNumber || `CRF-${Date.now().toString().slice(-6)}`),
-          date: getTodayBusinessDateString(),
+          date: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }),
           customerName: workspace.customer.name,
           customerPhone: workspace.customer.phone || null,
           refundedFineWeight: String(data.refundedFineWeight || refundFineWeight),
