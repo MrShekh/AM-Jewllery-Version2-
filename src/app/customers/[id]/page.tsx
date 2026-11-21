@@ -258,6 +258,15 @@ export default function CustomerProfilePage() {
   const [refundPhysicalWeight, setRefundPhysicalWeight] = useState<string>("");
   const [refundReason, setRefundReason] = useState<string>("");
   const [postingRefund, setPostingRefund] = useState(false);
+  const [lastRefundReceipt, setLastRefundReceipt] = useState<{
+    refundNumber: string;
+    date: string;
+    customerName: string;
+    customerPhone: string | null;
+    refundedFineWeight: string;
+    remainingAdvance: string;
+    reason: string;
+  } | null>(null);
 
   // Direct Bill Form (without creating orders)
   interface DirectBillLineDraft {
@@ -664,6 +673,56 @@ export default function CustomerProfilePage() {
     }
   }
 
+  function sendRefundReceiptWhatsApp(r: NonNullable<typeof lastRefundReceipt>) {
+    const lines = [
+      `*AM Jewellery — Advance Gold Refund Receipt*`,
+      `Refund #: ${r.refundNumber} (${r.date})`,
+      `Customer: ${r.customerName}`,
+      `Advance Gold Refunded: ${formatWeight3(r.refundedFineWeight)} g fine`,
+      `Remaining Advance Balance: ${formatWeight3(r.remainingAdvance)} g fine`,
+      ...(r.reason ? [`Reason: ${r.reason}`] : []),
+    ];
+    const url = buildWhatsAppSendUrl(r.customerPhone, lines.join("\n"));
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  function printRefundReceipt(r: NonNullable<typeof lastRefundReceipt>) {
+    const win = window.open("", "_blank", "width=520,height=600");
+    if (!win) return;
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Refund Receipt ${r.refundNumber}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+            .box { border: 2px solid #222; border-radius: 8px; padding: 20px; max-width: 420px; margin: 0 auto; }
+            h2 { margin: 0 0 4px; font-size: 18px; text-align: center; }
+            .sub { text-align: center; font-size: 12px; color: #555; margin-bottom: 16px; }
+            .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #ddd; font-size: 13px; }
+            .row strong { font-family: monospace; }
+            .sig { margin-top: 28px; display: flex; justify-content: space-between; font-size: 11px; color: #555; }
+          </style>
+        </head>
+        <body>
+          <div class="box">
+            <h2>AM JEWELLERY</h2>
+            <div class="sub">Advance Gold Refund Receipt</div>
+            <div class="row"><span>Refund No.:</span><strong>${r.refundNumber}</strong></div>
+            <div class="row"><span>Date:</span><strong>${r.date}</strong></div>
+            <div class="row"><span>Customer:</span><strong>${r.customerName}</strong></div>
+            <div class="row"><span>Gold Refunded:</span><strong>${formatWeight3(r.refundedFineWeight)} g fine</strong></div>
+            <div class="row"><span>Remaining Advance:</span><strong>${formatWeight3(r.remainingAdvance)} g fine</strong></div>
+            <div class="row"><span>Reason:</span><span>${r.reason || "-"}</span></div>
+            <div class="sig"><span>Customer Signature</span><span>Authorized Signature</span></div>
+          </div>
+          <script>window.onload = function() { setTimeout(function() { window.print(); }, 200); };</script>
+        </body>
+      </html>
+    `);
+    win.document.close();
+  }
+
   function sendCustomerReceiptWhatsApp(
     r: ProfileWorkspace["transactionHistory"]["goldReceipts"][number]
   ) {
@@ -877,10 +936,20 @@ export default function CustomerProfilePage() {
       if (!res.ok || !data.ok) {
         setError(data.error || "Failed to refund gold advance");
       } else {
+        const receiptInfo = {
+          refundNumber: String(data.refundNumber || `CRF-${Date.now().toString().slice(-6)}`),
+          date: getTodayBusinessDateString(),
+          customerName: workspace.customer.name,
+          customerPhone: workspace.customer.phone || null,
+          refundedFineWeight: String(data.refundedFineWeight || refundFineWeight),
+          remainingAdvance: String(data.remainingAdvance || "0.0000"),
+          reason: refundReason,
+        };
         setShowRefundModal(false);
         setRefundFineWeight("");
         setRefundPhysicalWeight("");
         setRefundReason("");
+        setLastRefundReceipt(receiptInfo);
         setMessage(
           `Refunded ${data.refundedFineWeight}g fine advance (${data.refundNumber}).`
         );
@@ -2760,6 +2829,76 @@ export default function CustomerProfilePage() {
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {lastRefundReceipt && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl max-w-md w-full p-6 space-y-4 shadow-xl">
+              <div className="flex items-center justify-between border-b pb-2">
+                <h3 className="text-base font-bold text-gray-900">
+                  Advance Refund Receipt ({lastRefundReceipt.refundNumber})
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setLastRefundReceipt(null)}
+                  className="text-gray-500 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Date:</span>
+                  <strong className="font-mono">{lastRefundReceipt.date}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Customer:</span>
+                  <strong>{lastRefundReceipt.customerName}</strong>
+                </div>
+                <div className="flex justify-between text-red-700">
+                  <span>Gold Refunded:</span>
+                  <strong className="font-mono">
+                    {formatWeight3(lastRefundReceipt.refundedFineWeight)} g fine
+                  </strong>
+                </div>
+                <div className="flex justify-between text-emerald-700">
+                  <span>Remaining Advance:</span>
+                  <strong className="font-mono">
+                    {formatWeight3(lastRefundReceipt.remainingAdvance)} g fine
+                  </strong>
+                </div>
+                {lastRefundReceipt.reason && (
+                  <div className="flex justify-between gap-2 pt-1 border-t border-gray-200 text-xs">
+                    <span className="text-gray-500">Reason:</span>
+                    <span className="text-gray-800 text-right">{lastRefundReceipt.reason}</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => printRefundReceipt(lastRefundReceipt)}
+                  className="px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white text-sm font-semibold rounded-md cursor-pointer"
+                >
+                  🖨️ Print Receipt
+                </button>
+                <button
+                  type="button"
+                  onClick={() => sendRefundReceiptWhatsApp(lastRefundReceipt)}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-md cursor-pointer"
+                >
+                  📲 Send on WhatsApp
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLastRefundReceipt(null)}
+                  className="px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-md cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

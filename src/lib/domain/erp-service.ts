@@ -10402,6 +10402,13 @@ export class ErpDomainService {
         });
       }
 
+      const journalPhysicalReturn = physicalReturn.gt(ZERO)
+        ? physicalReturn
+        : conv.finePurity.isFineCategory ||
+            conv.finePurity.touchPercent.eq(new Decimal(100))
+          ? requestedFine
+          : ZERO;
+
       const refundNumber = `CRF-${Date.now().toString().slice(-6)}`;
       const jtx = await this.postBalancedJournalEntry(tx, {
         organizationId: validActor.organizationId,
@@ -10409,7 +10416,7 @@ export class ErpDomainService {
         transactionType: "CUSTOMER_GOLD_REFUND",
         businessDate,
         purity: conv.finePurity,
-        physicalWeight: physicalReturn,
+        physicalWeight: journalPhysicalReturn,
         fineEquivalentWeight: requestedFine,
         sourceAccount: adminFineAcct,
         destinationAccount: inflowAcct,

@@ -289,6 +289,7 @@ function ProductionRegisterContent() {
   // Process Entry Form state
   const [activeProcessType, setActiveProcessType] =
     useState<ProcessType>("FILING");
+  const [moveTargetStage, setMoveTargetStage] = useState<string>("");
   const [selectedKarigarId, setSelectedKarigarId] = useState<string>("");
   const [quickKarigarName, setQuickKarigarName] = useState<string>("");
   const [grossInWeight, setGrossInWeight] = useState<string>("");
@@ -625,6 +626,42 @@ function ProductionRegisterContent() {
     setAdjustAgainstKarigarBalance(false);
     setIsRepairing(false);
     setSettleNoksiImmediately(false);
+  }
+
+  async function handleMovePendingStage() {
+    if (!selectedOrderRow || !activeProcessObj || !moveTargetStage || submittingAction) {
+      return;
+    }
+    setActionError(null);
+    setActionSuccess(null);
+    setSubmittingAction(true);
+    try {
+      const res = await fetch(
+        `/api/orders/${selectedOrderRow.order.id}/process`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "MOVE_PENDING_STAGE",
+            fromProcessType: activeProcessObj.processType,
+            toProcessType: moveTargetStage,
+          }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setActionError(data.error || "Failed to move stage");
+      } else {
+        setActionSuccess(
+          `Moved ${data.movedWeight} g from ${PROCESS_DISPLAY_LABELS[activeProcessObj.processType]} to ${PROCESS_DISPLAY_LABELS[moveTargetStage as ProcessType]}`
+        );
+        setActiveProcessType(moveTargetStage as ProcessType);
+        setMoveTargetStage("");
+        await loadRegister();
+      }
+    } finally {
+      setSubmittingAction(false);
+    }
   }
 
   async function handleGiveWork(e: React.FormEvent) {
@@ -2688,6 +2725,49 @@ function ProductionRegisterContent() {
                             : `Carried Stone In: ${activeProcessObj.carriedStoneInWeight} g`}
                         </span>
                       </div>
+
+                      {Number(activeProcessObj.custodyMetalWeight || 0) > 0 &&
+                        Number(activeProcessObj.returnedMetalWeight || 0) === 0 && (
+                          <div className="flex flex-wrap items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-xs px-2.5 py-1.5 text-[11px]">
+                            <span className="text-amber-900 font-medium">
+                              Wrong stage? Move{" "}
+                              <strong className="font-mono">
+                                {Number(activeProcessObj.custodyMetalWeight).toFixed(3)} g
+                              </strong>{" "}
+                              to:
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <select
+                                value={moveTargetStage}
+                                onChange={(e) => setMoveTargetStage(e.target.value)}
+                                className="px-2 py-1 text-[11px] bg-white border border-amber-300 rounded-xs"
+                              >
+                                <option value="">-- Select Stage --</option>
+                                {selectedOrderRow.processes
+                                  .filter(
+                                    (p) =>
+                                      p.processType !== activeProcessObj.processType &&
+                                      p.status !== "CLOSED" &&
+                                      Number(p.custodyMetalWeight || 0) === 0 &&
+                                      Number(p.issuedMetalWeight || 0) === 0
+                                  )
+                                  .map((p) => (
+                                    <option key={p.id} value={p.processType}>
+                                      {PROCESS_DISPLAY_LABELS[p.processType]}
+                                    </option>
+                                  ))}
+                              </select>
+                              <button
+                                type="button"
+                                disabled={!moveTargetStage || submittingAction}
+                                onClick={() => void handleMovePendingStage()}
+                                className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-semibold rounded-xs cursor-pointer"
+                              >
+                                Move Stage →
+                              </button>
+                            </div>
+                          </div>
+                        )}
 
                       {/* Karigar Selector + Quick Create */}
                       <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
