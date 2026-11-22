@@ -262,6 +262,7 @@ function ProductionRegisterContent() {
     | "SETTING"
     | "FINAL_POLISH"
     | "COMPLETED"
+    | "DELIVERED"
   >("ALL");
   const [cadDesignerName, setCadDesignerName] = useState("");
   const [savingHolder, setSavingHolder] = useState(false);
@@ -1109,7 +1110,10 @@ function ProductionRegisterContent() {
   const getOrderLocation = useCallback(
     (r: RegisterOrderRow) => {
       const tr = jobCardTracking[r.order.id];
-      if (r.order.status === "COMPLETED" || r.order.status === "DELIVERED") {
+      if (r.order.status === "DELIVERED") {
+        return { type: "DELIVERED" as const, label: "Billed / Delivered" };
+      }
+      if (r.order.status === "COMPLETED") {
         return { type: "COMPLETED" as const, label: "Completed / Ready" };
       }
       if (r.order.status === "CANCELLED") {
@@ -1169,6 +1173,7 @@ function ProductionRegisterContent() {
       SETTING: 0,
       FINAL_POLISH: 0,
       COMPLETED: 0,
+      DELIVERED: 0,
     };
     for (const r of rows) {
       if (getEffectivePrintCount(r) > 0) counts.PRINTED += 1;
@@ -2108,10 +2113,12 @@ function ProductionRegisterContent() {
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="px-2 py-1.5 text-xs border border-slate-300 rounded-xs bg-white"
               >
-                <option value="ACTIVE">All Orders</option>
+                <option value="ACTIVE">Active Orders</option>
+                <option value="ALL">All Orders (Incl. Billed)</option>
                 <option value="CREATED">Not Started</option>
                 <option value="IN_PROCESS">With Karigar / In Process</option>
-                <option value="COMPLETED">Completed</option>
+                <option value="COMPLETED">Completed (Ready to Bill)</option>
+                <option value="DELIVERED">Billed / Delivered</option>
               </select>
               <select
                 value={purityFilter}
@@ -2215,12 +2222,18 @@ function ProductionRegisterContent() {
                 ["SETTING", `Setting (${locationCounts.SETTING})`],
                 ["FINAL_POLISH", `Final Polish (${locationCounts.FINAL_POLISH})`],
                 ["COMPLETED", `Completed (${locationCounts.COMPLETED})`],
+                ["DELIVERED", `Billed / Delivered (${locationCounts.DELIVERED})`],
               ] as const
             ).map(([fKey, fLabel]) => (
               <button
                 key={fKey}
                 type="button"
-                onClick={() => setLocationFilter(fKey)}
+                onClick={() => {
+                  setLocationFilter(fKey);
+                  if (fKey === "DELIVERED" && statusFilter === "ACTIVE") {
+                    setStatusFilter("ALL");
+                  }
+                }}
                 className={`px-2.5 py-1 rounded-xs font-bold border cursor-pointer ${
                   locationFilter === fKey
                     ? "bg-slate-900 text-white border-slate-900"
