@@ -10,6 +10,10 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { AppShell, AppShellUser } from "@/components/AppShell";
+import {
+  compressImageFileForUpload,
+  safeParseJsonResponse,
+} from "@/lib/image-upload";
 import { ManufacturingWorksheetPreview } from "@/components/previews/v1/ManufacturingWorksheetPreview";
 import { downloadManufacturingWorksheet } from "@/components/previews/v1/manufacturingWorksheetGenerator";
 import {
@@ -284,6 +288,8 @@ function ProductionRegisterContent() {
   const [editSize, setEditSize] = useState("");
   const [editDueDate, setEditDueDate] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [editPhotoUrl, setEditPhotoUrl] = useState("");
+  const [uploadingEditPhoto, setUploadingEditPhoto] = useState(false);
   const [savingOrderEdit, setSavingOrderEdit] = useState(false);
 
   // Process Entry Form state
@@ -2442,6 +2448,7 @@ function ProductionRegisterContent() {
                         : ""
                     );
                     setEditNotes(selectedOrderRow.order.notes || "");
+                    setEditPhotoUrl(selectedOrderRow.order.photoUrl || "");
                     setDrawerTab("EDIT_ORDER");
                   }}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-xs cursor-pointer ${
@@ -3870,6 +3877,7 @@ function ProductionRegisterContent() {
                         size: editSize || null,
                         dueDate: editDueDate || null,
                         notes: editNotes || null,
+                        photoUrl: editPhotoUrl || null,
                       }),
                     });
                     const data = await res.json();
@@ -3992,6 +4000,70 @@ function ProductionRegisterContent() {
                       placeholder="Optional order notes..."
                       className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xs"
                     />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Product Photo
+                    </label>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {editPhotoUrl ? (
+                        <img
+                          src={editPhotoUrl}
+                          alt="Product"
+                          className="w-16 h-16 object-cover rounded border border-slate-300 bg-white"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 flex items-center justify-center rounded border border-dashed border-slate-300 bg-white text-[10px] text-slate-400">
+                          No photo
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={uploadingEditPhoto}
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setUploadingEditPhoto(true);
+                            setActionError(null);
+                            try {
+                              const compressed = await compressImageFileForUpload(file);
+                              const fd = new FormData();
+                              fd.append("file", compressed);
+                              const res = await fetch("/api/uploads", {
+                                method: "POST",
+                                body: fd,
+                              });
+                              const data = await safeParseJsonResponse<{
+                                ok?: boolean;
+                                publicUrl?: string;
+                                error?: string;
+                              }>(res);
+                              if (!res.ok || !data.ok || !data.publicUrl) {
+                                setActionError(data.error || "Failed to upload photo");
+                              } else {
+                                setEditPhotoUrl(data.publicUrl);
+                              }
+                            } catch (err) {
+                              setActionError(
+                                err instanceof Error
+                                  ? err.message
+                                  : "Failed to upload photo"
+                              );
+                            } finally {
+                              setUploadingEditPhoto(false);
+                            }
+                          }}
+                          className="text-xs file:mr-2 file:py-1 file:px-2.5 file:rounded-xs file:border file:border-slate-300 file:bg-white file:text-slate-700 file:font-semibold hover:file:bg-slate-100 cursor-pointer"
+                        />
+                        {uploadingEditPhoto && (
+                          <div className="text-[11px] text-blue-700 font-medium">
+                            Uploading photo...
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 pt-1">

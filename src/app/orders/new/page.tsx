@@ -184,6 +184,12 @@ export default function NewOrderPage() {
   async function handleSubmitOrder(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!photoUrl) {
+      const msg = "Please upload a product photo before creating the bag.";
+      setError(msg);
+      window.alert(msg);
+      return;
+    }
     setSubmitting(true);
     try {
       let activeCustomerId = customerId;
