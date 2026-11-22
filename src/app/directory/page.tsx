@@ -275,6 +275,126 @@ function DirectoryContent() {
     );
   }, [karigars, searchKarigar]);
 
+  function handlePrintCustomerSummary() {
+    const today = new Date().toLocaleDateString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+    let sumPendingGold = 0;
+    let sumAdvanceGold = 0;
+    let sumRecoveredGold = 0;
+    let sumPendingCash = 0;
+    let sumAdvanceCash = 0;
+
+    const rowsHtml = filteredCustomers
+      .map((c, idx) => {
+        const st = byCustomer[c.id];
+        const pg = Number(st?.pendingFineGold || 0);
+        const ag = Number(st?.advanceFineGold || 0);
+        const rg = Number(st?.recoveredFineGold || 0);
+        const pc = Number(st?.pendingCashRupees || 0);
+        const ac = Number(st?.advanceCashRupees || 0);
+        sumPendingGold += pg;
+        sumAdvanceGold += ag;
+        sumRecoveredGold += rg;
+        sumPendingCash += pc;
+        sumAdvanceCash += ac;
+        return `
+          <tr>
+            <td style="text-align:center;">${idx + 1}</td>
+            <td style="font-family:monospace;">${c.customerCode}</td>
+            <td><strong>${c.name}</strong>${c.phone ? `<div style="font-size:10px;color:#555;">${c.phone}</div>` : ""}</td>
+            <td style="text-align:right;font-family:monospace;${pg > 0 ? "color:#b91c1c;font-weight:700;" : "color:#777;"}">${pg.toFixed(3)} g</td>
+            <td style="text-align:right;font-family:monospace;${ag > 0 ? "color:#b45309;font-weight:700;" : "color:#777;"}">${ag.toFixed(3)} g</td>
+            <td style="text-align:right;font-family:monospace;${rg > 0 ? "color:#047857;font-weight:600;" : "color:#777;"}">${rg.toFixed(3)} g</td>
+            <td style="text-align:right;font-family:monospace;${pc > 0 ? "color:#b91c1c;font-weight:700;" : "color:#777;"}">₹${pc.toFixed(2)}</td>
+            <td style="text-align:right;font-family:monospace;${ac > 0 ? "color:#047857;font-weight:600;" : "color:#777;"}">₹${ac.toFixed(2)}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc || !iframe.contentWindow) {
+      document.body.removeChild(iframe);
+      return;
+    }
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Customer Gold & Cash Summary — AM Jewellery</title>
+          <style>
+            @page { size: A4; margin: 12mm; }
+            body { font-family: Arial, sans-serif; color: #111; margin: 0; font-size: 11px; }
+            .hdr { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 12px; }
+            .hdr h1 { margin: 0; font-size: 16px; }
+            .totals { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 12px; }
+            .tbox { border: 1px solid #ccc; padding: 6px 8px; border-radius: 4px; background: #f9fafb; }
+            .tbox .lbl { font-size: 9px; text-transform: uppercase; color: #555; font-weight: 700; }
+            .tbox .val { font-size: 13px; font-weight: 700; font-family: monospace; margin-top: 2px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #ccc; padding: 5px 6px; }
+            th { background: #f1f5f9; text-align: left; font-size: 10px; text-transform: uppercase; }
+          </style>
+        </head>
+        <body>
+          <div class="hdr">
+            <div>
+              <h1>AM JEWELLERY — CUSTOMER SUMMARY</h1>
+              <div style="font-size:11px;color:#555;">Filter: ${customerFilter} • Customers: ${filteredCustomers.length}</div>
+            </div>
+            <div style="font-size:11px;">Printed: <strong>${today}</strong></div>
+          </div>
+          <div class="totals">
+            <div class="tbox"><div class="lbl">Pending Gold</div><div class="val" style="color:#b91c1c;">${sumPendingGold.toFixed(3)} g</div></div>
+            <div class="tbox"><div class="lbl">Advance Gold</div><div class="val" style="color:#b45309;">${sumAdvanceGold.toFixed(3)} g</div></div>
+            <div class="tbox"><div class="lbl">Recovered Gold</div><div class="val" style="color:#047857;">${sumRecoveredGold.toFixed(3)} g</div></div>
+            <div class="tbox"><div class="lbl">Pending Cash</div><div class="val" style="color:#b91c1c;">₹${sumPendingCash.toFixed(2)}</div></div>
+            <div class="tbox"><div class="lbl">Advance Cash</div><div class="val" style="color:#047857;">₹${sumAdvanceCash.toFixed(2)}</div></div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align:center;width:28px;">#</th>
+                <th>Code</th>
+                <th>Customer Name</th>
+                <th style="text-align:right;">Pending Gold</th>
+                <th style="text-align:right;">Advance Gold</th>
+                <th style="text-align:right;">Recovered Gold</th>
+                <th style="text-align:right;">Pending Cash</th>
+                <th style="text-align:right;">Advance Cash</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </body>
+      </html>
+    `);
+    doc.close();
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } finally {
+        setTimeout(() => {
+          if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+        }, 1500);
+      }
+    }, 250);
+  }
+
   function toggleCapability(p: ProcessType) {
     setKarCapabilities((prev) =>
       prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
@@ -607,13 +727,22 @@ function DirectoryContent() {
                   </button>
                 </div>
               </div>
-              <input
-                type="search"
-                value={searchCustomer}
-                onChange={(e) => setSearchCustomer(e.target.value)}
-                placeholder="Search customer name / code / phone..."
-                className="px-2.5 py-1 text-xs border border-slate-300 rounded-xs w-56"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="search"
+                  value={searchCustomer}
+                  onChange={(e) => setSearchCustomer(e.target.value)}
+                  placeholder="Search customer name / code / phone..."
+                  className="px-2.5 py-1 text-xs border border-slate-300 rounded-xs w-56"
+                />
+                <button
+                  type="button"
+                  onClick={handlePrintCustomerSummary}
+                  className="px-2.5 py-1 text-xs font-semibold bg-slate-800 hover:bg-slate-900 text-white rounded-xs cursor-pointer"
+                >
+                  🖨️ Print Summary
+                </button>
+              </div>
             </div>
 
             <form
