@@ -304,6 +304,7 @@ function ProductionRegisterContent() {
   const [stageAddGoldKarigarId, setStageAddGoldKarigarId] = useState("");
   const [stageAddGoldNotes, setStageAddGoldNotes] = useState("");
   const [showStageAddGoldBox, setShowStageAddGoldBox] = useState(false);
+  const [showAdvancedEntry, setShowAdvancedEntry] = useState(false);
   const [weightGainPrompt, setWeightGainPrompt] = useState<{
     gainGrams: string;
     message: string;
@@ -3006,12 +3007,21 @@ function ProductionRegisterContent() {
 
                       {/* Karigar Selector + Quick Create */}
                       <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
-                        <div className="sm:col-span-6">
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">
-                            {activeProcessObj.processType === "SETTING"
-                              ? "Setting Karigar *"
-                              : "Assign Karigar *"}
-                          </label>
+                        <div className="sm:col-span-12">
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-xs font-semibold text-slate-700">
+                              {activeProcessObj.processType === "SETTING"
+                                ? "Setting Karigar *"
+                                : "Assign Karigar *"}
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setShowAdvancedEntry((v) => !v)}
+                              className="text-[11px] font-semibold text-slate-600 hover:text-blue-700 underline cursor-pointer"
+                            >
+                              {showAdvancedEntry ? "Hide More Options ▲" : "More Options (Date / Quick-Add / Partial) ▾"}
+                            </button>
+                          </div>
                           <select
                             required
                             value={selectedKarigarId}
@@ -3028,11 +3038,11 @@ function ProductionRegisterContent() {
                             ))}
                           </select>
                         </div>
-                        {actor.role === "OWNER_ADMIN" && (
+                        {showAdvancedEntry && actor.role === "OWNER_ADMIN" && (
                           <>
-                            <div className="sm:col-span-4">
+                            <div className="sm:col-span-8">
                               <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                                Or Quick-Add Karigar
+                                Or Quick-Add New Karigar
                               </label>
                               <input
                                 type="text"
@@ -3044,13 +3054,13 @@ function ProductionRegisterContent() {
                                 className="w-full px-2 py-1.5 text-xs bg-white border border-slate-300 rounded-xs"
                               />
                             </div>
-                            <div className="sm:col-span-2">
+                            <div className="sm:col-span-4">
                               <button
                                 type="button"
                                 onClick={handleQuickCreateKarigar}
                                 className="w-full py-1.5 px-2 bg-slate-800 text-white text-xs font-semibold rounded-xs cursor-pointer"
                               >
-                                + Add
+                                + Add Karigar
                               </button>
                             </div>
                           </>
@@ -3078,18 +3088,8 @@ function ProductionRegisterContent() {
                                     className="text-[10px] font-mono font-semibold text-blue-700 hover:underline cursor-pointer"
                                   >
                                     {showFilingIssueHistory
-                                      ? "Hide Previous Issues"
-                                      : `Previous issues (${(selectedOrderRow.filingIssues ?? []).length})`}
-                                  </button>
-                                )}
-                                {selectedOrderRow.order.status !== "COMPLETED" &&
-                                  selectedOrderRow.order.status !== "CANCELLED" && (
-                                  <button
-                                    type="button"
-                                    onClick={openAddFilingGoldForm}
-                                    className="px-2 py-0.5 text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-xs cursor-pointer"
-                                  >
-                                    + Add / Edit Gold
+                                      ? "Hide History"
+                                      : `History (${(selectedOrderRow.filingIssues ?? []).length})`}
                                   </button>
                                 )}
                               </div>
@@ -3140,30 +3140,34 @@ function ProductionRegisterContent() {
                                 placeholder="0.000"
                                 className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-xs font-mono tabular-nums"
                               />
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setShowExtraTouchOverride((prev) => !prev)
-                                }
-                                className="mt-1 text-[10px] text-blue-700 underline cursor-pointer"
-                              >
-                                {showExtraTouchOverride
-                                  ? "Use order touch"
-                                  : "Different touch? (Advanced)"}
-                              </button>
-                              {showExtraTouchOverride && (
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min="0.01"
-                                  max="100"
-                                  value={extraMetalTouchPercent}
-                                  onChange={(e) =>
-                                    setExtraMetalTouchPercent(e.target.value)
-                                  }
-                                  placeholder={`Touch % (${liveTouch}%)`}
-                                  className="mt-1 w-full px-2 py-1 text-[11px] bg-white border border-blue-300 rounded-xs font-mono tabular-nums"
-                                />
+                              {showAdvancedEntry && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setShowExtraTouchOverride((prev) => !prev)
+                                    }
+                                    className="mt-1 text-[10px] text-blue-700 underline cursor-pointer"
+                                  >
+                                    {showExtraTouchOverride
+                                      ? "Use order touch"
+                                      : "Different touch? (Advanced)"}
+                                  </button>
+                                  {showExtraTouchOverride && (
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0.01"
+                                      max="100"
+                                      value={extraMetalTouchPercent}
+                                      onChange={(e) =>
+                                        setExtraMetalTouchPercent(e.target.value)
+                                      }
+                                      placeholder={`Touch % (${liveTouch}%)`}
+                                      className="mt-1 w-full px-2 py-1 text-[11px] bg-white border border-blue-300 rounded-xs font-mono tabular-nums"
+                                    />
+                                  )}
+                                </>
                               )}
                             </div>
                           </>
@@ -3177,18 +3181,20 @@ function ProductionRegisterContent() {
                             </div>
                           </div>
                         )}
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">
-                            Business Date *
-                          </label>
-                          <input
-                            type="date"
-                            required
-                            value={businessDate}
-                            onChange={(e) => setBusinessDate(e.target.value)}
-                            className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-xs"
-                          />
-                        </div>
+                        {showAdvancedEntry && (
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                              Business Date *
+                            </label>
+                            <input
+                              type="date"
+                              required
+                              value={businessDate}
+                              onChange={(e) => setBusinessDate(e.target.value)}
+                              className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-xs"
+                            />
+                          </div>
+                        )}
                       </div>
 
                       {/* FILING ONLY: Edit Filing IN (Add / Return Unused / Correct) */}
@@ -3446,8 +3452,8 @@ function ProductionRegisterContent() {
                                 Previous issues
                               </span>
                               <span className="font-mono font-bold text-blue-900">
-                                Total Filing IN:{" "}
-                                {selectedOrderRow.filingValidIssuedWeight || "0.000"} g
+                                Net Filing IN:{" "}
+                                {Number(activeProcessObj.issuedMetalWeight || 0).toFixed(3)} g
                               </span>
                             </div>
                             <div className="space-y-1">
@@ -3565,8 +3571,8 @@ function ProductionRegisterContent() {
                         </div>
                       )}
 
-                      {/* Optional Partial Return (hidden behind button) */}
-                      {entryStep === "RECEIVE_WORK" && (
+                      {/* Optional Partial Return (only in More Options) */}
+                      {entryStep === "RECEIVE_WORK" && showAdvancedEntry && (
                         <div className="space-y-2 pt-1">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <button
@@ -3656,14 +3662,16 @@ function ProductionRegisterContent() {
                                   <option value="COMPLETE">Ready to Complete Order</option>
                                 </select>
                               </div>
-                              <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer pt-4">
-                                <input
-                                  type="checkbox"
-                                  checked={isRepairing}
-                                  onChange={(e) => setIsRepairing(e.target.checked)}
-                                />
-                                <span>Mark as Repairing</span>
-                              </label>
+                              {showAdvancedEntry && (
+                                <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer pt-4">
+                                  <input
+                                    type="checkbox"
+                                    checked={isRepairing}
+                                    onChange={(e) => setIsRepairing(e.target.checked)}
+                                  />
+                                  <span>Mark as Repairing</span>
+                                </label>
+                              )}
                             </div>
                           )}
 
