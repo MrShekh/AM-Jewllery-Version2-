@@ -285,7 +285,6 @@ export const ManufacturingWorksheetPreview: React.FC<
                 : ""}
             </div>
           </div>
-          {renderBlankRow("setting-r2")}
           <div className={`${procGridClass} border-b border-black bg-gray-50`}>
             <div className="px-1 border-r border-black font-semibold text-[8.5px] text-gray-700 h-5 flex items-center">
               REPAIRING
@@ -328,6 +327,25 @@ export const ManufacturingWorksheetPreview: React.FC<
           <div className="border-r border-black h-6" />
           <div className="h-6" />
         </div>
+        {(() => {
+          const settingIn = Number(settingSummary?.inWeight || 0);
+          const adWt = Number(settingSummary?.adWeight || 0);
+          const klWt = Number(settingSummary?.klWeight || 0);
+          const settingTotalIn = settingIn + adWt + klWt;
+          return (
+            <div className={`${procGridClass} border-b border-black bg-blue-50`}>
+              <div className="px-1 border-r border-black font-bold text-[10px] h-6 flex items-center">
+                TOTAL
+              </div>
+              <div className="px-1 border-r border-black h-6 flex items-center justify-end font-mono font-bold text-[9.5px] text-blue-950">
+                {settingTotalIn > 0 ? `${settingTotalIn.toFixed(3)}g` : ""}
+              </div>
+              <div className="border-r border-black h-6" />
+              <div className="border-r border-black h-6" />
+              <div className="h-6" />
+            </div>
+          );
+        })()}
 
         {renderProcessSection("NOKSI", "noksi")}
         {renderProcessSection("FINAL POLISH", "finalpolish")}
