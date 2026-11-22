@@ -508,6 +508,8 @@ function BillingWorkspaceInner() {
 
   const [customAdvanceGoldUsed, setCustomAdvanceGoldUsed] = useState("0");
   const [advanceManuallyEdited, setAdvanceManuallyEdited] = useState(false);
+  const [makingChargeManuallyEdited, setMakingChargeManuallyEdited] =
+    useState(false);
 
   // Pre-select orders passed via ?orderIds=...
   useEffect(() => {
@@ -690,10 +692,18 @@ function BillingWorkspaceInner() {
     bills,
   ]);
 
-  // Reset manual advance override whenever customer changes
+  // Reset manual advance & making charge overrides whenever customer changes
   useEffect(() => {
     setAdvanceManuallyEdited(false);
+    setMakingChargeManuallyEdited(false);
   }, [customerId]);
+
+  // Auto-fill Admin Internal Making Charge (g) = Billed Fine - Delivered Pure Gold unless manually overridden
+  useEffect(() => {
+    if (editingBillId || makingChargeManuallyEdited) return;
+    const autoMaking = Math.max(0, draftTotals.makingDiff);
+    setAdminMakingCharge(autoMaking > 0 ? formatWeight3(autoMaking) : "");
+  }, [editingBillId, makingChargeManuallyEdited, draftTotals.makingDiff]);
 
   // Auto-fill Advance Gold to Use with min(availableAdvance, billFineTotal) unless manually overridden
   useEffect(() => {
@@ -2301,22 +2311,39 @@ function BillingWorkspaceInner() {
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-semibold text-amber-900 mb-0.5">
-                          Admin Internal Making Charge (g)
-                        </label>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <label className="block text-[11px] font-semibold text-amber-900">
+                            Admin Internal Making Charge (g)
+                          </label>
+                          {draftTotals.makingDiff > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMakingChargeManuallyEdited(false);
+                                setAdminMakingCharge(formatWeight3(draftTotals.makingDiff));
+                              }}
+                              className="text-[10px] text-amber-800 hover:underline font-semibold cursor-pointer"
+                            >
+                              Auto ({formatWeight3(draftTotals.makingDiff)} g)
+                            </button>
+                          )}
+                        </div>
                         <input
                           type="number"
                           step="0.001"
                           min="0"
                           value={adminMakingCharge}
-                          onChange={(e) => setAdminMakingCharge(e.target.value)}
+                          onChange={(e) => {
+                            setMakingChargeManuallyEdited(true);
+                            setAdminMakingCharge(e.target.value);
+                          }}
                           placeholder="0.000"
                           className="w-full px-2.5 py-1.5 border border-amber-300 rounded-xs bg-amber-50/40 font-mono"
                         />
                         <span className="text-[10px] text-amber-800">
                           {Number(adminMakingCharge || 0) > 0
-                            ? `${Math.round(Number(adminMakingCharge) * 1000)} mg • Dashboard only`
-                            : "In grams (e.g. 0.040 = 40 mg) — Dashboard only"}
+                            ? `${Math.round(Number(adminMakingCharge) * 1000)} mg • Auto: Billed Fine − Pure Gold`
+                            : "Auto-calculated (Billed Fine − Pure Gold) • Dashboard only"}
                         </span>
                       </div>
                       <div>
