@@ -77,14 +77,24 @@ export function StockBoxQrModal({
 
   const chosenPurities = purities.filter((p) => selectedIds[p.purityId]);
 
-  function handlePrintStickers() {
+  async function handlePrintStickers() {
     if (chosenPurities.length === 0) return;
-    const printWin = window.open("", "_blank", "width=900,height=700");
-    if (!printWin) return;
+
+    const resolvedQrMap: Record<string, string> = { ...qrMap };
+    await Promise.all(
+      chosenPurities.map(async (p) => {
+        if (!resolvedQrMap[p.purityId]) {
+          resolvedQrMap[p.purityId] = await QRCode.toDataURL(
+            buildStockBoxQrUrl(p.code),
+            { width: 240, margin: 1, errorCorrectionLevel: "M" }
+          );
+        }
+      })
+    );
 
     const cardsHtml = chosenPurities
       .map((p) => {
-        const qrSrc = qrMap[p.purityId] || "";
+        const qrSrc = resolvedQrMap[p.purityId] || "";
         const isFine = p.isFineCategory || Number(p.touchPercent) >= 99;
         const title = isFine ? "FINE GOLD (100%)" : p.displayLabel;
         return `
@@ -100,7 +110,7 @@ export function StockBoxQrModal({
       })
       .join("");
 
-    printWin.document.write(`
+    const html = `
       <!DOCTYPE html>
       <html>
         <head>
@@ -127,13 +137,41 @@ export function StockBoxQrModal({
         </head>
         <body>
           <div class="grid">${cardsHtml}</div>
-          <script>
-            window.onload = function() { setTimeout(function() { window.print(); }, 250); };
-          </script>
         </body>
       </html>
-    `);
-    printWin.document.close();
+    `;
+
+    // Use a hidden iframe so browser popup blockers never block printing
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc || !iframe.contentWindow) {
+      document.body.removeChild(iframe);
+      return;
+    }
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } finally {
+        setTimeout(() => {
+          if (iframe.parentNode) {
+            iframe.parentNode.removeChild(iframe);
+          }
+        }, 1500);
+      }
+    }, 300);
   }
 
   return (
