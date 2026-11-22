@@ -297,6 +297,17 @@ function ProductionRegisterContent() {
   const [activeProcessType, setActiveProcessType] =
     useState<ProcessType>("FILING");
   const [moveTargetStage, setMoveTargetStage] = useState<string>("");
+  const [repairWeight, setRepairWeight] = useState("");
+  const [repairKarigarId, setRepairKarigarId] = useState("");
+  const [repairNotes, setRepairNotes] = useState("");
+  const [stageAddGoldWeight, setStageAddGoldWeight] = useState("");
+  const [stageAddGoldKarigarId, setStageAddGoldKarigarId] = useState("");
+  const [stageAddGoldNotes, setStageAddGoldNotes] = useState("");
+  const [showStageAddGoldBox, setShowStageAddGoldBox] = useState(false);
+  const [weightGainPrompt, setWeightGainPrompt] = useState<{
+    gainGrams: string;
+    message: string;
+  } | null>(null);
   const [selectedKarigarId, setSelectedKarigarId] = useState<string>("");
   const [quickKarigarName, setQuickKarigarName] = useState<string>("");
   const [grossInWeight, setGrossInWeight] = useState<string>("");
@@ -635,6 +646,83 @@ function ProductionRegisterContent() {
     setSettleNoksiImmediately(false);
   }
 
+  async function handleReopenForRepair(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedOrderRow || !activeProcessObj || submittingAction) return;
+    setActionError(null);
+    setActionSuccess(null);
+    setSubmittingAction(true);
+    try {
+      const res = await fetch(
+        `/api/orders/${selectedOrderRow.order.id}/process`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "REOPEN_STAGE_FOR_REPAIR",
+            toProcessType: activeProcessObj.processType,
+            karigarId: repairKarigarId || selectedKarigarId,
+            weightGrams: repairWeight,
+            notes: repairNotes || undefined,
+          }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setActionError(data.error || "Failed to send piece for repair");
+      } else {
+        setActionSuccess(
+          `Sent ${data.weightGrams} g to ${PROCESS_DISPLAY_LABELS[activeProcessObj.processType]} (${data.karigarName}) for repair — no Admin Stock deducted.`
+        );
+        setRepairWeight("");
+        setRepairNotes("");
+        setIsRepairing(true);
+        await loadRegister();
+      }
+    } finally {
+      setSubmittingAction(false);
+    }
+  }
+
+  async function handleAddStageGold(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedOrderRow || !activeProcessObj || submittingAction) return;
+    setActionError(null);
+    setActionSuccess(null);
+    setSubmittingAction(true);
+    try {
+      const res = await fetch(
+        `/api/orders/${selectedOrderRow.order.id}/process`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "ADD_STAGE_GOLD",
+            processType: activeProcessObj.processType,
+            karigarId: stageAddGoldKarigarId || selectedKarigarId,
+            additionalWeight: stageAddGoldWeight,
+            notes: stageAddGoldNotes || undefined,
+            idempotencyKey: `ui_addstg_${selectedOrderRow.order.id}_${activeProcessObj.processType}_${Date.now()}`,
+          }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setActionError(data.error || "Failed to add new piece / admin gold");
+      } else {
+        setActionSuccess(
+          `Added +${data.addedWeight} g from Admin Stock to ${PROCESS_DISPLAY_LABELS[activeProcessObj.processType]} (${data.transactionNumber}).`
+        );
+        setStageAddGoldWeight("");
+        setStageAddGoldNotes("");
+        setShowStageAddGoldBox(false);
+        await loadRegister();
+      }
+    } finally {
+      setSubmittingAction(false);
+    }
+  }
+
   async function handleMovePendingStage() {
     if (!selectedOrderRow || !activeProcessObj || !moveTargetStage || submittingAction) {
       return;
@@ -908,8 +996,19 @@ function ProductionRegisterContent() {
       );
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        setActionError(data.error || "Failed to post process entry");
+        const errText = String(data.error || "Failed to post process entry");
+        const gainMatch = errText.match(/\((-\d+\.\d+)g/);
+        if (errText.includes("Unexplained") && gainMatch) {
+          const absGain = Math.abs(Number(gainMatch[1])).toFixed(3);
+          setWeightGainPrompt({
+            gainGrams: absGain,
+            message: errText,
+          });
+        } else {
+          setActionError(errText);
+        }
       } else {
+        setWeightGainPrompt(null);
         setActionSuccess(
           `Posted ${
             PROCESS_DISPLAY_LABELS[activeProcessObj.processType]
@@ -2406,6 +2505,64 @@ function ProductionRegisterContent() {
                         .join(" → ")}
                     </span>
                   </p>
+                  {(() => {
+                    const supplied = Number(selectedOrderRow.order.initialIssuedMetalWeight || 0);
+                    const totalLoss = selectedOrderRow.processes.reduce(
+                      (s, p) => s + Number(p.closedLossWeight || 0),
+                      0
+                    );
+                    const totalExtra = selectedOrderRow.processes.reduce(
+                      (s, p) => s + Number(p.extraReturnedMetalWeight || 0),
+                      0
+                    );
+                    const totalCustody = selectedOrderRow.processes.reduce(
+                      (s, p) => s + Number(p.custodyMetalWeight || 0),
+                      0
+                    );
+                    const isDone =
+                      selectedOrderRow.order.status === "COMPLETED" ||
+                      selectedOrderRow.order.status === "DELIVERED";
+                    const finishedNet = Number(
+                      selectedOrderRow.order.finishedNetMetalWeight || 0
+                    );
+                    const diff = isDone
+                      ? supplied - (finishedNet + totalExtra + totalLoss)
+                      : 0;
+                    const balanced = isDone && Math.abs(diff) <= 0.005;
+                    return (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] font-mono">
+                        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200">
+                          Supplied: {supplied.toFixed(3)} g
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-800 border border-rose-200">
+                          Net Loss: {totalLoss.toFixed(3)} g
+                        </span>
+                        {totalExtra > 0 && (
+                          <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                            Extra Ret: {totalExtra.toFixed(3)} g
+                          </span>
+                        )}
+                        {totalCustody > 0 && (
+                          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">
+                            In Karigar Custody: {totalCustody.toFixed(3)} g
+                          </span>
+                        )}
+                        {isDone && (
+                          <span
+                            className={`px-2 py-0.5 rounded font-bold border ${
+                              balanced
+                                ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                                : "bg-amber-100 text-amber-900 border-amber-300"
+                            }`}
+                          >
+                            {balanced
+                              ? "✓ Bag Balanced"
+                              : `⚠ Diff: ${diff.toFixed(3)} g — review entries`}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -2737,6 +2894,13 @@ function ProductionRegisterContent() {
                             >
                               Receive Work (OUT)
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowStageAddGoldBox((v) => !v)}
+                              className="px-2.5 py-0.5 font-semibold cursor-pointer bg-amber-50 text-amber-900 hover:bg-amber-100 border-l border-slate-300"
+                            >
+                              + New Piece / Gold
+                            </button>
                           </div>
                         </div>
                         <span className="text-[11px] font-mono text-slate-600">
@@ -2745,6 +2909,57 @@ function ProductionRegisterContent() {
                             : `Carried Stone In: ${activeProcessObj.carriedStoneInWeight} g`}
                         </span>
                       </div>
+
+                      {showStageAddGoldBox && (
+                        <div className="p-3 bg-amber-50 border border-amber-300 rounded-xs space-y-2 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-amber-950">
+                              + Add New Piece / Admin Gold to {PROCESS_DISPLAY_LABELS[activeProcessObj.processType]}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowStageAddGoldBox(false)}
+                              className="text-amber-800 hover:underline text-[11px] cursor-pointer"
+                            >
+                              Close
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-amber-900">
+                            Deducts Admin Stock once and adds to Bag Total Supplied.
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <input
+                              type="number"
+                              step="0.001"
+                              min="0.001"
+                              value={stageAddGoldWeight}
+                              onChange={(e) => setStageAddGoldWeight(e.target.value)}
+                              placeholder="Weight (g) e.g. 0.781"
+                              className="px-2 py-1 bg-white border border-amber-300 rounded-xs font-mono"
+                            />
+                            <select
+                              value={stageAddGoldKarigarId || selectedKarigarId}
+                              onChange={(e) => setStageAddGoldKarigarId(e.target.value)}
+                              className="px-2 py-1 bg-white border border-amber-300 rounded-xs"
+                            >
+                              <option value="">-- Select Karigar --</option>
+                              {karigars.map((k) => (
+                                <option key={k.id} value={k.id}>
+                                  {k.name}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              disabled={submittingAction || !stageAddGoldWeight}
+                              onClick={(e) => void handleAddStageGold(e)}
+                              className="px-3 py-1 bg-amber-700 hover:bg-amber-800 disabled:opacity-50 text-white font-semibold rounded-xs cursor-pointer"
+                            >
+                              {submittingAction ? "Adding..." : "Deduct & Add Gold"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       {Number(activeProcessObj.custodyMetalWeight || 0) > 0 &&
                         Number(activeProcessObj.returnedMetalWeight || 0) === 0 && (
@@ -3619,19 +3834,112 @@ function ProductionRegisterContent() {
                       </div>
                     </form>
                   ) : (
-                    <div className="p-4 text-xs text-slate-700 space-y-2">
-                      <div className="font-bold text-slate-900">
-                        {activeProcessObj
-                          ? `${PROCESS_DISPLAY_LABELS[activeProcessObj.processType]} is CLOSED.`
-                          : "Select a process stage on the left."}
+                    <div className="p-4 text-xs text-slate-700 space-y-4">
+                      <div>
+                        <div className="font-bold text-slate-900">
+                          {activeProcessObj
+                            ? `${PROCESS_DISPLAY_LABELS[activeProcessObj.processType]} is CLOSED.`
+                            : "Select a process stage on the left."}
+                        </div>
+                        <p className="mt-1">
+                          Select the next open process stage on the left, or click{" "}
+                          <span className="font-semibold">
+                            Complete Order & Move to Finished Goods
+                          </span>{" "}
+                          once all selected stages are closed.
+                        </p>
                       </div>
-                      <p>
-                        Select the next open process stage on the left, or click{" "}
-                        <span className="font-semibold">
-                          Complete Order & Move to Finished Goods
-                        </span>{" "}
-                        once all selected stages are closed.
-                      </p>
+
+                      {activeProcessObj &&
+                        selectedOrderRow.order.status !== "COMPLETED" &&
+                        selectedOrderRow.order.status !== "DELIVERED" &&
+                        selectedOrderRow.order.status !== "CANCELLED" && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200">
+                            <form
+                              onSubmit={handleReopenForRepair}
+                              className="p-3 bg-white border border-blue-200 rounded-xs space-y-2"
+                            >
+                              <div className="font-bold text-blue-900">
+                                🔧 Send Existing Piece for Repair
+                              </div>
+                              <p className="text-[11px] text-slate-500">
+                                Reopens {PROCESS_DISPLAY_LABELS[activeProcessObj.processType]} without deducting Admin Stock (e.g. 1 ring 3.455 g sent back for repair).
+                              </p>
+                              <input
+                                type="number"
+                                step="0.001"
+                                min="0.001"
+                                required
+                                value={repairWeight}
+                                onChange={(e) => setRepairWeight(e.target.value)}
+                                placeholder="Piece weight (g) e.g. 3.455"
+                                className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-xs font-mono"
+                              />
+                              <select
+                                required
+                                value={repairKarigarId || selectedKarigarId}
+                                onChange={(e) => setRepairKarigarId(e.target.value)}
+                                className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-xs"
+                              >
+                                <option value="">-- Select Karigar --</option>
+                                {karigars.map((k) => (
+                                  <option key={k.id} value={k.id}>
+                                    {k.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="submit"
+                                disabled={submittingAction}
+                                className="w-full py-1.5 bg-blue-700 hover:bg-blue-800 text-white font-semibold rounded-xs cursor-pointer"
+                              >
+                                Send for Repair (0 Stock Deducted)
+                              </button>
+                            </form>
+
+                            <form
+                              onSubmit={handleAddStageGold}
+                              className="p-3 bg-white border border-amber-200 rounded-xs space-y-2"
+                            >
+                              <div className="font-bold text-amber-900">
+                                ➕ Add New Piece / Admin Gold
+                              </div>
+                              <p className="text-[11px] text-slate-500">
+                                Adds a separate new piece or extra gold (e.g. 0.781 g) from Admin Stock and reopens {PROCESS_DISPLAY_LABELS[activeProcessObj.processType]}.
+                              </p>
+                              <input
+                                type="number"
+                                step="0.001"
+                                min="0.001"
+                                required
+                                value={stageAddGoldWeight}
+                                onChange={(e) => setStageAddGoldWeight(e.target.value)}
+                                placeholder="New gold weight (g) e.g. 0.781"
+                                className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-xs font-mono"
+                              />
+                              <select
+                                required
+                                value={stageAddGoldKarigarId || selectedKarigarId}
+                                onChange={(e) => setStageAddGoldKarigarId(e.target.value)}
+                                className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-xs"
+                              >
+                                <option value="">-- Select Karigar --</option>
+                                {karigars.map((k) => (
+                                  <option key={k.id} value={k.id}>
+                                    {k.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="submit"
+                                disabled={submittingAction}
+                                className="w-full py-1.5 bg-amber-700 hover:bg-amber-800 text-white font-semibold rounded-xs cursor-pointer"
+                              >
+                                Deduct Admin Stock & Reopen
+                              </button>
+                            </form>
+                          </div>
+                        )}
                     </div>
                   )}
                 </div>
@@ -4353,6 +4661,159 @@ function ProductionRegisterContent() {
             Showing {rows.length} order(s) • Month tabs filter rows only and never reset stock or loss balances.
           </div>
         </div>
+        {weightGainPrompt && selectedOrderRow && activeProcessObj && (
+          <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg max-w-md w-full p-5 space-y-4 shadow-xl border border-amber-300">
+              <div className="border-b pb-2">
+                <h3 className="text-sm font-bold text-amber-950">
+                  Weight Increased by +{weightGainPrompt.gainGrams} g — Where did it come from?
+                </h3>
+                <p className="text-xs text-slate-600 mt-1">
+                  Output weight is +{weightGainPrompt.gainGrams} g higher than recorded input for{" "}
+                  <strong>{PROCESS_DISPLAY_LABELS[activeProcessObj.processType]}</strong>.
+                </p>
+              </div>
+              <div className="space-y-2 text-xs">
+                <button
+                  type="button"
+                  disabled={submittingAction}
+                  onClick={async () => {
+                    setSubmittingAction(true);
+                    setActionError(null);
+                    try {
+                      const res = await fetch(
+                        `/api/orders/${selectedOrderRow.order.id}/process`,
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            action: "POST_PROCESS_ENTRY",
+                            processType: activeProcessObj.processType,
+                            karigarId: selectedKarigarId,
+                            grossInWeight,
+                            grossOutWeight,
+                            extraMetalReturnedWeight: extraMetalReturnedWeight || undefined,
+                            closeProcess,
+                            nextProcessType: closeProcess && nextProcessType ? nextProcessType : undefined,
+                            adjustAgainstKarigarBalance: true,
+                            isRepairing,
+                            businessDate,
+                            notes: entryNotes || undefined,
+                            idempotencyKey: `ui_proc_adj_${selectedOrderRow.order.id}_${activeProcessObj.processType}_${Date.now()}`,
+                          }),
+                        }
+                      );
+                      const data = await res.json();
+                      if (!res.ok || !data.ok) {
+                        setActionError(data.error || "Failed to adjust against karigar balance");
+                      } else {
+                        setWeightGainPrompt(null);
+                        setActionSuccess(
+                          `Adjusted +${weightGainPrompt.gainGrams} g against karigar balance (${PROCESS_DISPLAY_LABELS[activeProcessObj.processType]}).`
+                        );
+                        await loadRegister();
+                      }
+                    } finally {
+                      setSubmittingAction(false);
+                    }
+                  }}
+                  className="w-full text-left p-3 rounded border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 cursor-pointer"
+                >
+                  <div className="font-bold text-emerald-900">
+                    1. From Karigar&apos;s Outstanding Balance (-{weightGainPrompt.gainGrams} g loss)
+                  </div>
+                  <div className="text-[11px] text-emerald-800 mt-0.5">
+                    Karigar used his own / previously lost gold; reduces his loss balance.
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={submittingAction}
+                  onClick={async () => {
+                    setSubmittingAction(true);
+                    setActionError(null);
+                    try {
+                      const addRes = await fetch(
+                        `/api/orders/${selectedOrderRow.order.id}/process`,
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            action: "ADD_STAGE_GOLD",
+                            processType: activeProcessObj.processType,
+                            karigarId: selectedKarigarId,
+                            additionalWeight: weightGainPrompt.gainGrams,
+                            notes: `Extra gold added during ${activeProcessObj.processType}`,
+                            idempotencyKey: `ui_gain_add_${selectedOrderRow.order.id}_${Date.now()}`,
+                          }),
+                        }
+                      );
+                      const addData = await addRes.json();
+                      if (!addRes.ok || !addData.ok) {
+                        setActionError(addData.error || "Failed to deduct from Admin Stock");
+                        return;
+                      }
+                      const updatedGrossIn = (
+                        Number(grossInWeight || 0) + Number(weightGainPrompt.gainGrams)
+                      ).toFixed(3);
+                      const postRes = await fetch(
+                        `/api/orders/${selectedOrderRow.order.id}/process`,
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            action: "POST_PROCESS_ENTRY",
+                            processType: activeProcessObj.processType,
+                            karigarId: selectedKarigarId,
+                            grossInWeight: updatedGrossIn,
+                            grossOutWeight,
+                            extraMetalReturnedWeight: extraMetalReturnedWeight || undefined,
+                            closeProcess,
+                            nextProcessType: closeProcess && nextProcessType ? nextProcessType : undefined,
+                            adjustAgainstKarigarBalance: false,
+                            isRepairing,
+                            businessDate,
+                            notes: entryNotes || undefined,
+                            idempotencyKey: `ui_gain_post_${selectedOrderRow.order.id}_${Date.now()}`,
+                          }),
+                        }
+                      );
+                      const postData = await postRes.json();
+                      if (!postRes.ok || !postData.ok) {
+                        setActionError(postData.error || "Added stock, but failed to post return");
+                      } else {
+                        setWeightGainPrompt(null);
+                        setActionSuccess(
+                          `Deducted +${weightGainPrompt.gainGrams} g from Admin Stock and closed ${PROCESS_DISPLAY_LABELS[activeProcessObj.processType]}.`
+                        );
+                        await loadRegister();
+                      }
+                    } finally {
+                      setSubmittingAction(false);
+                    }
+                  }}
+                  className="w-full text-left p-3 rounded border border-amber-300 bg-amber-50 hover:bg-amber-100 cursor-pointer"
+                >
+                  <div className="font-bold text-amber-900">
+                    2. New Gold Added from Admin Stock (+{weightGainPrompt.gainGrams} g)
+                  </div>
+                  <div className="text-[11px] text-amber-800 mt-0.5">
+                    Deducts +{weightGainPrompt.gainGrams} g from Admin Stock once and adds to Bag Supplied.
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setWeightGainPrompt(null)}
+                  className="w-full p-2 text-center rounded border border-slate-300 bg-white hover:bg-slate-50 font-semibold text-slate-700 cursor-pointer"
+                >
+                  3. Cancel &amp; Fix Weights Manually
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AppShell>
   );

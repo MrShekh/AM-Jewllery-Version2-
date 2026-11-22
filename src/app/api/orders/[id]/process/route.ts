@@ -3,6 +3,7 @@ import { requireServerActor } from "@/lib/auth";
 import { handleApiError } from "@/lib/api-response";
 import { erpService, ProcessType, StoneComponentInput } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
+import { Decimal } from "@prisma/client/runtime/library";
 
 export async function POST(
   req: NextRequest,
@@ -104,6 +105,309 @@ export async function POST(
         deltaWeight: res.deltaWeight.toFixed(3),
         netIssuedWeight: res.process.issuedMetalWeight.toFixed(3),
       });
+    }
+
+    if (action === "REOPEN_STAGE_FOR_REPAIR") {
+      const toProcessType = body.toProcessType as ProcessType;
+      const karigarId = String(body.karigarId || "").trim();
+      const weightNum = Number(body.weightGrams || 0);
+      const notes = body.notes ? String(body.notes).trim() : "";
+
+      if (!toProcessType || !karigarId || !Number.isFinite(weightNum) || weightNum <= 0) {
+        return NextResponse.json(
+          { ok: false, error: "Select stage, karigar, and weight > 0" },
+          { status: 400 }
+        );
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        const order = await tx.order.findFirst({
+          where: { id: orderId, organizationId: actor.organizationId },
+        });
+        if (!order) throw new Error("Order not found");
+        if (order.status === "COMPLETED" || order.status === "CANCELLED") {
+          throw new Error(`Cannot send piece for repair on ${order.status} order`);
+        }
+
+        const targetProc = await tx.orderProcess.findFirst({
+          where: { orderId, processType: toProcessType },
+        });
+        if (!targetProc) {
+          throw new Error(`Stage ${toProcessType} is not on this order`);
+        }
+
+        const karigar = await tx.karigar.findFirst({
+          where: { id: karigarId, organizationId: actor.organizationId },
+        });
+        if (!karigar) throw new Error("Karigar not found");
+
+        const w = new Decimal(weightNum.toFixed(6));
+
+        // If a downstream open stage currently holds unreturned metal >= w, transfer custody from it
+        const holderProc = await tx.orderProcess.findFirst({
+          where: {
+            orderId,
+            id: { not: targetProc.id },
+            status: { not: "CLOSED" },
+            custodyMetalWeight: { gte: w },
+            returnedMetalWeight: 0,
+          },
+          orderBy: { sequenceOrder: "desc" },
+        });
+        if (holderProc) {
+          await tx.orderProcess.update({
+            where: { id: holderProc.id },
+            data: {
+              issuedMetalWeight: { decrement: w },
+              custodyMetalWeight: { decrement: w },
+              latestGrossInWeight: {
+                set: new Decimal(
+                  Math.max(0, Number(holderProc.latestGrossInWeight) - weightNum).toFixed(6)
+                ),
+              },
+            },
+          });
+        }
+
+        await tx.orderProcess.update({
+          where: { id: targetProc.id },
+          data: {
+            status: "IN_PROGRESS",
+            assignedKarigarId: karigar.id,
+            issuedMetalWeight: { increment: w },
+            custodyMetalWeight: { increment: w },
+            latestGrossInWeight: w,
+            closedAt: null,
+            closedById: null,
+          },
+        });
+
+        await tx.metalMovement.create({
+          data: {
+            organizationId: actor.organizationId,
+            orderId: order.id,
+            orderProcessId: targetProc.id,
+            movementType: "PROCESS_TRANSFER",
+            fromProcessType: null,
+            toProcessType,
+            karigarId: karigar.id,
+            businessDate: new Date(),
+            grossWeight: w,
+            nonGoldWeight: 0,
+            netMetalWeight: w,
+            touchSnapshot: order.touchSnapshot,
+            fineEquivalentWeight: new Decimal(
+              ((weightNum * Number(order.touchSnapshot)) / 100).toFixed(6)
+            ),
+            notes: notes || `Repair piece sent to ${toProcessType} (${weightNum.toFixed(3)} g)`,
+            idempotencyKey: `repair_${orderId}_${toProcessType}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            createdById: actor.userId,
+          },
+        });
+
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            status: "IN_PROCESS",
+          },
+        });
+
+        return {
+          toProcessType,
+          weightGrams: weightNum.toFixed(3),
+          karigarName: karigar.name,
+        };
+      });
+
+      return NextResponse.json({ ok: true, ...result });
+    }
+
+    if (action === "ADD_STAGE_GOLD") {
+      const processType = body.processType as ProcessType;
+      const karigarId = String(body.karigarId || "").trim();
+      const weightNum = Number(body.additionalWeight || 0);
+      const notes = body.notes ? String(body.notes).trim() : "";
+
+      if (!processType || !karigarId || !Number.isFinite(weightNum) || weightNum <= 0) {
+        return NextResponse.json(
+          { ok: false, error: "Select stage, karigar, and additional weight > 0" },
+          { status: 400 }
+        );
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        const order = await tx.order.findFirst({
+          where: { id: orderId, organizationId: actor.organizationId },
+          include: { purity: true },
+        });
+        if (!order) throw new Error("Order not found");
+        if (order.status === "COMPLETED" || order.status === "CANCELLED") {
+          throw new Error(`Cannot add gold to ${order.status} order`);
+        }
+
+        const targetProc = await tx.orderProcess.findFirst({
+          where: { orderId, processType },
+        });
+        if (!targetProc) throw new Error(`Stage ${processType} not found on this order`);
+
+        const karigar = await tx.karigar.findFirst({
+          where: { id: karigarId, organizationId: actor.organizationId },
+        });
+        if (!karigar) throw new Error("Karigar not found");
+
+        const adminPoolAcct = await tx.stockAccount.findFirst({
+          where: {
+            organizationId: actor.organizationId,
+            accountCode: `ADMIN_POOL_${order.purity.code}`,
+          },
+        });
+        if (!adminPoolAcct || Number(adminPoolAcct.cachedPhysicalBalance) < weightNum) {
+          throw new Error(
+            `Insufficient ${order.purity.displayLabel} stock (${Number(adminPoolAcct?.cachedPhysicalBalance || 0).toFixed(3)} g available, required ${weightNum.toFixed(3)} g)`
+          );
+        }
+
+        let karigarCustodyAcct = await tx.stockAccount.findFirst({
+          where: {
+            organizationId: actor.organizationId,
+            accountCode: `KARIGAR_CUSTODY_${karigar.id}`,
+          },
+        });
+        if (!karigarCustodyAcct) {
+          karigarCustodyAcct = await tx.stockAccount.create({
+            data: {
+              organizationId: actor.organizationId,
+              accountCode: `KARIGAR_CUSTODY_${karigar.id}`,
+              name: `Karigar Custody - ${karigar.name} (${karigar.karigarCode})`,
+              accountType: "KARIGAR_CUSTODY",
+              karigarId: karigar.id,
+              cachedPhysicalBalance: 0,
+              cachedFineBalance: 0,
+            },
+          });
+        }
+
+        const w = new Decimal(weightNum.toFixed(6));
+        const fineNum = (weightNum * Number(order.touchSnapshot)) / 100;
+        const fineW = new Decimal(fineNum.toFixed(6));
+        const txNum = `JTX-ADD-${Date.now().toString().slice(-6)}`;
+
+        const jtx = await tx.journalTransaction.create({
+          data: {
+            organizationId: actor.organizationId,
+            transactionNumber: txNum,
+            transactionType: "ORDER_METAL_ISSUE",
+            businessDate: new Date(),
+            purityId: order.purityId,
+            touchSnapshot: order.touchSnapshot,
+            physicalWeight: w,
+            fineEquivalentWeight: fineW,
+            orderId: order.id,
+            orderProcessId: targetProc.id,
+            karigarId: karigar.id,
+            sourceReference: `BAG-${order.bagNumber}`,
+            reason: notes || `New piece / admin gold +${weightNum.toFixed(3)}g to Bag #${order.bagNumber} (${processType})`,
+            idempotencyKey: `add_stg_jtx_${idempotencyKey}`,
+            actorId: actor.userId,
+          },
+        });
+
+        await tx.journalLine.createMany({
+          data: [
+            {
+              organizationId: actor.organizationId,
+              journalTransactionId: jtx.id,
+              accountId: adminPoolAcct.id,
+              direction: "CREDIT_OUT",
+              signedPhysicalDelta: w.neg(),
+              touchSnapshot: order.touchSnapshot,
+              signedFineDelta: fineW.neg(),
+              orderId: order.id,
+              orderProcessId: targetProc.id,
+              karigarId: karigar.id,
+              description: `Issued +${weightNum.toFixed(3)}g to Bag #${order.bagNumber} (${processType})`,
+            },
+            {
+              organizationId: actor.organizationId,
+              journalTransactionId: jtx.id,
+              accountId: karigarCustodyAcct.id,
+              direction: "DEBIT_IN",
+              signedPhysicalDelta: w,
+              touchSnapshot: order.touchSnapshot,
+              signedFineDelta: fineW,
+              orderId: order.id,
+              orderProcessId: targetProc.id,
+              karigarId: karigar.id,
+              description: `Received +${weightNum.toFixed(3)}g for Bag #${order.bagNumber} (${processType})`,
+            },
+          ],
+        });
+
+        await tx.stockAccount.update({
+          where: { id: adminPoolAcct.id },
+          data: {
+            cachedPhysicalBalance: { decrement: w },
+            cachedFineBalance: { decrement: fineW },
+          },
+        });
+        await tx.stockAccount.update({
+          where: { id: karigarCustodyAcct.id },
+          data: {
+            cachedPhysicalBalance: { increment: w },
+            cachedFineBalance: { increment: fineW },
+          },
+        });
+
+        await tx.metalMovement.create({
+          data: {
+            organizationId: actor.organizationId,
+            orderId: order.id,
+            orderProcessId: targetProc.id,
+            movementType: "ADDITIONAL_ADMIN_ISSUE",
+            toProcessType: processType,
+            karigarId: karigar.id,
+            businessDate: new Date(),
+            grossWeight: w,
+            nonGoldWeight: 0,
+            netMetalWeight: w,
+            touchSnapshot: order.touchSnapshot,
+            fineEquivalentWeight: fineW,
+            journalTransactionId: jtx.id,
+            notes: notes || `Added +${weightNum.toFixed(3)}g from Admin Stock to ${processType}`,
+            idempotencyKey: `add_stg_mov_${idempotencyKey}`,
+            createdById: actor.userId,
+          },
+        });
+
+        await tx.orderProcess.update({
+          where: { id: targetProc.id },
+          data: {
+            status: "IN_PROGRESS",
+            assignedKarigarId: karigar.id,
+            issuedMetalWeight: { increment: w },
+            custodyMetalWeight: { increment: w },
+            latestGrossInWeight: w,
+            closedAt: null,
+            closedById: null,
+          },
+        });
+
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            status: "IN_PROCESS",
+            initialIssuedMetalWeight: { increment: w },
+          },
+        });
+
+        return {
+          processType,
+          addedWeight: weightNum.toFixed(3),
+          transactionNumber: txNum,
+        };
+      });
+
+      return NextResponse.json({ ok: true, ...result });
     }
 
     if (action === "MOVE_PENDING_STAGE") {
