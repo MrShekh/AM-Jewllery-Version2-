@@ -641,8 +641,19 @@ function BillingWorkspaceInner() {
       ? Math.min(availAdv, Math.max(0, Number(customAdvanceGoldUsed || 0)))
       : 0;
     const netCustomerOwesFine = Math.max(0, fineTotal - advUsed);
-    const pastJamaFine = Number(activeCustomer?.fineOwed || 0);
-    const pastInrOwed = Number(activeCustomer?.inrOwed || 0);
+    const editingBill = editingBillId
+      ? bills.find((b) => b.id === editingBillId) || null
+      : null;
+    const pastJamaFine = Math.max(
+      0,
+      Number(activeCustomer?.fineOwed || 0) -
+        Number(editingBill?.fineOutstanding || 0)
+    );
+    const pastInrOwed = Math.max(
+      0,
+      Number(activeCustomer?.inrOwed || 0) -
+        Number(editingBill?.inrOutstanding || 0)
+    );
     const inrAdvAvail = Number(activeCustomer?.inrAdvance || 0);
     const inrAdvUsed = applyInrAdvance
       ? Math.min(inrAdvAvail, Math.max(0, inrTotal))
@@ -675,6 +686,8 @@ function BillingWorkspaceInner() {
     applyInrAdvance,
     customAdvanceGoldUsed,
     additionalRupees,
+    editingBillId,
+    bills,
   ]);
 
   // Reset manual advance override whenever customer changes
