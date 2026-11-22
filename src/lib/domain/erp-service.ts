@@ -3458,11 +3458,21 @@ export class ErpDomainService {
               ...rawNext,
               assignedKarigarId: nextKarigar.id,
               status: input.nextKarigarId ? "IN_PROGRESS" : "PENDING",
-              issuedMetalWeight: roundInternal(rawNext.issuedMetalWeight.add(metalOut)),
-              custodyMetalWeight: metalOut,
-              carriedStoneInWeight: nonGoldOut,
-              carriedStoneOutWeight: nonGoldOut,
-              latestGrossInWeight: grossOut,
+              issuedMetalWeight: roundInternal(
+                rawNext.issuedMetalWeight.add(metalOut)
+              ),
+              custodyMetalWeight: roundInternal(
+                rawNext.custodyMetalWeight.add(metalOut)
+              ),
+              carriedStoneInWeight: roundInternal(
+                rawNext.carriedStoneInWeight.add(nonGoldOut)
+              ),
+              carriedStoneOutWeight: roundInternal(
+                rawNext.carriedStoneOutWeight.add(nonGoldOut)
+              ),
+              latestGrossInWeight: roundInternal(
+                rawNext.latestGrossInWeight.add(grossOut)
+              ),
               closedAt: null,
               closedById: null,
               updatedAt: now,
