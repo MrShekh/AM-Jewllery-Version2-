@@ -2749,15 +2749,15 @@ function ProductionRegisterContent() {
                             setGrossOutWeight("");
                           }
                           setActiveProcessType(proc.processType);
-                          if (proc.assignedKarigarId) {
+                          const defKarId = resolveDefaultKarigarIdForProcess(
+                            proc.processType
+                          );
+                          if (proc.status === "PENDING" && defKarId) {
+                            setSelectedKarigarId(defKarId);
+                          } else if (proc.assignedKarigarId) {
                             setSelectedKarigarId(proc.assignedKarigarId);
-                          } else {
-                            const defKarId = resolveDefaultKarigarIdForProcess(
-                              proc.processType
-                            );
-                            if (defKarId) {
-                              setSelectedKarigarId(defKarId);
-                            }
+                          } else if (defKarId) {
+                            setSelectedKarigarId(defKarId);
                           }
                           if (Number(proc.latestGrossInWeight) > 0) {
                             setGrossInWeight(proc.latestGrossInWeight);
