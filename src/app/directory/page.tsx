@@ -81,6 +81,8 @@ function DirectoryContent() {
         totalAdvanceFineGold: "0.000",
         totalRecoveredFineGold: "0.000",
         totalPendingCashRupees: "0.00",
+        totalAdvanceCashRupees: "0.00",
+        totalRecoveredCashRupees: "0.00",
       }
   );
   const [byCustomer, setByCustomer] = useState<Record<string, CustomerRowStats>>(
@@ -498,13 +500,13 @@ function DirectoryContent() {
             </div>
             <div className="bg-white border border-slate-200 rounded-xs p-3">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Pending Cash
+                Cash (Pending / Adv / Rec)
               </div>
-              <div className="mt-1 text-xl font-bold font-mono text-slate-900">
+              <div className="mt-1 text-base font-bold font-mono text-rose-700">
                 ₹{customerSummary.totalPendingCashRupees || "0.00"}
               </div>
-              <div className="text-[11px] text-slate-500 mt-0.5">
-                Unpaid making / cash
+              <div className="text-[10px] text-slate-600 mt-0.5 font-mono">
+                Adv: ₹{customerSummary.totalAdvanceCashRupees || "0.00"} • Rec: ₹{customerSummary.totalRecoveredCashRupees || "0.00"}
               </div>
             </div>
           </div>
@@ -677,7 +679,7 @@ function DirectoryContent() {
                     <th className="p-2 text-right font-semibold">Pending Gold</th>
                     <th className="p-2 text-right font-semibold">Advance Gold</th>
                     <th className="p-2 text-right font-semibold">Recovered Gold</th>
-                    <th className="p-2 text-right font-semibold">Pending Cash</th>
+                    <th className="p-2 text-right font-semibold">Cash (Pend / Adv / Rec)</th>
                     <th className="p-2 text-right font-semibold">Actions</th>
                   </tr>
                 </thead>
@@ -698,6 +700,8 @@ function DirectoryContent() {
                       const advanceGold = Number(stats?.advanceFineGold || 0);
                       const recoveredGold = Number(stats?.recoveredFineGold || 0);
                       const pendingCash = Number(stats?.pendingCashRupees || 0);
+                      const advanceCash = Number(stats?.advanceCashRupees || 0);
+                      const recoveredCash = Number(stats?.recoveredCashRupees || 0);
                       return (
                       <tr
                         key={c.id}
@@ -757,12 +761,22 @@ function DirectoryContent() {
                           )}
                         </td>
                         <td className="p-2 text-right font-mono">
-                          {pendingCash > 0 ? (
-                            <span className="text-rose-700 font-semibold">
-                              ₹{pendingCash.toFixed(2)}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400">₹0.00</span>
+                          <div className={pendingCash > 0 ? "text-rose-700 font-semibold" : "text-slate-400"}>
+                            ₹{pendingCash.toFixed(2)}
+                          </div>
+                          {(advanceCash > 0 || recoveredCash > 0) && (
+                            <div className="text-[10px] text-slate-600">
+                              {advanceCash > 0 && (
+                                <span className="text-amber-700 font-semibold">
+                                  Adv: ₹{advanceCash.toFixed(2)}{" "}
+                                </span>
+                              )}
+                              {recoveredCash > 0 && (
+                                <span className="text-emerald-700">
+                                  Rec: ₹{recoveredCash.toFixed(2)}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </td>
                         <td className="p-2 text-right space-x-1.5">

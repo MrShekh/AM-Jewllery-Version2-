@@ -643,6 +643,11 @@ function BillingWorkspaceInner() {
     const netCustomerOwesFine = Math.max(0, fineTotal - advUsed);
     const pastJamaFine = Number(activeCustomer?.fineOwed || 0);
     const pastInrOwed = Number(activeCustomer?.inrOwed || 0);
+    const inrAdvAvail = Number(activeCustomer?.inrAdvance || 0);
+    const inrAdvUsed = applyInrAdvance
+      ? Math.min(inrAdvAvail, Math.max(0, inrTotal))
+      : 0;
+    const netCustomerOwesInr = Math.max(0, inrTotal - inrAdvUsed);
 
     return {
       fineTotal,
@@ -654,8 +659,11 @@ function BillingWorkspaceInner() {
       netCustomerOwesFine,
       pastJamaFine,
       pastInrOwed,
+      inrAdvAvail,
+      inrAdvUsed,
+      netCustomerOwesInr,
       grandTotalFineWithPast: netCustomerOwesFine + pastJamaFine,
-      grandTotalInrWithPast: inrTotal + pastInrOwed,
+      grandTotalInrWithPast: netCustomerOwesInr + pastInrOwed,
     };
   }, [
     billType,
@@ -664,6 +672,7 @@ function BillingWorkspaceInner() {
     orders,
     activeCustomer,
     applyFineAdvance,
+    applyInrAdvance,
     customAdvanceGoldUsed,
     additionalRupees,
   ]);
@@ -2690,6 +2699,16 @@ function BillingWorkspaceInner() {
                             </span>
                           </div>
                         )}
+                        {draftTotals.inrAdvAvail > 0 && (
+                          <div className="flex justify-between items-center px-3.5 py-2 border-b border-slate-200 bg-emerald-50/60">
+                            <span className="font-bold text-emerald-800 uppercase">
+                              PREVIOUS INR ADVANCE:
+                            </span>
+                            <span className="font-mono font-semibold text-emerald-800">
+                              ₹{draftTotals.inrAdvAvail.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        )}
                         {draftTotals.pastInrOwed > 0 && (
                           <div className="flex justify-between items-center px-3.5 py-2 border-b border-slate-200 bg-white">
                             <span className="font-bold text-slate-700 uppercase">
@@ -2710,13 +2729,31 @@ function BillingWorkspaceInner() {
                             </span>
                           </div>
                         )}
-                        {draftTotals.grandTotalInrWithPast > 0 && (
+                        {draftTotals.inrAdvUsed > 0 && (
+                          <div className="flex justify-between items-center px-3.5 py-2 border-b border-slate-200 bg-white text-emerald-700">
+                            <span className="font-bold uppercase">
+                              INR ADVANCE APPLIED:
+                            </span>
+                            <span className="font-mono font-semibold">
+                              -₹{draftTotals.inrAdvUsed.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        )}
+                        {(draftTotals.grandTotalInrWithPast > 0 || draftTotals.inrAdvUsed > 0) && (
                           <div className="flex justify-between items-center px-3.5 py-2 border-b border-slate-200 bg-slate-100 font-bold">
                             <span className="text-slate-800 uppercase">
                               TOTAL DUE (INR):
                             </span>
                             <span className="font-mono text-slate-900">
                               ₹{draftTotals.grandTotalInrWithPast.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        )}
+                        {Math.max(0, draftTotals.inrAdvAvail - draftTotals.inrAdvUsed) > 0 && (
+                          <div className="flex justify-between items-center px-3.5 py-2 border-b border-slate-200 bg-emerald-50 text-emerald-800 font-bold">
+                            <span className="uppercase">REMAINING INR ADVANCE:</span>
+                            <span className="font-mono">
+                              ₹{Math.max(0, draftTotals.inrAdvAvail - draftTotals.inrAdvUsed).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                             </span>
                           </div>
                         )}

@@ -268,6 +268,25 @@ export default function CustomerProfilePage() {
     reason: string;
   } | null>(null);
 
+  // Cash / INR Recovery & Advance Form
+  const [showCashModal, setShowCashModal] = useState(false);
+  const [cashFormMode, setCashFormMode] = useState<"RECEIVE_CASH" | "ADD_CASH_ADVANCE">("RECEIVE_CASH");
+  const [cashAmountRupees, setCashAmountRupees] = useState("");
+  const [cashPaymentMode, setCashPaymentMode] = useState<"CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE">("CASH");
+  const [cashRef, setCashRef] = useState("");
+  const [cashNotes, setCashNotes] = useState("");
+  const [postingCash, setPostingCash] = useState(false);
+  const [lastCashReceipt, setLastCashReceipt] = useState<{
+    receiptNumber: string;
+    date: string;
+    customerName: string;
+    customerPhone: string | null;
+    amountRupees: string;
+    unallocatedRupees: string;
+    paymentMode: string;
+    notes: string;
+  } | null>(null);
+
   // Direct Bill Form (without creating orders)
   interface DirectBillLineDraft {
     description: string;
@@ -670,6 +689,150 @@ export default function CustomerProfilePage() {
       setError(err instanceof Error ? err.message : "Failed to upload photo");
     } finally {
       setUploadingLineIdx(null);
+    }
+  }
+
+  function sendCashReceiptWhatsApp(r: {
+    receiptNumber: string;
+    date: string;
+    customerName: string;
+    customerPhone: string | null;
+    amountRupees: string;
+    unallocatedRupees: string;
+    paymentMode: string;
+    notes?: string | null;
+  }) {
+    const lines = [
+      `*AM Jewellery — Cash Receipt*`,
+      `Receipt #: ${r.receiptNumber} (${r.date})`,
+      `Customer: ${r.customerName}`,
+      `Cash Received (${r.paymentMode}): ₹${Number(r.amountRupees || 0).toFixed(2)}`,
+      ...(Number(r.unallocatedRupees || 0) > 0
+        ? [`Cash Advance Balance: ₹${Number(r.unallocatedRupees).toFixed(2)}`]
+        : []),
+      ...(workspace
+        ? [`Remaining Cash Due: ₹${Number(workspace.summaryCards.inrDue || 0).toFixed(2)}`]
+        : []),
+      ...(r.notes ? [`Note: ${r.notes}`] : []),
+    ];
+    const url = buildWhatsAppSendUrl(r.customerPhone, lines.join("\n"));
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  function printCashReceipt(r: {
+    receiptNumber: string;
+    date: string;
+    customerName: string;
+    amountRupees: string;
+    unallocatedRupees: string;
+    paymentMode: string;
+    notes?: string | null;
+  }) {
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc || !iframe.contentWindow) {
+      document.body.removeChild(iframe);
+      return;
+    }
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Cash Receipt ${r.receiptNumber}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+            .box { border: 2px solid #222; border-radius: 8px; padding: 20px; max-width: 420px; margin: 0 auto; }
+            h2 { margin: 0 0 4px; font-size: 18px; text-align: center; }
+            .sub { text-align: center; font-size: 12px; color: #555; margin-bottom: 16px; }
+            .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #ddd; font-size: 13px; }
+            .row strong { font-family: monospace; }
+            .sig { margin-top: 28px; display: flex; justify-content: space-between; font-size: 11px; color: #555; }
+          </style>
+        </head>
+        <body>
+          <div class="box">
+            <h2>AM JEWELLERY</h2>
+            <div class="sub">Cash / INR Payment Receipt</div>
+            <div class="row"><span>Receipt No.:</span><strong>${r.receiptNumber}</strong></div>
+            <div class="row"><span>Date:</span><strong>${r.date}</strong></div>
+            <div class="row"><span>Customer:</span><strong>${r.customerName}</strong></div>
+            <div class="row"><span>Mode:</span><strong>${r.paymentMode}</strong></div>
+            <div class="row"><span>Amount Received:</span><strong>₹${Number(r.amountRupees || 0).toFixed(2)}</strong></div>
+            <div class="row"><span>Unallocated Advance:</span><strong>₹${Number(r.unallocatedRupees || 0).toFixed(2)}</strong></div>
+            <div class="row"><span>Notes:</span><span>${r.notes || "-"}</span></div>
+            <div class="sig"><span>Customer Signature</span><span>Authorized Signature</span></div>
+          </div>
+        </body>
+      </html>
+    `);
+    doc.close();
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } finally {
+        setTimeout(() => {
+          if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+        }, 1500);
+      }
+    }, 250);
+  }
+
+  async function handleRecordCashReceipt(e: React.FormEvent) {
+    e.preventDefault();
+    if (!workspace || postingCash) return;
+    setError(null);
+    setMessage(null);
+    setPostingCash(true);
+    try {
+      const res = await fetch("/api/billing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "RECORD_CASH_RECEIPT",
+          customerId: workspace.customer.id,
+          amountRupees: cashAmountRupees,
+          paymentMode: cashPaymentMode,
+          referenceNumber: cashRef || undefined,
+          notes: cashNotes || undefined,
+          allocationMode:
+            cashFormMode === "ADD_CASH_ADVANCE" ? "NONE" : "OLDEST_FIRST",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setError(data.error || "Failed to record cash receipt");
+      } else {
+        const info = {
+          receiptNumber: String(data.receiptNumber || ""),
+          date: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }),
+          customerName: workspace.customer.name,
+          customerPhone: workspace.customer.phone || null,
+          amountRupees: String(data.amountRupees || cashAmountRupees),
+          unallocatedRupees: String(data.unallocatedRupees || "0.00"),
+          paymentMode: cashPaymentMode,
+          notes: cashNotes,
+        };
+        setShowCashModal(false);
+        setCashAmountRupees("");
+        setCashRef("");
+        setCashNotes("");
+        setLastCashReceipt(info);
+        setMessage(
+          `Recorded Cash Receipt ${info.receiptNumber}: ₹${Number(info.amountRupees).toFixed(2)}.`
+        );
+        await loadWorkspace();
+      }
+    } finally {
+      setPostingCash(false);
     }
   }
 
@@ -1397,23 +1560,135 @@ export default function CustomerProfilePage() {
             </div>
           </div>
 
-          {(Number(summaryCards.inrDue) > 0 ||
-            Number(summaryCards.inrAdvance) > 0) && (
-            <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg flex flex-wrap gap-6 text-sm">
+          {/* Cash / INR Balance Summary & Recovery */}
+          <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <span className="text-gray-500">INR Due: </span>
-                <span className="font-bold text-gray-900">
-                  ₹{summaryCards.inrDue}
-                </span>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Cash / INR Balance Summary
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Track pending making charges, recovered cash, and customer cash advance
+                </p>
               </div>
-              <div>
-                <span className="text-gray-500">INR Advance: </span>
-                <span className="font-bold text-emerald-700">
-                  ₹{summaryCards.inrAdvance}
-                </span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCashFormMode("RECEIVE_CASH");
+                    setShowCashModal(true);
+                  }}
+                  className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white rounded-md text-xs font-semibold cursor-pointer"
+                >
+                  ₹ Receive Cash
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCashFormMode("ADD_CASH_ADVANCE");
+                    setShowCashModal(true);
+                  }}
+                  className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-md text-xs font-semibold cursor-pointer"
+                >
+                  + Add Cash Advance
+                </button>
               </div>
             </div>
-          )}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+              <div className="p-3 bg-white border border-rose-200 rounded-md">
+                <div className="text-xs text-rose-700 font-semibold">Pending Cash (Due)</div>
+                <div className="text-xl font-bold font-mono text-rose-700 mt-0.5">
+                  ₹{Number(summaryCards.inrDue || 0).toFixed(2)}
+                </div>
+              </div>
+              <div className="p-3 bg-white border border-emerald-200 rounded-md">
+                <div className="text-xs text-emerald-700 font-semibold">Cash Advance Available</div>
+                <div className="text-xl font-bold font-mono text-emerald-700 mt-0.5">
+                  ₹{Number(summaryCards.inrAdvance || 0).toFixed(2)}
+                </div>
+              </div>
+              <div className="p-3 bg-white border border-slate-200 rounded-md">
+                <div className="text-xs text-slate-600 font-semibold">Total Cash Recovered</div>
+                <div className="text-xl font-bold font-mono text-slate-900 mt-0.5">
+                  ₹
+                  {workspace.transactionHistory.cashReceipts
+                    .filter((r) => r.status === "POSTED")
+                    .reduce((s, r) => s + Number(r.amountRupees || 0), 0)
+                    .toFixed(2)}
+                </div>
+              </div>
+            </div>
+            {workspace.transactionHistory.cashReceipts.length > 0 && (
+              <div className="overflow-x-auto bg-white border border-slate-200 rounded-md">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-100 text-slate-700">
+                    <tr>
+                      <th className="p-2 text-left">Receipt #</th>
+                      <th className="p-2 text-left">Date</th>
+                      <th className="p-2 text-left">Mode</th>
+                      <th className="p-2 text-right">Amount (₹)</th>
+                      <th className="p-2 text-right">Advance Left (₹)</th>
+                      <th className="p-2 text-left">Status</th>
+                      <th className="p-2 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {workspace.transactionHistory.cashReceipts.map((cr) => (
+                      <tr key={cr.id}>
+                        <td className="p-2 font-mono font-semibold">{cr.receiptNumber}</td>
+                        <td className="p-2 font-mono">{cr.businessDate}</td>
+                        <td className="p-2">{cr.paymentMode}</td>
+                        <td className="p-2 text-right font-mono font-bold">
+                          ₹{Number(cr.amountRupees || 0).toFixed(2)}
+                        </td>
+                        <td className="p-2 text-right font-mono text-emerald-700">
+                          ₹{Number(cr.unallocatedRupees || 0).toFixed(2)}
+                        </td>
+                        <td className="p-2">{cr.status}</td>
+                        <td className="p-2 text-right space-x-1.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              printCashReceipt({
+                                receiptNumber: cr.receiptNumber,
+                                date: cr.businessDate,
+                                customerName: workspace.customer.name,
+                                amountRupees: cr.amountRupees,
+                                unallocatedRupees: cr.unallocatedRupees,
+                                paymentMode: cr.paymentMode,
+                                notes: cr.notes,
+                              })
+                            }
+                            className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-[11px] font-semibold cursor-pointer"
+                          >
+                            Print
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              sendCashReceiptWhatsApp({
+                                receiptNumber: cr.receiptNumber,
+                                date: cr.businessDate,
+                                customerName: workspace.customer.name,
+                                customerPhone: workspace.customer.phone,
+                                amountRupees: cr.amountRupees,
+                                unallocatedRupees: cr.unallocatedRupees,
+                                paymentMode: cr.paymentMode,
+                                notes: cr.notes,
+                              })
+                            }
+                            className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-[11px] font-semibold cursor-pointer"
+                          >
+                            WhatsApp
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
 
           {/* Optional Owner Basis Setting */}
           {showConventionSettings && (
@@ -2893,6 +3168,163 @@ export default function CustomerProfilePage() {
                 <button
                   type="button"
                   onClick={() => setLastRefundReceipt(null)}
+                  className="px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-md cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showCashModal && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+            <form
+              onSubmit={handleRecordCashReceipt}
+              className="bg-white rounded-xl max-w-md w-full p-6 space-y-4 shadow-xl"
+            >
+              <div className="flex items-center justify-between border-b pb-2">
+                <h3 className="text-base font-bold text-gray-800">
+                  {cashFormMode === "ADD_CASH_ADVANCE"
+                    ? "Add Customer Cash Advance (₹)"
+                    : "Receive Cash Payment (₹)"}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowCashModal(false)}
+                  className="text-gray-500 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="text-xs text-gray-600">
+                Pending Cash Due: <strong>₹{Number(summaryCards.inrDue || 0).toFixed(2)}</strong> •
+                Cash Advance: <strong className="text-emerald-700">₹{Number(summaryCards.inrAdvance || 0).toFixed(2)}</strong>
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Amount (₹) *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  required
+                  autoFocus
+                  value={cashAmountRupees}
+                  onChange={(e) => setCashAmountRupees(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Payment Mode
+                </label>
+                <select
+                  value={cashPaymentMode}
+                  onChange={(e) =>
+                    setCashPaymentMode(
+                      e.target.value as "CASH" | "UPI" | "BANK_TRANSFER" | "CHEQUE"
+                    )
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="CASH">Cash</option>
+                  <option value="UPI">UPI</option>
+                  <option value="BANK_TRANSFER">Bank Transfer</option>
+                  <option value="CHEQUE">Cheque</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Reference / Notes (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={cashNotes}
+                  onChange={(e) => setCashNotes(e.target.value)}
+                  placeholder="e.g. Received via UPI / Cash counter"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCashModal(false)}
+                  className="px-4 py-2 text-sm text-gray-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={postingCash}
+                  className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-md cursor-pointer"
+                >
+                  {postingCash ? "Saving..." : "Save Cash Receipt"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {lastCashReceipt && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl max-w-md w-full p-6 space-y-4 shadow-xl">
+              <div className="flex items-center justify-between border-b pb-2">
+                <h3 className="text-base font-bold text-gray-900">
+                  Cash Receipt ({lastCashReceipt.receiptNumber})
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setLastCashReceipt(null)}
+                  className="text-gray-500 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Date:</span>
+                  <strong className="font-mono">{lastCashReceipt.date}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Customer:</span>
+                  <strong>{lastCashReceipt.customerName}</strong>
+                </div>
+                <div className="flex justify-between text-blue-700">
+                  <span>Cash Received ({lastCashReceipt.paymentMode}):</span>
+                  <strong className="font-mono">
+                    ₹{Number(lastCashReceipt.amountRupees || 0).toFixed(2)}
+                  </strong>
+                </div>
+                {Number(lastCashReceipt.unallocatedRupees || 0) > 0 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <span>Cash Advance Left:</span>
+                    <strong className="font-mono">
+                      ₹{Number(lastCashReceipt.unallocatedRupees).toFixed(2)}
+                    </strong>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => printCashReceipt(lastCashReceipt)}
+                  className="px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white text-sm font-semibold rounded-md cursor-pointer"
+                >
+                  🖨️ Print Receipt
+                </button>
+                <button
+                  type="button"
+                  onClick={() => sendCashReceiptWhatsApp(lastCashReceipt)}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-md cursor-pointer"
+                >
+                  📲 Send on WhatsApp
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLastCashReceipt(null)}
                   className="px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-md cursor-pointer"
                 >
                   Close

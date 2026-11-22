@@ -11,6 +11,8 @@ export interface CustomerDirectorySummary {
   totalAdvanceFineGold: string;
   totalRecoveredFineGold: string;
   totalPendingCashRupees: string;
+  totalAdvanceCashRupees: string;
+  totalRecoveredCashRupees: string;
 }
 
 export interface CustomerRowStats {
@@ -20,6 +22,8 @@ export interface CustomerRowStats {
   advanceFineGold: string;
   recoveredFineGold: string;
   pendingCashRupees: string;
+  advanceCashRupees: string;
+  recoveredCashRupees: string;
 }
 
 export interface CustomerAdvanceBreakdownRow {
@@ -50,7 +54,7 @@ export async function getCustomerDirectoryStats(organizationId: string): Promise
   summary: CustomerDirectorySummary;
   byCustomer: Record<string, CustomerRowStats>;
 }> {
-  const [totalCustomers, orders, bills, allocations, receipts] =
+  const [totalCustomers, orders, bills, allocations, receipts, cashReceipts] =
     await Promise.all([
       prisma.customer.count({ where: { organizationId } }),
       prisma.order.findMany({
@@ -88,6 +92,14 @@ export async function getCustomerDirectoryStats(organizationId: string): Promise
           refundedFineWeight: true,
         },
       }),
+      prisma.customerCashReceipt.findMany({
+        where: { organizationId, status: "POSTED" },
+        select: {
+          customerId: true,
+          amountRupees: true,
+          unallocatedRupees: true,
+        },
+      }),
     ]);
 
   let totalActiveOrders = 0;
@@ -101,6 +113,8 @@ export async function getCustomerDirectoryStats(organizationId: string): Promise
       advanceFine: number;
       recoveredFine: number;
       pendingCash: number;
+      advanceCash: number;
+      recoveredCash: number;
     }
   > = {};
 
@@ -113,6 +127,8 @@ export async function getCustomerDirectoryStats(organizationId: string): Promise
         advanceFine: 0,
         recoveredFine: 0,
         pendingCash: 0,
+        advanceCash: 0,
+        recoveredCash: 0,
       };
     }
     return accum[customerId];
@@ -168,6 +184,18 @@ export async function getCustomerDirectoryStats(organizationId: string): Promise
     totalRecoveredFineGold += netRecovered;
   }
 
+  let totalAdvanceCashRupees = 0;
+  let totalRecoveredCashRupees = 0;
+  for (const cr of cashReceipts) {
+    const unalloc = Math.max(0, Number(cr.unallocatedRupees || 0));
+    const amt = Math.max(0, Number(cr.amountRupees || 0));
+    const entry = ensureCust(cr.customerId);
+    entry.advanceCash += unalloc;
+    entry.recoveredCash += amt;
+    totalAdvanceCashRupees += unalloc;
+    totalRecoveredCashRupees += amt;
+  }
+
   const byCustomer: Record<string, CustomerRowStats> = {};
   for (const [custId, v] of Object.entries(accum)) {
     byCustomer[custId] = {
@@ -177,6 +205,8 @@ export async function getCustomerDirectoryStats(organizationId: string): Promise
       advanceFineGold: v.advanceFine.toFixed(3),
       recoveredFineGold: v.recoveredFine.toFixed(3),
       pendingCashRupees: v.pendingCash.toFixed(2),
+      advanceCashRupees: v.advanceCash.toFixed(2),
+      recoveredCashRupees: v.recoveredCash.toFixed(2),
     };
   }
 
@@ -190,6 +220,8 @@ export async function getCustomerDirectoryStats(organizationId: string): Promise
       totalAdvanceFineGold: totalAdvanceFineGold.toFixed(3),
       totalRecoveredFineGold: totalRecoveredFineGold.toFixed(3),
       totalPendingCashRupees: totalPendingCashRupees.toFixed(2),
+      totalAdvanceCashRupees: totalAdvanceCashRupees.toFixed(2),
+      totalRecoveredCashRupees: totalRecoveredCashRupees.toFixed(2),
     },
     byCustomer,
   };
