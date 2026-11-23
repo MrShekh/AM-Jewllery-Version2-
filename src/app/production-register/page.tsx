@@ -3220,6 +3220,78 @@ function ProductionRegisterContent() {
                         )}
                       </div>
 
+                      {/* Clear Given / Added Gold / Repairing Breakdown for active stage */}
+                      {(() => {
+                        const stageMovs = (selectedOrderRow.movements ?? []).filter(
+                          (m) =>
+                            m.toProcessType === activeProcessObj.processType &&
+                            (m.movementType === "ADMIN_ISSUE_TO_ORDER" ||
+                              m.movementType === "ADDITIONAL_ADMIN_ISSUE" ||
+                              m.movementType === "PROCESS_TRANSFER")
+                        );
+                        const stageClosedVisits = (selectedOrderRow.visits ?? []).filter(
+                          (v) =>
+                            v.orderProcessId === activeProcessObj.id &&
+                            v.status === "CLOSED"
+                        );
+                        if (stageMovs.length <= 1 && stageClosedVisits.length === 0) {
+                          return null;
+                        }
+                        return (
+                          <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-xs text-[11px] space-y-1.5">
+                            <div className="font-bold text-blue-950 uppercase tracking-wide text-[10px]">
+                              {PROCESS_DISPLAY_LABELS[activeProcessObj.processType]} — Given &amp; Repairing Breakdown
+                            </div>
+                            {stageMovs.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {stageMovs.map((m, idx) => {
+                                  const label =
+                                    m.movementType === "ADMIN_ISSUE_TO_ORDER"
+                                      ? "1st Given (Admin)"
+                                      : m.movementType === "ADDITIONAL_ADMIN_ISSUE"
+                                      ? "+ Added Gold (Admin)"
+                                      : m.fromProcessType
+                                      ? `From ${PROCESS_DISPLAY_LABELS[m.fromProcessType]}`
+                                      : "Repairing IN";
+                                  return (
+                                    <span
+                                      key={m.id}
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-xs border font-mono ${
+                                        m.movementType === "ADDITIONAL_ADMIN_ISSUE"
+                                          ? "bg-amber-50 border-amber-300 text-amber-900 font-semibold"
+                                          : m.movementType === "PROCESS_TRANSFER" && !m.fromProcessType
+                                          ? "bg-purple-50 border-purple-300 text-purple-900 font-semibold"
+                                          : "bg-white border-blue-200 text-slate-800"
+                                      }`}
+                                    >
+                                      <span>{idx > 0 ? `+ ` : ""}{label}:</span>
+                                      <strong>{formatWeight3(m.grossWeight)}g</strong>
+                                    </span>
+                                  );
+                                })}
+                                {Number(activeProcessObj.latestGrossInWeight || 0) > 0 && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-xs bg-blue-700 text-white font-mono font-bold">
+                                    Current IN: {formatWeight3(activeProcessObj.latestGrossInWeight)}g
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {stageClosedVisits.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 text-[10px] text-slate-600 font-mono">
+                                {stageClosedVisits.map((v, idx) => (
+                                  <span
+                                    key={v.id}
+                                    className="px-1.5 py-0.5 bg-white border border-slate-200 rounded-xs"
+                                  >
+                                    Visit {idx + 1} (Closed): IN {formatWeight3(v.grossInWeight)}g → OUT {formatWeight3(v.grossOutWeight)}g • Loss {formatWeight3(v.rawLossWeight)}g
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                       {/* FILING ONLY: Edit Filing IN (Add / Return Unused / Correct) */}
                       {activeProcessObj.processType === "FILING" &&
                         showAddFilingGoldForm && (

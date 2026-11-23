@@ -2201,13 +2201,8 @@ export class ErpDomainService {
           `Process ${currentProc.processType} is already CLOSED`
         );
       }
-      for (let i = 0; i < procIndex; i++) {
-        if (processes[i].status !== "CLOSED") {
-          throw new ValidationError(
-            `Cannot give work to ${currentProc.processType} before prior process ${processes[i].processType} is CLOSED`
-          );
-        }
-      }
+      // Stages are independent: allow giving/transferring work to any selected stage
+      // without blocking on prior unstarted/PENDING stages (e.g. skipped NOKSI).
 
       const now = new Date();
 
@@ -2828,35 +2823,23 @@ export class ErpDomainService {
       const cumulativeLoss = roundInternal(
         currentProc.closedLossWeight.add(rawLoss)
       );
-      if (isSameTouch && currentProc.extraReturnedMetalWeight.isZero()) {
-        const reconciledSum = roundInternal(
-          cumulativeReturned
-            .add(cumulativeExtraReturned)
-            .add(cumulativeLoss)
-            .add(custodyRetained)
+      // Validate per-visit mass conservation (supports independent/reopened/repaired stages);
+      // whole-order mass conservation is enforced in completeOrder().
+      const expectedTotal = roundInternal(
+        metalOut.add(extraOrderEquiv).add(rawLoss).add(custodyRetained)
+      );
+      if (expectedTotal.sub(metalIn).abs().gt(new Decimal("0.002"))) {
+        throw new ValidationError(
+          `Process reconciliation failed for ${currentProc.processType}: visitMetalIn (${metalIn.toFixed(
+            3
+          )}g) != metalOut (${metalOut.toFixed(
+            3
+          )}g) + extraReturned (${extraOrderEquiv.toFixed(
+            3
+          )}g) + visitLoss (${rawLoss.toFixed(
+            3
+          )}g) + custodyRetained (${custodyRetained.toFixed(3)}g)`
         );
-        if (!reconciledSum.eq(currentProc.issuedMetalWeight)) {
-          throw new ValidationError(
-            `Process reconciliation failed for ${currentProc.processType}: issuedMetal (${currentProc.issuedMetalWeight.toFixed(
-              3
-            )}g) != returnedMetal (${cumulativeReturned.toFixed(
-              3
-            )}g) + extraReturned (${cumulativeExtraReturned.toFixed(
-              3
-            )}g) + closedProcessLoss (${cumulativeLoss.toFixed(
-              3
-            )}g) + metalStillInCustody (${custodyRetained.toFixed(3)}g)`
-          );
-        }
-      } else {
-        const expectedTotal = roundInternal(
-          metalOut.add(extraOrderEquiv).add(rawLoss).add(custodyRetained)
-        );
-        if (expectedTotal.sub(metalIn).abs().gt(new Decimal("0.002"))) {
-          throw new ValidationError(
-            `Process fine-equivalent reconciliation failed for ${currentProc.processType}`
-          );
-        }
       }
 
       if (closeProcess && !custodyRetained.isZero()) {

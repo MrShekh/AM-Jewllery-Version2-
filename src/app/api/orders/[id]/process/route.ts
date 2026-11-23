@@ -409,6 +409,7 @@ export async function POST(
           },
         });
 
+        const isClosedTarget = targetProc.status === "CLOSED";
         await tx.orderProcess.update({
           where: { id: targetProc.id },
           data: {
@@ -416,7 +417,7 @@ export async function POST(
             assignedKarigarId: karigar.id,
             issuedMetalWeight: { increment: w },
             custodyMetalWeight: { increment: w },
-            latestGrossInWeight: w,
+            latestGrossInWeight: isClosedTarget ? w : { increment: w },
             closedAt: null,
             closedById: null,
           },
