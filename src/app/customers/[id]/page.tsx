@@ -222,6 +222,28 @@ export default function CustomerProfilePage() {
     useState<string>("");
   const [touchPercentOverride, setTouchPercentOverride] = useState<string>("");
 
+  // Split Gold + Cash settlement for fine gold
+  const [splitCashEnabled, setSplitCashEnabled] = useState(false);
+  const [cashSettledFine, setCashSettledFine] = useState<string>("");
+  const [goldRatePerGram, setGoldRatePerGram] = useState<string>("");
+  const [splitCashAmount, setSplitCashAmount] = useState<string>("");
+  const [splitCashMode, setSplitCashMode] = useState<"CASH" | "UPI" | "BANK">(
+    "CASH"
+  );
+  const [printingSplitReceipt, setPrintingSplitReceipt] = useState<{
+    goldReceiptNumber: string | null;
+    cashReceiptNumber: string | null;
+    businessDate: string;
+    pendingBeforeFine: string;
+    goldReceivedFine: string;
+    cashSettledFine: string;
+    cashAmountRupees: string;
+    goldRatePerGram: string;
+    pendingAfterFine: string;
+    paymentMode: string;
+    notes: string;
+  } | null>(null);
+
   // Optional Advanced "Choose Bills" section
   const [showChooseBills, setShowChooseBills] = useState(false);
   const [allocationMode, setAllocationMode] = useState<
@@ -2201,11 +2223,11 @@ export default function CustomerProfilePage() {
                   <input
                     type="number"
                     step="0.001"
-                    min="0.001"
-                    required
+                    min={splitCashEnabled ? "0" : "0.001"}
+                    required={!splitCashEnabled}
                     value={amountReceived}
                     onChange={(e) => setAmountReceived(e.target.value)}
-                    placeholder="e.g. 25.000"
+                    placeholder="e.g. 4.000"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   />
                 </div>
@@ -2235,31 +2257,143 @@ export default function CustomerProfilePage() {
                 </div>
               </div>
 
+              {/* Optional Split Payment: Gold + Cash for Fine */}
+              {receiptFormMode === "RECEIVE_FINE" && (
+                <div className="border border-blue-200 bg-blue-50/60 rounded-lg p-3 space-y-3">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-blue-950 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={splitCashEnabled}
+                      onChange={(e) => setSplitCashEnabled(e.target.checked)}
+                      className="rounded border-blue-400"
+                    />
+                    <span>
+                      Also paying part in Cash? (Gold + Cash Split — e.g. 4g Gold + 1g in Cash)
+                    </span>
+                  </label>
+                  {splitCashEnabled && (
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          Fine Settled in Cash (g) *
+                        </label>
+                        <input
+                          type="number"
+                          step="0.001"
+                          min="0.001"
+                          required
+                          value={cashSettledFine}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setCashSettledFine(val);
+                            const g = Number(val);
+                            const r = Number(goldRatePerGram);
+                            if (g > 0 && r > 0) {
+                              setSplitCashAmount((g * r).toFixed(2));
+                            }
+                          }}
+                          placeholder="e.g. 1.000"
+                          className="w-full px-2.5 py-1.5 text-sm border border-blue-300 rounded-md bg-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          Gold Rate (₹ / g)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={goldRatePerGram}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setGoldRatePerGram(val);
+                            const g = Number(cashSettledFine);
+                            const r = Number(val);
+                            if (g > 0 && r > 0) {
+                              setSplitCashAmount((g * r).toFixed(2));
+                            }
+                          }}
+                          placeholder="e.g. 7500"
+                          className="w-full px-2.5 py-1.5 text-sm border border-blue-300 rounded-md bg-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          Cash Paid (₹) *
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          required
+                          value={splitCashAmount}
+                          onChange={(e) => setSplitCashAmount(e.target.value)}
+                          placeholder="e.g. 7500"
+                          className="w-full px-2.5 py-1.5 text-sm border border-blue-300 rounded-md bg-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          Mode
+                        </label>
+                        <select
+                          value={splitCashMode}
+                          onChange={(e) =>
+                            setSplitCashMode(
+                              e.target.value as "CASH" | "UPI" | "BANK"
+                            )
+                          }
+                          className="w-full px-2.5 py-1.5 text-sm border border-blue-300 rounded-md bg-white"
+                        >
+                          <option value="CASH">Cash</option>
+                          <option value="UPI">UPI</option>
+                          <option value="BANK">Bank Transfer</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Live Compact Preview */}
-              {Number(amountReceived) > 0 && liveReceiptPreview && (
+              {(Number(amountReceived) > 0 ||
+                (splitCashEnabled && Number(cashSettledFine) > 0)) && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm flex flex-wrap justify-between items-center gap-4">
                   <div>
-                    Crediting:{" "}
-                    <strong className="text-emerald-700">
-                      +{formatWeight3(liveReceiptPreview.fineCredited)}g Fine
+                    Pending Before:{" "}
+                    <strong className="text-slate-900">
+                      {formatWeight3(summaryCards.goldDue)}g
                     </strong>
                   </div>
                   <div>
-                    Settling Bills:{" "}
-                    <strong className="text-blue-700">
-                      {formatWeight3(liveReceiptPreview.settlingBills)}g
+                    Gold to Admin Stock:{" "}
+                    <strong className="text-emerald-700">
+                      +{formatWeight3(liveReceiptPreview?.fineCredited ?? Number(amountReceived || 0))}g
                     </strong>
                   </div>
+                  {splitCashEnabled && Number(cashSettledFine) > 0 && (
+                    <div>
+                      Settled via Cash:{" "}
+                      <strong className="text-blue-700">
+                        {formatWeight3(cashSettledFine)}g (₹
+                        {Number(splitCashAmount || 0).toFixed(2)})
+                      </strong>
+                    </div>
+                  )}
                   <div>
                     Remaining Due:{" "}
                     <strong className="text-amber-800">
-                      {formatWeight3(liveReceiptPreview.remainingDue)}g
-                    </strong>
-                  </div>
-                  <div>
-                    Available Advance:{" "}
-                    <strong className="text-emerald-700">
-                      {formatWeight3(liveReceiptPreview.advanceAfterSettlement)}g
+                      {formatWeight3(
+                        Math.max(
+                          0,
+                          Number(summaryCards.goldDue) -
+                            (liveReceiptPreview?.fineCredited ??
+                              Number(amountReceived || 0)) -
+                            (splitCashEnabled ? Number(cashSettledFine || 0) : 0)
+                        )
+                      )}
+                      g
                     </strong>
                   </div>
                 </div>
@@ -2279,7 +2413,11 @@ export default function CustomerProfilePage() {
 
                 <button
                   type="submit"
-                  disabled={postingReceipt || Number(amountReceived || 0) <= 0}
+                  disabled={
+                    postingReceipt ||
+                    (Number(amountReceived || 0) <= 0 &&
+                      (!splitCashEnabled || Number(cashSettledFine || 0) <= 0))
+                  }
                   className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 font-medium text-sm cursor-pointer"
                 >
                   {postingReceipt ? "Saving..." : "Confirm Receipt"}
@@ -3413,6 +3551,137 @@ export default function CustomerProfilePage() {
               <button
                 type="button"
                 onClick={() => setPrintingReceipt(null)}
+                className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-xs font-semibold rounded cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Printable Split Gold + Cash Receipt Modal */}
+      {printingSplitReceipt && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 print:static print:bg-white print:p-0">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-300 print:shadow-none print:border-2 print:border-black">
+            <div className="flex items-center justify-between border-b-2 border-slate-800 pb-2">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">
+                  AM Jewellery — Gold &amp; Cash Receipt
+                </h3>
+                <p className="text-xs font-mono text-slate-600">
+                  {[
+                    printingSplitReceipt.goldReceiptNumber,
+                    printingSplitReceipt.cashReceiptNumber,
+                  ]
+                    .filter(Boolean)
+                    .join(" + ")}{" "}
+                  • {printingSplitReceipt.businessDate}
+                </p>
+              </div>
+              <span className="px-2 py-0.5 text-[11px] font-bold rounded bg-blue-100 text-blue-800 border border-blue-300">
+                GOLD + CASH
+              </span>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-slate-600">Customer:</span>
+                <span className="font-bold text-slate-900">
+                  {customer.name} ({customer.customerCode})
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Pending Fine Before:</span>
+                <span className="font-mono font-semibold text-slate-800">
+                  {formatWeight3(printingSplitReceipt.pendingBeforeFine)} g fine
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">
+                  Gold Received (Added to Stock):
+                </span>
+                <span className="font-mono font-extrabold text-emerald-700">
+                  +{formatWeight3(printingSplitReceipt.goldReceivedFine)} g fine
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">
+                  Fine Converted to {printingSplitReceipt.paymentMode}:
+                </span>
+                <span className="font-mono font-bold text-blue-700">
+                  {formatWeight3(printingSplitReceipt.cashSettledFine)} g = ₹
+                  {Number(printingSplitReceipt.cashAmountRupees).toLocaleString(
+                    "en-IN",
+                    { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+                  )}
+                  {Number(printingSplitReceipt.goldRatePerGram) > 0
+                    ? ` (@ ₹${Number(
+                        printingSplitReceipt.goldRatePerGram
+                      ).toLocaleString("en-IN")}/g)`
+                    : ""}
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-slate-200 pt-2">
+                <span className="text-slate-600 font-semibold">
+                  Remaining Pending Due:
+                </span>
+                <span className="font-mono font-extrabold text-amber-800 text-base">
+                  {formatWeight3(printingSplitReceipt.pendingAfterFine)} g fine
+                </span>
+              </div>
+              {printingSplitReceipt.notes && (
+                <div className="text-xs text-slate-600 bg-slate-50 p-2 rounded border border-slate-200">
+                  <strong>Note:</strong> {printingSplitReceipt.notes}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 print:hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  const msg = [
+                    `AM Jewellery — Payment Receipt`,
+                    `Customer: ${customer.name}`,
+                    `Date: ${printingSplitReceipt.businessDate}`,
+                    `Pending Before: ${formatWeight3(
+                      printingSplitReceipt.pendingBeforeFine
+                    )}g fine`,
+                    `Gold Received: ${formatWeight3(
+                      printingSplitReceipt.goldReceivedFine
+                    )}g fine`,
+                    `Cash Paid (${printingSplitReceipt.paymentMode}): ${formatWeight3(
+                      printingSplitReceipt.cashSettledFine
+                    )}g = ₹${Number(
+                      printingSplitReceipt.cashAmountRupees
+                    ).toLocaleString("en-IN")}`,
+                    `Remaining Due: ${formatWeight3(
+                      printingSplitReceipt.pendingAfterFine
+                    )}g fine`,
+                  ].join("\n");
+                  const phone = (customer.phone || "").replace(/\D/g, "");
+                  const url = phone
+                    ? `https://wa.me/${
+                        phone.length === 10 ? `91${phone}` : phone
+                      }?text=${encodeURIComponent(msg)}`
+                    : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+                  window.open(url, "_blank", "noopener,noreferrer");
+                }}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded cursor-pointer"
+              >
+                Send WhatsApp
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded cursor-pointer"
+              >
+                Print Receipt
+              </button>
+              <button
+                type="button"
+                onClick={() => setPrintingSplitReceipt(null)}
                 className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-xs font-semibold rounded cursor-pointer"
               >
                 Close

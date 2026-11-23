@@ -75,6 +75,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, preview });
     }
 
+    if (action === "RECEIVE_SPLIT_GOLD_AND_CASH") {
+      const res = await erpService.receiveCustomerSplitGoldAndCash(actor, {
+        customerId: String(body.customerId || ""),
+        goldFineReceived: body.goldFineReceived,
+        cashSettledFine: body.cashSettledFine,
+        cashAmountRupees: body.cashAmountRupees,
+        goldRatePerGram: body.goldRatePerGram,
+        paymentMode: body.paymentMode || "CASH",
+        businessDate: body.businessDate,
+        referenceNumber: body.referenceNumber,
+        notes: body.notes,
+        allocationMode: body.allocationMode || "OLDEST_FIRST",
+        selectedBillIds: Array.isArray(body.selectedBillIds)
+          ? body.selectedBillIds
+          : undefined,
+        idempotencyKey,
+      });
+      return NextResponse.json({
+        ok: true,
+        ...res,
+        goldReceiptId: res.goldReceipt?.id ?? null,
+        goldReceiptNumber: res.goldReceipt?.receiptNumber ?? null,
+        cashReceiptId: res.cashReceipt?.id ?? null,
+        cashReceiptNumber: res.cashReceipt?.receiptNumber ?? null,
+      });
+    }
+
     if (action === "RECEIVE_FINE_GOLD") {
       const res = await erpService.receiveCustomerFineGold(actor, {
         customerId: String(body.customerId || ""),

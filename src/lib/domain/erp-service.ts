@@ -10181,6 +10181,214 @@ export class ErpDomainService {
     });
   }
 
+  public async receiveCustomerSplitGoldAndCash(
+    actor: ActorContext,
+    input: {
+      customerId: string;
+      goldFineReceived?: DecimalInput;
+      cashSettledFine?: DecimalInput;
+      cashAmountRupees?: DecimalInput;
+      goldRatePerGram?: DecimalInput;
+      paymentMode?: "CASH" | "UPI" | "BANK";
+      businessDate?: string | Date;
+      referenceNumber?: string;
+      notes?: string;
+      allocationMode?: "OLDEST_FIRST" | "CHOOSE_BILLS";
+      selectedBillIds?: string[];
+      idempotencyKey: string;
+    }
+  ) {
+    const validActor = this.assertRole(actor, ["OWNER_ADMIN", "OPERATOR"]);
+    return this.repo.runInTransaction(async (tx) => {
+      const customer = await tx.getCustomerById(
+        validActor.organizationId,
+        input.customerId
+      );
+      if (!customer) {
+        throw new NotFoundError(`Customer ${input.customerId} not found`);
+      }
+
+      await tx.lockCustomerForUpdate(validActor.organizationId, customer.id);
+
+      const preBal = await this.computeCustomerBalances(
+        tx,
+        validActor.organizationId,
+        customer.id
+      );
+
+      const goldFine = roundInternal(input.goldFineReceived ?? ZERO);
+      const cashFine = roundInternal(input.cashSettledFine ?? ZERO);
+      const cashRupees = roundRupees(input.cashAmountRupees ?? ZERO);
+      const ratePerGram = roundRupees(input.goldRatePerGram ?? ZERO);
+
+      if (goldFine.lte(ZERO) && cashFine.lte(ZERO)) {
+        throw new ValidationError(
+          "Enter either Gold Received (g) or Fine Settled in Cash (g)"
+        );
+      }
+      if (cashFine.gt(ZERO) && cashRupees.lte(ZERO)) {
+        throw new ValidationError(
+          "Cash amount (₹) must be greater than zero when settling fine in cash"
+        );
+      }
+
+      const businessDate = parseBusinessDate(input.businessDate);
+      const noteText = (input.notes || "").trim();
+
+      // 1) Record actual physical/fine gold received -> ONLY this goes to Admin Stock
+      let goldReceiptRes: Awaited<
+        ReturnType<typeof this.executeFineGoldReceiptInTx>
+      > | null = null;
+      if (goldFine.gt(ZERO)) {
+        goldReceiptRes = await this.executeFineGoldReceiptInTx(tx, validActor, {
+          customerId: customer.id,
+          amountReceived: goldFine,
+          businessDate,
+          referenceNumber: input.referenceNumber,
+          notes:
+            noteText ||
+            (cashFine.gt(ZERO)
+              ? `Split payment: ${goldFine.toFixed(3)}g gold + ${cashFine.toFixed(
+                  3
+                )}g in cash (₹${cashRupees.toFixed(2)})`
+              : "Fine Gold Received"),
+          allocationMode: input.allocationMode ?? "OLDEST_FIRST",
+          selectedBillIds: input.selectedBillIds,
+          idempotencyKey: `${input.idempotencyKey}_gold`,
+        });
+      }
+
+      // 2) Record Cash Receipt for the cash-converted fine portion (does NOT add gold to Admin Stock)
+      let cashReceipt: CustomerCashReceiptEntity | null = null;
+      if (cashFine.gt(ZERO)) {
+        const existingCash = await tx.listCustomerCashReceipts(
+          validActor.organizationId
+        );
+        const cashReceiptNumber = `CCR-${String(
+          existingCash.length + 1
+        ).padStart(4, "0")}`;
+        const now = new Date();
+        const paymentMode: "CASH" | "UPI" | "BANK" =
+          input.paymentMode ?? "CASH";
+        const cashDesc = `Cash for ${cashFine.toFixed(3)}g fine${
+          ratePerGram.gt(ZERO) ? ` @ ₹${ratePerGram.toFixed(2)}/g` : ""
+        }${noteText ? ` — ${noteText}` : ""}`;
+
+        cashReceipt = await tx.createCustomerCashReceipt({
+          id: newId("ccr"),
+          organizationId: validActor.organizationId,
+          customerId: customer.id,
+          receiptNumber: cashReceiptNumber,
+          businessDate,
+          amountRupees: cashRupees,
+          unallocatedRupees: ZERO,
+          paymentMode,
+          referenceNumber: input.referenceNumber?.trim() || null,
+          status: "POSTED",
+          notes: cashDesc,
+          idempotencyKey: `${input.idempotencyKey}_cash`,
+          reversedAt: null,
+          reversedById: null,
+          reversalReason: null,
+          createdById: validActor.userId,
+          createdAt: now,
+        });
+
+        // Allocate cashFine against remaining unpaid bills (reduces customer fine due without touching Admin Stock)
+        const allBills = await tx.listCustomerBills(
+          validActor.organizationId,
+          customer.id
+        );
+        const allAllocs = await tx.listCustomerPaymentAllocations(
+          validActor.organizationId,
+          { customerId: customer.id }
+        );
+        const selectedSet =
+          input.allocationMode === "CHOOSE_BILLS" &&
+          Array.isArray(input.selectedBillIds) &&
+          input.selectedBillIds.length > 0
+            ? new Set(input.selectedBillIds)
+            : null;
+
+        const candidateBills = allBills
+          .filter((b) => {
+            if (b.status !== "POSTED") return false;
+            if (selectedSet && !selectedSet.has(b.id)) return false;
+            return true;
+          })
+          .sort((a, b) => a.billDate.getTime() - b.billDate.getTime());
+
+        let remainingToAllocate = cashFine;
+        for (const bill of candidateBills) {
+          if (remainingToAllocate.lte(ZERO)) break;
+          const bal = this.computeBillSettlement(bill, allAllocs);
+          if (bal.fineOutstanding.lte(ZERO)) continue;
+          const applyFine = remainingToAllocate.lte(bal.fineOutstanding)
+            ? remainingToAllocate
+            : bal.fineOutstanding;
+
+          const newAlloc = await tx.createCustomerPaymentAllocation({
+            id: newId("cpa"),
+            organizationId: validActor.organizationId,
+            customerId: customer.id,
+            billId: bill.id,
+            goldReceiptId: null,
+            cashReceiptId: cashReceipt.id,
+            businessDate,
+            allocatedFineWeight: applyFine,
+            allocatedRupees: ZERO,
+            status: "ACTIVE",
+            notes: `Fine settled via cash (${cashReceiptNumber}: ${applyFine.toFixed(
+              3
+            )}g = ₹${cashRupees.toFixed(2)})`,
+            idempotencyKey: `${input.idempotencyKey}_alloc_${bill.id}`,
+            undoneAt: null,
+            undoneById: null,
+            undoReason: null,
+            createdById: validActor.userId,
+            createdAt: now,
+          });
+          allAllocs.push(newAlloc);
+          remainingToAllocate = roundInternal(
+            remainingToAllocate.sub(applyFine)
+          );
+
+          const updatedBal = this.computeBillSettlement(bill, allAllocs);
+          await tx.updateCustomerBill({
+            ...bill,
+            settlementStatus: updatedBal.settlementStatus,
+            updatedAt: now,
+          });
+        }
+      }
+
+      const postBal = await this.computeCustomerBalances(
+        tx,
+        validActor.organizationId,
+        customer.id
+      );
+
+      return {
+        goldReceipt: goldReceiptRes?.receipt ?? null,
+        cashReceipt,
+        pendingBeforeFine: preBal.fineOwed.toFixed(4),
+        goldReceivedFine: (
+          goldReceiptRes?.receipt.totalFineWeight ?? ZERO
+        ).toFixed(4),
+        cashSettledFine: cashFine.toFixed(4),
+        cashAmountRupees: cashRupees.toFixed(2),
+        goldRatePerGram: ratePerGram.toFixed(2),
+        pendingAfterFine: postBal.fineOwed.toFixed(4),
+        unallocatedAdvanceFine: (
+          goldReceiptRes?.receipt.unallocatedFineWeight ?? ZERO
+        ).toFixed(4),
+        businessDate: businessDate.toISOString().slice(0, 10),
+        paymentMode: input.paymentMode ?? "CASH",
+        notes: noteText,
+      };
+    });
+  }
+
   public async refundCustomerGoldAdvance(
     actor: ActorContext,
     input: {
