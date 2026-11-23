@@ -419,8 +419,9 @@ export default function DashboardPage() {
                       <thead>
                         <tr className="border-b border-slate-200 text-left text-[11px] text-slate-500">
                           <th className="py-1">Bill #</th>
+                          <th className="py-1">Customer</th>
                           <th className="py-1">Date</th>
-                          <th className="py-1 text-right">Making Charge (₹)</th>
+                          <th className="py-1 text-right">Making Charge (g)</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -428,6 +429,18 @@ export default function DashboardPage() {
                           <tr key={b.billId} className="border-b border-slate-100">
                             <td className="py-1 font-mono font-semibold text-slate-900">
                               {b.billNumber}
+                            </td>
+                            <td className="py-1 font-medium text-slate-800">
+                              {b.customerId ? (
+                                <Link
+                                  href={`/customers/${b.customerId}`}
+                                  className="hover:underline text-slate-900"
+                                >
+                                  {b.customerName || "—"}
+                                </Link>
+                              ) : (
+                                b.customerName || "—"
+                              )}
                             </td>
                             <td className="py-1 font-mono text-slate-600">
                               {b.billDate}

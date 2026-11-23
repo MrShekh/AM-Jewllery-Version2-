@@ -6,6 +6,8 @@ export interface AdminMakingChargeBillItem {
   billId: string;
   billNumber: string;
   billDate: string;
+  customerId?: string;
+  customerName?: string;
   amountRupees: number;
 }
 
@@ -145,7 +147,10 @@ export async function getAdminMakingChargeSummary(
   }
 
   const candidateIds = Array.from(latestByBill.keys());
-  const nonCancelledBillIds = new Set<string>();
+  const nonCancelledBillMap = new Map<
+    string,
+    { customerId: string; customerName: string }
+  >();
   if (candidateIds.length > 0) {
     const validBills = await prisma.customerBill.findMany({
       where: {
@@ -153,10 +158,17 @@ export async function getAdminMakingChargeSummary(
         id: { in: candidateIds },
         status: { not: "CANCELLED" },
       },
-      select: { id: true },
+      select: {
+        id: true,
+        customerId: true,
+        customer: { select: { name: true } },
+      },
     });
     for (const b of validBills) {
-      nonCancelledBillIds.add(b.id);
+      nonCancelledBillMap.set(b.id, {
+        customerId: b.customerId,
+        customerName: b.customer?.name || "",
+      });
     }
   }
 
@@ -164,11 +176,16 @@ export async function getAdminMakingChargeSummary(
   let total = 0;
 
   for (const item of latestByBill.values()) {
-    if (!nonCancelledBillIds.has(item.billId)) continue;
+    const billMeta = nonCancelledBillMap.get(item.billId);
+    if (!billMeta) continue;
     if (item.billDate < fromDate || item.billDate > toDate) continue;
     if (item.amountRupees <= 0) continue;
     total += item.amountRupees;
-    bills.push(item);
+    bills.push({
+      ...item,
+      customerId: billMeta.customerId,
+      customerName: billMeta.customerName,
+    });
   }
 
   bills.sort((a, b) => b.billDate.localeCompare(a.billDate) || b.billNumber.localeCompare(a.billNumber));
