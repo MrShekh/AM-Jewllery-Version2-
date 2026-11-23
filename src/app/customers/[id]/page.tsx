@@ -583,6 +583,69 @@ export default function CustomerProfilePage() {
         return;
       }
 
+      if (
+        receiptFormMode === "RECEIVE_FINE" &&
+        splitCashEnabled &&
+        Number(cashSettledFine || 0) > 0
+      ) {
+        const splitRes = await fetch("/api/customers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "RECEIVE_SPLIT_GOLD_AND_CASH",
+            customerId: workspace.customer.id,
+            goldFineReceived: amountReceived || "0",
+            cashSettledFine,
+            cashAmountRupees: splitCashAmount,
+            goldRatePerGram: goldRatePerGram || "0",
+            paymentMode: splitCashMode,
+            businessDate: receiptDate,
+            referenceNumber: referenceNumber || undefined,
+            notes: receiptNotes || undefined,
+            allocationMode:
+              allocationMode === "CHOOSE_BILLS" ? "CHOOSE_BILLS" : "OLDEST_FIRST",
+            selectedBillIds:
+              allocationMode === "CHOOSE_BILLS" ? selectedBillIds : undefined,
+            idempotencyKey: `cgr_split_${workspace.customer.id}_${Date.now()}`,
+          }),
+        });
+        const splitData = await splitRes.json();
+        if (!splitRes.ok || !splitData.ok) {
+          setError(splitData.error || "Failed to record split gold + cash receipt");
+        } else {
+          setPrintingSplitReceipt({
+            goldReceiptNumber: splitData.goldReceiptNumber ?? null,
+            cashReceiptNumber: splitData.cashReceiptNumber ?? null,
+            businessDate: splitData.businessDate,
+            pendingBeforeFine: splitData.pendingBeforeFine,
+            goldReceivedFine: splitData.goldReceivedFine,
+            cashSettledFine: splitData.cashSettledFine,
+            cashAmountRupees: splitData.cashAmountRupees,
+            goldRatePerGram: splitData.goldRatePerGram,
+            pendingAfterFine: splitData.pendingAfterFine,
+            paymentMode: splitData.paymentMode,
+            notes: splitData.notes || "",
+          });
+          setAmountReceived("");
+          setCashSettledFine("");
+          setGoldRatePerGram("");
+          setSplitCashAmount("");
+          setSplitCashEnabled(false);
+          setReferenceNumber("");
+          setReceiptNotes("");
+          setShowReceiptForm(false);
+          setMessage(
+            `Saved Split Receipt: +${formatWeight3(
+              splitData.goldReceivedFine
+            )}g Gold added to Admin Stock + ${formatWeight3(
+              splitData.cashSettledFine
+            )}g settled via ₹${splitData.cashAmountRupees} ${splitData.paymentMode}.`
+          );
+          await loadWorkspace();
+        }
+        return;
+      }
+
       const res = await fetch("/api/customers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1068,9 +1131,11 @@ export default function CustomerProfilePage() {
     const data = await res.json();
     if (!res.ok || !data.ok) {
       setError(data.error || "Failed to reverse receipt");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } else {
-      setMessage(`Reversed receipt ${receiptNumber}.`);
+      setMessage(`Reversed receipt ${receiptNumber} and restored customer due.`);
       await loadWorkspace();
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }
 

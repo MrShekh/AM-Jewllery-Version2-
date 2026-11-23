@@ -11587,10 +11587,35 @@ export class ErpDomainService {
         validActor.organizationId,
         { goldReceiptId: receipt.id }
       );
-      if (allocs.some((a) => a.status === "ACTIVE")) {
-        throw new ConflictError(
-          "Receipt has active bill allocations. Undo allocations first before reversing the receipt."
+      const activeAllocs = allocs.filter((a) => a.status === "ACTIVE");
+      const now = new Date();
+      const affectedBillIds = new Set<string>();
+      for (const a of activeAllocs) {
+        await tx.updateCustomerPaymentAllocation({
+          ...a,
+          status: "UNDONE",
+          undoneAt: now,
+          undoneById: validActor.userId,
+          undoReason: `Reversed with ${receipt.receiptNumber}: ${reason}`,
+        });
+        affectedBillIds.add(a.billId);
+      }
+      for (const billId of affectedBillIds) {
+        const bill = await tx.getCustomerBillById(
+          validActor.organizationId,
+          billId
         );
+        if (bill) {
+          const allAllocs = await tx.listCustomerPaymentAllocations(
+            validActor.organizationId,
+            { billId: bill.id }
+          );
+          const bal = this.computeBillSettlement(bill, allAllocs);
+          await tx.updateCustomerBill({
+            ...bill,
+            settlementStatus: bal.settlementStatus,
+          });
+        }
       }
 
       const lines = await tx.listCustomerGoldReceiptLines(
