@@ -3454,6 +3454,7 @@ export class ErpDomainService {
           });
 
           if (rawNext.status === "PENDING" || Boolean(input.nextProcessType)) {
+            const isReopeningClosed = rawNext.status === "CLOSED";
             nextProc = await tx.updateOrderProcess({
               ...rawNext,
               assignedKarigarId: nextKarigar.id,
@@ -3464,15 +3465,15 @@ export class ErpDomainService {
               custodyMetalWeight: roundInternal(
                 rawNext.custodyMetalWeight.add(metalOut)
               ),
-              carriedStoneInWeight: roundInternal(
-                rawNext.carriedStoneInWeight.add(nonGoldOut)
-              ),
-              carriedStoneOutWeight: roundInternal(
-                rawNext.carriedStoneOutWeight.add(nonGoldOut)
-              ),
-              latestGrossInWeight: roundInternal(
-                rawNext.latestGrossInWeight.add(grossOut)
-              ),
+              carriedStoneInWeight: isReopeningClosed
+                ? nonGoldOut
+                : roundInternal(rawNext.carriedStoneInWeight.add(nonGoldOut)),
+              carriedStoneOutWeight: isReopeningClosed
+                ? nonGoldOut
+                : roundInternal(rawNext.carriedStoneOutWeight.add(nonGoldOut)),
+              latestGrossInWeight: isReopeningClosed
+                ? grossOut
+                : roundInternal(rawNext.latestGrossInWeight.add(grossOut)),
               closedAt: null,
               closedById: null,
               updatedAt: now,
