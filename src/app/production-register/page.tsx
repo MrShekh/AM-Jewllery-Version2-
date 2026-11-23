@@ -78,6 +78,8 @@ interface RegisterOrderRow {
     notes: string | null;
     adDetailsJson: string | null;
     status: string;
+    deliveryStatus?: string;
+    billingStatus?: string;
     initialIssuedMetalWeight: string;
     retainedStoneWeight: string;
     finishedGrossWeight: string | null;
@@ -1210,7 +1212,11 @@ function ProductionRegisterContent() {
   const getOrderLocation = useCallback(
     (r: RegisterOrderRow) => {
       const tr = jobCardTracking[r.order.id];
-      if (r.order.status === "DELIVERED") {
+      if (
+        r.order.status === "DELIVERED" ||
+        r.order.deliveryStatus === "DELIVERED" ||
+        r.order.billingStatus === "BILLED"
+      ) {
         return { type: "DELIVERED" as const, label: "Billed / Delivered" };
       }
       if (r.order.status === "COMPLETED") {
@@ -2841,7 +2847,24 @@ function ProductionRegisterContent() {
                         </button>
                       </div>
                     )}
-                  {selectedOrderRow.order.status === "COMPLETED" && (
+                  {(selectedOrderRow.order.status === "DELIVERED" ||
+                    selectedOrderRow.order.deliveryStatus === "DELIVERED" ||
+                    selectedOrderRow.order.billingStatus === "BILLED") && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xs flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-emerald-900">
+                        Billed &amp; Delivered
+                      </span>
+                      <a
+                        href={`/billing?customerId=${selectedOrderRow.order.customerId}`}
+                        className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-xs"
+                      >
+                        View Bills
+                      </a>
+                    </div>
+                  )}
+                  {selectedOrderRow.order.status === "COMPLETED" &&
+                    selectedOrderRow.order.deliveryStatus !== "DELIVERED" &&
+                    selectedOrderRow.order.billingStatus !== "BILLED" && (
                     <div className="p-3 bg-blue-50 border border-blue-300 rounded-xs flex items-center justify-between gap-2">
                       <span className="text-xs font-semibold text-blue-900">
                         Order Completed — Ready for Billing &amp; Delivery

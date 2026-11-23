@@ -5072,11 +5072,19 @@ export class ErpDomainService {
         ) {
           return false;
         }
+        const isBilledOrDelivered =
+          r.order.deliveryStatus === "DELIVERED" ||
+          r.order.billingStatus === "BILLED";
+
         if (
           filters?.status &&
           filters.status === "ACTIVE"
         ) {
           if (r.order.status === "CANCELLED") return false;
+        } else if (filters?.status === "DELIVERED") {
+          if (!isBilledOrDelivered) return false;
+        } else if (filters?.status === "COMPLETED") {
+          if (r.order.status !== "COMPLETED" || isBilledOrDelivered) return false;
         } else if (
           filters?.status &&
           filters.status !== "ALL" &&
