@@ -143,23 +143,49 @@ export async function POST(
 
         const w = new Decimal(weightNum.toFixed(6));
 
-        // If a downstream open stage currently holds unreturned metal >= w, transfer custody from it
+        // If a downstream open stage currently holds unreturned metal/gross >= w, transfer custody from it
         const holderProc = await tx.orderProcess.findFirst({
           where: {
             orderId,
             id: { not: targetProc.id },
             status: { not: "CLOSED" },
-            custodyMetalWeight: { gte: w },
+            OR: [
+              { custodyMetalWeight: { gte: w } },
+              { latestGrossInWeight: { gte: w } },
+            ],
             returnedMetalWeight: 0,
           },
           orderBy: { sequenceOrder: "desc" },
         });
+
+        let metalTransferNum = weightNum;
+        let stoneTransferNum = 0;
+
         if (holderProc) {
+          const holderCustody = Number(holderProc.custodyMetalWeight);
+          const holderStones = Number(holderProc.carriedStoneInWeight);
+          if (weightNum > holderCustody + 1e-6 && holderStones > 0) {
+            stoneTransferNum = Math.min(holderStones, Math.max(0, weightNum - holderCustody));
+            metalTransferNum = Math.min(holderCustody, Math.max(0, weightNum - stoneTransferNum));
+          } else {
+            metalTransferNum = Math.min(holderCustody, weightNum);
+            stoneTransferNum = 0;
+          }
+
+          const metalDec = new Decimal(metalTransferNum.toFixed(6));
           await tx.orderProcess.update({
             where: { id: holderProc.id },
             data: {
-              issuedMetalWeight: { decrement: w },
-              custodyMetalWeight: { decrement: w },
+              issuedMetalWeight: { decrement: metalDec },
+              custodyMetalWeight: { decrement: metalDec },
+              carriedStoneInWeight: {
+                set: new Decimal(Math.max(0, holderStones - stoneTransferNum).toFixed(6)),
+              },
+              carriedStoneOutWeight: {
+                set: new Decimal(
+                  Math.max(0, Number(holderProc.carriedStoneOutWeight) - stoneTransferNum).toFixed(6)
+                ),
+              },
               latestGrossInWeight: {
                 set: new Decimal(
                   Math.max(0, Number(holderProc.latestGrossInWeight) - weightNum).toFixed(6)
@@ -169,13 +195,17 @@ export async function POST(
           });
         }
 
+        const metalTransferDec = new Decimal(metalTransferNum.toFixed(6));
+        const stoneTransferDec = new Decimal(stoneTransferNum.toFixed(6));
+
         await tx.orderProcess.update({
           where: { id: targetProc.id },
           data: {
             status: "IN_PROGRESS",
             assignedKarigarId: karigar.id,
-            issuedMetalWeight: { increment: w },
-            custodyMetalWeight: { increment: w },
+            issuedMetalWeight: { increment: metalTransferDec },
+            custodyMetalWeight: { increment: metalTransferDec },
+            carriedStoneInWeight: { increment: stoneTransferDec },
             latestGrossInWeight: w,
             closedAt: null,
             closedById: null,
@@ -188,16 +218,16 @@ export async function POST(
             orderId: order.id,
             orderProcessId: targetProc.id,
             movementType: "PROCESS_TRANSFER",
-            fromProcessType: null,
+            fromProcessType: holderProc ? holderProc.processType : null,
             toProcessType,
             karigarId: karigar.id,
             businessDate: new Date(),
             grossWeight: w,
-            nonGoldWeight: 0,
-            netMetalWeight: w,
+            nonGoldWeight: stoneTransferDec,
+            netMetalWeight: metalTransferDec,
             touchSnapshot: order.touchSnapshot,
             fineEquivalentWeight: new Decimal(
-              ((weightNum * Number(order.touchSnapshot)) / 100).toFixed(6)
+              ((metalTransferNum * Number(order.touchSnapshot)) / 100).toFixed(6)
             ),
             notes: notes || `Repair piece sent to ${toProcessType} (${weightNum.toFixed(3)} g)`,
             idempotencyKey: `repair_${orderId}_${toProcessType}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
