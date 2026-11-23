@@ -196,6 +196,9 @@ export default function CustomerProfilePage() {
 
   // Filters
   const [orderTab, setOrderTab] = useState<OrderTab>("ALL");
+  const [activeSection, setActiveSection] = useState<
+    "ALL" | "ORDERS" | "BILLS" | "RECEIPTS"
+  >("ALL");
   const [monthFilter, setMonthFilter] = useState<string>("");
 
   // Edit Customer Form
@@ -1556,7 +1559,7 @@ export default function CustomerProfilePage() {
                     setShowReceiptForm(true);
                   }
                 }}
-                className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 font-medium text-sm cursor-pointer"
+                className="px-3.5 py-1.5 bg-slate-900 text-white rounded-md hover:bg-slate-800 font-medium text-xs cursor-pointer"
               >
                 {showReceiptForm && receiptFormMode === "RECEIVE_FINE"
                   ? "Cancel"
@@ -1573,11 +1576,11 @@ export default function CustomerProfilePage() {
                     setShowReceiptForm(true);
                   }
                 }}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 font-medium text-sm cursor-pointer"
+                className="px-3.5 py-1.5 bg-white text-slate-700 border border-slate-300 rounded-md hover:bg-slate-50 font-medium text-xs cursor-pointer"
               >
                 {showReceiptForm && receiptFormMode === "ADD_ADVANCE"
                   ? "Cancel"
-                  : "+ Add Advance Gold"}
+                  : "+ Advance Gold"}
               </button>
               <button
                 type="button"
@@ -1585,23 +1588,23 @@ export default function CustomerProfilePage() {
                   setShowDirectBillForm((prev) => !prev);
                   setShowReceiptForm(false);
                 }}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-medium text-sm cursor-pointer"
+                className="px-3.5 py-1.5 bg-white text-slate-700 border border-slate-300 rounded-md hover:bg-slate-50 font-medium text-xs cursor-pointer"
               >
-                {showDirectBillForm ? "Cancel Direct Bill" : "+ Create Direct Bill"}
+                {showDirectBillForm ? "Cancel Direct Bill" : "+ Direct Bill"}
               </button>
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="px-4 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-900 font-medium text-sm cursor-pointer"
+                className="px-3.5 py-1.5 bg-white text-slate-700 border border-slate-300 rounded-md hover:bg-slate-50 font-medium text-xs cursor-pointer"
               >
-                Print Statement Sheet
+                Print Statement
               </button>
               {actor.role === "OWNER_ADMIN" &&
                 Number(summaryCards.advanceAvailable) > 0 && (
                   <button
                     type="button"
                     onClick={() => setShowRefundModal(true)}
-                    className="px-3 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-200 font-medium text-sm cursor-pointer"
+                    className="px-3.5 py-1.5 bg-white text-slate-700 border border-slate-300 rounded-md hover:bg-slate-50 font-medium text-xs cursor-pointer"
                   >
                     Refund Advance
                   </button>
@@ -1611,51 +1614,51 @@ export default function CustomerProfilePage() {
 
           {/* Summary Stat Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-amber-50 p-4 rounded-lg border-2 border-amber-200">
-              <p className="text-sm text-gray-600">Total Gold Due (Jama)</p>
-              <p className="text-3xl font-bold text-amber-700 mt-1">
+            <div className="bg-white p-4 rounded-lg border border-slate-200 border-l-4 border-l-amber-500">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Gold Due (Jama)</p>
+              <p className="text-2xl font-bold font-mono text-slate-900 mt-1">
                 {formatWeight3(summaryCards.goldDue)}g
               </p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-slate-500 mt-1">
                 Remaining unpaid fine gold across bills
               </p>
             </div>
 
-            <div className="bg-emerald-50 p-4 rounded-lg border-2 border-emerald-200">
-              <p className="text-sm text-gray-600">Advance Available</p>
-              <p className="text-3xl font-bold text-emerald-700 mt-1">
+            <div className="bg-white p-4 rounded-lg border border-slate-200 border-l-4 border-l-emerald-500">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Gold Advance Available</p>
+              <p className="text-2xl font-bold font-mono text-slate-900 mt-1">
                 {formatWeight3(summaryCards.advanceAvailable)}g
               </p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-slate-500 mt-1">
                 Credit ready to apply on future bills
               </p>
             </div>
 
-            <div className="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+            <div className="bg-white p-4 rounded-lg border border-slate-200 border-l-4 border-l-slate-400">
               <div className="flex justify-between items-center">
-                <p className="text-sm text-gray-600">Total Gold Received</p>
-                <span className="text-[11px] bg-green-100 text-green-800 px-2 py-0.5 rounded font-medium">
-                  Historical Activity
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Gold Received</p>
+                <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-medium">
+                  All-Time
                 </span>
               </div>
-              <p className="text-3xl font-bold text-green-700 mt-1">
+              <p className="text-2xl font-bold font-mono text-slate-900 mt-1">
                 {formatWeight3(summaryCards.totalGoldReceivedHistorical)}g
               </p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-slate-500 mt-1">
                 Total fine gold collected from customer
               </p>
             </div>
           </div>
 
           {/* Cash / INR Balance Summary & Recovery */}
-          <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-3">
+          <div className="mt-4 p-4 bg-slate-50/70 border border-slate-200 rounded-lg space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">
-                  Cash / INR Balance Summary
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Cash / INR Balance
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Track pending making charges, recovered cash, and customer cash advance
+                  Pending making charges, recovered cash, and customer cash advance
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1665,7 +1668,7 @@ export default function CustomerProfilePage() {
                     setCashFormMode("RECEIVE_CASH");
                     setShowCashModal(true);
                   }}
-                  className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white rounded-md text-xs font-semibold cursor-pointer"
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-medium cursor-pointer"
                 >
                   ₹ Receive Cash
                 </button>
@@ -1675,22 +1678,22 @@ export default function CustomerProfilePage() {
                     setCashFormMode("ADD_CASH_ADVANCE");
                     setShowCashModal(true);
                   }}
-                  className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-md text-xs font-semibold cursor-pointer"
+                  className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-md text-xs font-medium cursor-pointer"
                 >
-                  + Add Cash Advance
+                  + Cash Advance
                 </button>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-              <div className="p-3 bg-white border border-rose-200 rounded-md">
-                <div className="text-xs text-rose-700 font-semibold">Pending Cash (Due)</div>
-                <div className="text-xl font-bold font-mono text-rose-700 mt-0.5">
+              <div className="p-3 bg-white border border-slate-200 rounded-md">
+                <div className="text-xs text-slate-500 font-medium">Pending Cash (Due)</div>
+                <div className="text-lg font-bold font-mono text-slate-900 mt-0.5">
                   ₹{Number(summaryCards.inrDue || 0).toFixed(2)}
                 </div>
               </div>
-              <div className="p-3 bg-white border border-emerald-200 rounded-md">
-                <div className="text-xs text-emerald-700 font-semibold">Cash Advance Available</div>
-                <div className="text-xl font-bold font-mono text-emerald-700 mt-0.5">
+              <div className="p-3 bg-white border border-slate-200 rounded-md">
+                <div className="text-xs text-slate-500 font-medium">Cash Advance Available</div>
+                <div className="text-lg font-bold font-mono text-slate-900 mt-0.5">
                   ₹{Number(summaryCards.inrAdvance || 0).toFixed(2)}
                 </div>
               </div>
@@ -2557,8 +2560,40 @@ export default function CustomerProfilePage() {
           )}
         </div>
 
+        {/* Clean Section Filter Tabs */}
+        <div className="flex flex-wrap items-center gap-2 bg-white px-4 py-2.5 rounded-lg border border-slate-200">
+          {(
+            [
+              ["ALL", "All Sections"],
+              ["ORDERS", `Orders (${workspace.orders.length})`],
+              ["BILLS", `Bills (${workspace.bills.length})`],
+              [
+                "RECEIPTS",
+                `Gold & Cash Receipts (${
+                  workspace.transactionHistory.goldReceipts.length +
+                  workspace.transactionHistory.cashReceipts.length
+                })`,
+              ],
+            ] as const
+          ).map(([secKey, secLabel]) => (
+            <button
+              key={secKey}
+              type="button"
+              onClick={() => setActiveSection(secKey)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors ${
+                activeSection === secKey
+                  ? "bg-slate-900 text-white"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+            >
+              {secLabel}
+            </button>
+          ))}
+        </div>
+
         {/* Orders History Card */}
-        <div className="bg-white p-6 rounded-lg shadow">
+        {(activeSection === "ALL" || activeSection === "ORDERS") && (
+        <div className="bg-white p-6 rounded-lg border border-slate-200">
           <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
             <h2 className="text-lg font-semibold text-gray-800">
               Order History
@@ -2681,9 +2716,11 @@ export default function CustomerProfilePage() {
             </div>
           )}
         </div>
+        )}
 
         {/* Bills Card */}
-        <div className="bg-white p-6 rounded-lg shadow">
+        {(activeSection === "ALL" || activeSection === "BILLS") && (
+        <div className="bg-white p-6 rounded-lg border border-slate-200">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">
             Customer Bills ({workspace.bills.length})
           </h2>
@@ -2861,9 +2898,11 @@ export default function CustomerProfilePage() {
             </div>
           )}
         </div>
+        )}
 
         {/* Gold Recovery / Receipt History (Simple V1-style list) */}
-        <div className="bg-white p-6 rounded-lg shadow">
+        {(activeSection === "ALL" || activeSection === "RECEIPTS") && (
+        <div className="bg-white p-6 rounded-lg border border-slate-200">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">
             Gold Received History
           </h2>
@@ -2932,9 +2971,10 @@ export default function CustomerProfilePage() {
             </div>
           )}
         </div>
+        )}
 
         {/* Collapsible Statement & Advanced Allocations */}
-        <details className="bg-white p-6 rounded-lg shadow">
+        <details className="bg-white p-6 rounded-lg border border-slate-200">
           <summary className="text-base font-semibold text-gray-800 cursor-pointer select-none">
             Full Customer Statement & Bill Allocations
           </summary>
