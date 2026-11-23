@@ -399,7 +399,24 @@ export const AppShell: React.FC<{
     const trimmed = rawValue.trim();
     if (!trimmed) return;
 
-    // Extract target from a full URL if scanned from a QR code (e.g. .../scan/4360 or ?order=...)
+    // Extract target from a full URL if scanned from a QR code
+    // 1) Stock Box QR: .../stock/scan/<purityCode>
+    const stockScanMatch = trimmed.match(/\/stock\/scan\/([^/?#]+)/i);
+    if (stockScanMatch?.[1]) {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        setCameraActive(false);
+      }
+      setManualBagOrQrInput("");
+      setScannerModalOpen(false);
+      router.push(
+        `/stock/scan/${encodeURIComponent(decodeURIComponent(stockScanMatch[1]))}`
+      );
+      return;
+    }
+
+    // 2) Job Card / Bag QR: .../scan/4360 or ?order=...
     let target = trimmed;
     const scanMatch = trimmed.match(/\/scan\/([^/?#]+)/i);
     const orderParamMatch = trimmed.match(/[?&]order=([^&#]+)/i);
@@ -599,7 +616,7 @@ export const AppShell: React.FC<{
               <div className="flex items-center gap-2">
                 <QrCode className="w-4 h-4 text-blue-700" />
                 <h2 className="text-sm font-bold text-slate-900">
-                  Scan Job Card QR to Open Bag Entry Page
+                  Scan QR (Bag Job Card or Gold Box)
                 </h2>
               </div>
               <button
@@ -637,7 +654,7 @@ export const AppShell: React.FC<{
                   className="w-full py-2 px-3 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded-xs flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Camera className="w-4 h-4" />
-                  <span>Open Laptop Camera to Scan Job Card QR</span>
+                  <span>Open Laptop Camera to Scan QR</span>
                 </button>
               ) : (
                 <div className="space-y-2">

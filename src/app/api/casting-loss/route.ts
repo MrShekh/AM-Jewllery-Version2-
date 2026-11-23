@@ -6,6 +6,7 @@ import {
   deleteCastingLoss,
   getCastingLossSummary,
   recordCastingLoss,
+  recoverCastingLoss,
 } from "@/lib/casting-loss";
 
 export async function GET(req: NextRequest) {
@@ -55,6 +56,17 @@ export async function POST(req: NextRequest) {
     if (action === "DELETE") {
       await deleteCastingLoss(actor.organizationId, String(body?.id || ""));
       return NextResponse.json({ ok: true });
+    }
+
+    if (action === "RECOVER") {
+      const recovery = await recoverCastingLoss(actor, {
+        entryIds: Array.isArray(body?.entryIds) ? body.entryIds.map(String) : undefined,
+        recoveredFineGrams: body?.recoveredFineGrams,
+        businessDate: body?.businessDate ? String(body.businessDate) : undefined,
+        note: body?.note ? String(body.note) : undefined,
+        idempotencyKey: body?.idempotencyKey ? String(body.idempotencyKey) : undefined,
+      });
+      return NextResponse.json({ ok: true, recovery });
     }
 
     const entry = await recordCastingLoss({

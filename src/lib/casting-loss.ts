@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { erpService, type ActorContext } from "@/lib/domain";
 import {
   calculateFineEquivalent,
   formatWeight3,
@@ -19,6 +20,23 @@ export interface CastingLossEntryItem {
   lossWeightGrams: string;
   fineWeightGrams: string;
   note: string;
+  status: "PENDING" | "RECOVERED";
+  recoveryId: string | null;
+  createdAt: string;
+}
+
+export interface CastingLossRecoveryItem {
+  id: string;
+  businessDate: string;
+  entryCount: number;
+  entryIds: string[];
+  expectedFineGrams: string;
+  recoveredFineGrams: string;
+  milligramLossGrams: string;
+  extraGainGrams: string;
+  netDifferenceGrams: string;
+  transactionNumber: string;
+  note: string;
   createdAt: string;
 }
 
@@ -29,6 +47,7 @@ export interface CastingLossKaratGroup {
   touchPercent: string;
   totalPhysicalGrams: string;
   totalFineGrams: string;
+  pendingFineGrams: string;
   entryCount: number;
 }
 
@@ -39,9 +58,17 @@ export interface CastingLossSummary {
   month: string;
   totalPhysicalGrams: string;
   totalFineGrams: string;
+  pendingFineGrams: string;
+  pendingEntryCount: number;
+  allPendingFineGrams: string;
+  allPendingEntries: CastingLossEntryItem[];
+  recoveredFineGrams: string;
+  milligramLossGrams: string;
+  extraGainGrams: string;
   entryCount: number;
   byKarat: CastingLossKaratGroup[];
   entries: CastingLossEntryItem[];
+  recoveries: CastingLossRecoveryItem[];
 }
 
 function getIstTodayYmd(): string {
@@ -138,6 +165,8 @@ export async function recordCastingLoss(input: {
     lossWeightGrams: formatWeight3(lossWeight),
     fineWeightGrams: formatWeight3(fineWeight),
     note,
+    status: "PENDING",
+    recoveryId: null,
     createdAt: created.createdAt.toISOString(),
   };
 }
@@ -149,6 +178,28 @@ export async function deleteCastingLoss(
   if (!id) {
     throw new Error("Casting loss entry ID is required.");
   }
+  const existing = await prisma.auditEvent.findFirst({
+    where: {
+      id,
+      organizationId,
+      entityType: "CASTING_LOSS_RECORD",
+    },
+  });
+  if (!existing) return;
+  if (existing.metadataJson) {
+    try {
+      const meta = JSON.parse(existing.metadataJson) as { status?: string };
+      if (meta.status === "RECOVERED") {
+        throw new Error(
+          "Cannot delete a casting loss entry that has already been recovered."
+        );
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("already been recovered")) {
+        throw err;
+      }
+    }
+  }
   await prisma.auditEvent.deleteMany({
     where: {
       id,
@@ -156,6 +207,179 @@ export async function deleteCastingLoss(
       entityType: "CASTING_LOSS_RECORD",
     },
   });
+}
+
+export async function recoverCastingLoss(
+  actor: ActorContext,
+  input: {
+    entryIds?: string[];
+    recoveredFineGrams: number | string;
+    businessDate?: string;
+    note?: string;
+    idempotencyKey?: string;
+  }
+): Promise<CastingLossRecoveryItem> {
+  const recoveredFine = roundOperational(toDecimal(input.recoveredFineGrams));
+  if (recoveredFine.lte(ZERO)) {
+    throw new Error("Recovered fine gold weight must be greater than 0.000 g.");
+  }
+
+  const businessDate =
+    input.businessDate && /^\d{4}-\d{2}-\d{2}$/.test(input.businessDate)
+      ? input.businessDate
+      : getIstTodayYmd();
+  const note = (input.note || "").trim();
+
+  const allEvents = await prisma.auditEvent.findMany({
+    where: {
+      organizationId: actor.organizationId,
+      entityType: "CASTING_LOSS_RECORD",
+      action: "CASTING_LOSS_RECORDED",
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const requestedIds = Array.isArray(input.entryIds) && input.entryIds.length > 0
+    ? new Set(input.entryIds)
+    : null;
+
+  const targetEvents: Array<{
+    ev: (typeof allEvents)[number];
+    meta: Record<string, unknown>;
+    fineWt: ReturnType<typeof toDecimal>;
+  }> = [];
+
+  for (const ev of allEvents) {
+    if (!ev.metadataJson) continue;
+    if (requestedIds && !requestedIds.has(ev.id)) continue;
+    try {
+      const meta = JSON.parse(ev.metadataJson) as Record<string, unknown>;
+      if (meta.status === "RECOVERED") continue;
+      const fineWt = roundOperational(
+        toDecimal((meta.fineWeightGrams as string | number) || 0)
+      );
+      if (fineWt.lte(ZERO)) continue;
+      targetEvents.push({ ev, meta, fineWt });
+    } catch {
+      continue;
+    }
+  }
+
+  if (targetEvents.length === 0) {
+    throw new Error("No pending casting loss entries selected for recovery.");
+  }
+
+  let expectedFine = ZERO;
+  for (const item of targetEvents) {
+    expectedFine = expectedFine.plus(item.fineWt);
+  }
+  expectedFine = roundOperational(expectedFine);
+
+  const diff = expectedFine.minus(recoveredFine);
+  const milligramLoss = diff.gt(ZERO) ? roundOperational(diff) : ZERO;
+  const extraGain = recoveredFine.gt(expectedFine)
+    ? roundOperational(recoveredFine.minus(expectedFine))
+    : ZERO;
+  const netDiff = roundOperational(recoveredFine.minus(expectedFine));
+
+  const purities = await prisma.purityDefinition.findMany({
+    where: { organizationId: actor.organizationId, isActive: true },
+    orderBy: [{ sortOrder: "asc" }, { touchPercent: "desc" }],
+  });
+  const finePurity =
+    purities.find((p) => Number(p.touchPercent) === 100) ||
+    purities.find((p) => p.code === "ADMIN_FINE_GOLD") ||
+    purities.find((p) => p.isFineCategory) ||
+    purities[0];
+
+  if (!finePurity) {
+    throw new Error("Fine gold purity is not configured.");
+  }
+
+  const idemKey =
+    input.idempotencyKey ||
+    `casting_rec_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+  const diffDesc = extraGain.gt(ZERO)
+    ? `+${formatWeight3(extraGain)}g extra gain`
+    : milligramLoss.gt(ZERO)
+    ? `-${formatWeight3(milligramLoss)}g mg loss`
+    : "exact match";
+
+  const stockTx = await erpService.postStockReceipt(actor, {
+    purityId: finePurity.id,
+    physicalWeight: formatWeight3(recoveredFine),
+    sourceReference: "CASTING-LOSS-RECOVERY",
+    reason:
+      note ||
+      `Casting loss recovery (${targetEvents.length} entries, expected ${formatWeight3(
+        expectedFine
+      )}g fine, recovered ${formatWeight3(
+        recoveredFine
+      )}g fine, ${diffDesc} — settled)`,
+    businessDate,
+    idempotencyKey: idemKey,
+  });
+
+  const entryIds = targetEvents.map((t) => t.ev.id);
+  const recoveryEvent = await prisma.auditEvent.create({
+    data: {
+      organizationId: actor.organizationId,
+      actorId: actor.userId,
+      entityType: "CASTING_LOSS_RECOVERY",
+      entityId: stockTx.id,
+      action: "CASTING_LOSS_RECOVERED",
+      summary: `Recovered ${formatWeight3(
+        recoveredFine
+      )}g fine to Admin Stock (Expected ${formatWeight3(
+        expectedFine
+      )}g, ${diffDesc})`,
+      metadataJson: JSON.stringify({
+        businessDate,
+        entryIds,
+        entryCount: entryIds.length,
+        expectedFineGrams: formatWeight3(expectedFine),
+        recoveredFineGrams: formatWeight3(recoveredFine),
+        milligramLossGrams: formatWeight3(milligramLoss),
+        extraGainGrams: formatWeight3(extraGain),
+        netDifferenceGrams: netDiff.toFixed(3),
+        journalTransactionId: stockTx.id,
+        transactionNumber: stockTx.transactionNumber,
+        note,
+      }),
+    },
+  });
+
+  await prisma.$transaction(
+    targetEvents.map(({ ev, meta }) =>
+      prisma.auditEvent.update({
+        where: { id: ev.id },
+        data: {
+          metadataJson: JSON.stringify({
+            ...meta,
+            status: "RECOVERED",
+            recoveryId: recoveryEvent.id,
+            recoveredBusinessDate: businessDate,
+          }),
+        },
+      })
+    )
+  );
+
+  return {
+    id: recoveryEvent.id,
+    businessDate,
+    entryCount: entryIds.length,
+    entryIds,
+    expectedFineGrams: formatWeight3(expectedFine),
+    recoveredFineGrams: formatWeight3(recoveredFine),
+    milligramLossGrams: formatWeight3(milligramLoss),
+    extraGainGrams: formatWeight3(extraGain),
+    netDifferenceGrams: netDiff.toFixed(3),
+    transactionNumber: stockTx.transactionNumber,
+    note,
+    createdAt: recoveryEvent.createdAt.toISOString(),
+  };
 }
 
 export async function getCastingLossSummary(
@@ -192,18 +416,31 @@ export async function getCastingLossSummary(
     toDate = f <= t ? t : f;
   }
 
-  const events = await prisma.auditEvent.findMany({
-    where: {
-      organizationId,
-      entityType: "CASTING_LOSS_RECORD",
-      action: "CASTING_LOSS_RECORDED",
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const [events, recoveryEvents] = await Promise.all([
+    prisma.auditEvent.findMany({
+      where: {
+        organizationId,
+        entityType: "CASTING_LOSS_RECORD",
+        action: "CASTING_LOSS_RECORDED",
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.auditEvent.findMany({
+      where: {
+        organizationId,
+        entityType: "CASTING_LOSS_RECOVERY",
+        action: "CASTING_LOSS_RECOVERED",
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
   const entries: CastingLossEntryItem[] = [];
+  const allPendingEntries: CastingLossEntryItem[] = [];
   let totalPhysical = ZERO;
   let totalFine = ZERO;
+  let pendingFine = ZERO;
+  let allPendingFine = ZERO;
   const karatMap = new Map<
     string,
     {
@@ -213,6 +450,7 @@ export async function getCastingLossSummary(
       touchPercent: string;
       physical: ReturnType<typeof toDecimal>;
       fine: ReturnType<typeof toDecimal>;
+      pendingFine: ReturnType<typeof toDecimal>;
       entryCount: number;
     }
   >();
@@ -229,10 +467,11 @@ export async function getCastingLossSummary(
         lossWeightGrams?: string | number;
         fineWeightGrams?: string | number;
         note?: string;
+        status?: "PENDING" | "RECOVERED";
+        recoveryId?: string | null;
       };
       const bDate = meta.businessDate || "";
       if (!/^\d{4}-\d{2}-\d{2}$/.test(bDate)) continue;
-      if (bDate < fromDate || bDate > toDate) continue;
 
       const lossWt = roundOperational(toDecimal(meta.lossWeightGrams || 0));
       const fineWt = roundOperational(toDecimal(meta.fineWeightGrams || 0));
@@ -240,11 +479,11 @@ export async function getCastingLossSummary(
       const karatLabel = meta.karatLabel || meta.purityLabel || "Unknown";
       const purityLabel = meta.purityLabel || karatLabel;
       const touchPercent = meta.touchPercent || "0.00";
+      const status: "PENDING" | "RECOVERED" =
+        meta.status === "RECOVERED" ? "RECOVERED" : "PENDING";
+      const recoveryId = meta.recoveryId || null;
 
-      totalPhysical = totalPhysical.plus(lossWt);
-      totalFine = totalFine.plus(fineWt);
-
-      entries.push({
+      const item: CastingLossEntryItem = {
         id: ev.id,
         businessDate: bDate,
         purityId,
@@ -254,13 +493,33 @@ export async function getCastingLossSummary(
         lossWeightGrams: formatWeight3(lossWt),
         fineWeightGrams: formatWeight3(fineWt),
         note: meta.note || "",
+        status,
+        recoveryId,
         createdAt: ev.createdAt.toISOString(),
-      });
+      };
+
+      if (status === "PENDING") {
+        allPendingEntries.push(item);
+        allPendingFine = allPendingFine.plus(fineWt);
+      }
+
+      if (bDate < fromDate || bDate > toDate) continue;
+
+      totalPhysical = totalPhysical.plus(lossWt);
+      totalFine = totalFine.plus(fineWt);
+      if (status === "PENDING") {
+        pendingFine = pendingFine.plus(fineWt);
+      }
+
+      entries.push(item);
 
       const existing = karatMap.get(purityId);
       if (existing) {
         existing.physical = existing.physical.plus(lossWt);
         existing.fine = existing.fine.plus(fineWt);
+        if (status === "PENDING") {
+          existing.pendingFine = existing.pendingFine.plus(fineWt);
+        }
         existing.entryCount += 1;
       } else {
         karatMap.set(purityId, {
@@ -270,6 +529,7 @@ export async function getCastingLossSummary(
           touchPercent,
           physical: lossWt,
           fine: fineWt,
+          pendingFine: status === "PENDING" ? fineWt : ZERO,
           entryCount: 1,
         });
       }
@@ -278,7 +538,75 @@ export async function getCastingLossSummary(
     }
   }
 
+  const recoveries: CastingLossRecoveryItem[] = [];
+  let recoveredFineTotal = ZERO;
+  let milligramLossTotal = ZERO;
+  let extraGainTotal = ZERO;
+
+  for (const rec of recoveryEvents) {
+    if (!rec.metadataJson) continue;
+    try {
+      const meta = JSON.parse(rec.metadataJson) as {
+        businessDate?: string;
+        entryIds?: string[];
+        entryCount?: number;
+        expectedFineGrams?: string | number;
+        recoveredFineGrams?: string | number;
+        milligramLossGrams?: string | number;
+        extraGainGrams?: string | number;
+        netDifferenceGrams?: string | number;
+        transactionNumber?: string;
+        note?: string;
+      };
+      const bDate = meta.businessDate || "";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(bDate)) continue;
+      if (bDate < fromDate || bDate > toDate) continue;
+
+      const expectedWt = roundOperational(toDecimal(meta.expectedFineGrams || 0));
+      const recoveredWt = roundOperational(toDecimal(meta.recoveredFineGrams || 0));
+      const mgLossWt = roundOperational(toDecimal(meta.milligramLossGrams || 0));
+      const extraGainWt =
+        meta.extraGainGrams !== undefined
+          ? roundOperational(toDecimal(meta.extraGainGrams))
+          : recoveredWt.gt(expectedWt)
+          ? roundOperational(recoveredWt.minus(expectedWt))
+          : ZERO;
+      const netDiffWt =
+        meta.netDifferenceGrams !== undefined
+          ? roundOperational(toDecimal(meta.netDifferenceGrams))
+          : roundOperational(recoveredWt.minus(expectedWt));
+
+      recoveredFineTotal = recoveredFineTotal.plus(recoveredWt);
+      milligramLossTotal = milligramLossTotal.plus(mgLossWt);
+      extraGainTotal = extraGainTotal.plus(extraGainWt);
+
+      recoveries.push({
+        id: rec.id,
+        businessDate: bDate,
+        entryCount: meta.entryCount ?? (meta.entryIds?.length || 0),
+        entryIds: Array.isArray(meta.entryIds) ? meta.entryIds : [],
+        expectedFineGrams: formatWeight3(expectedWt),
+        recoveredFineGrams: formatWeight3(recoveredWt),
+        milligramLossGrams: formatWeight3(mgLossWt),
+        extraGainGrams: formatWeight3(extraGainWt),
+        netDifferenceGrams: netDiffWt.toFixed(3),
+        transactionNumber: meta.transactionNumber || "",
+        note: meta.note || "",
+        createdAt: rec.createdAt.toISOString(),
+      });
+    } catch {
+      // Ignore malformed metadata
+    }
+  }
+
   entries.sort((a, b) => {
+    if (a.businessDate !== b.businessDate) {
+      return a.businessDate > b.businessDate ? -1 : 1;
+    }
+    return a.createdAt > b.createdAt ? -1 : 1;
+  });
+
+  allPendingEntries.sort((a, b) => {
     if (a.businessDate !== b.businessDate) {
       return a.businessDate > b.businessDate ? -1 : 1;
     }
@@ -294,6 +622,7 @@ export async function getCastingLossSummary(
       touchPercent: k.touchPercent,
       totalPhysicalGrams: formatWeight3(roundOperational(k.physical)),
       totalFineGrams: formatWeight3(roundOperational(k.fine)),
+      pendingFineGrams: formatWeight3(roundOperational(k.pendingFine)),
       entryCount: k.entryCount,
     }));
 
@@ -304,8 +633,16 @@ export async function getCastingLossSummary(
     month,
     totalPhysicalGrams: formatWeight3(roundOperational(totalPhysical)),
     totalFineGrams: formatWeight3(roundOperational(totalFine)),
+    pendingFineGrams: formatWeight3(roundOperational(pendingFine)),
+    pendingEntryCount: allPendingEntries.length,
+    allPendingFineGrams: formatWeight3(roundOperational(allPendingFine)),
+    allPendingEntries,
+    recoveredFineGrams: formatWeight3(roundOperational(recoveredFineTotal)),
+    milligramLossGrams: formatWeight3(roundOperational(milligramLossTotal)),
+    extraGainGrams: formatWeight3(roundOperational(extraGainTotal)),
     entryCount: entries.length,
     byKarat,
     entries,
+    recoveries,
   };
 }

@@ -650,23 +650,46 @@ export default function StockPage() {
           </div>
         )}
 
-        {/* Green Card: Total Admin Stock (Fine Gold) */}
-        <div className="bg-gradient-to-br from-emerald-500 to-green-700 text-white p-6 rounded-xl shadow-lg">
-          <div className="flex flex-wrap justify-between items-start gap-2">
+        {/* Top Summary Card: Total Admin Stock (Fine Gold) with Clear Breakdown */}
+        <div
+          className={`text-white p-6 rounded-xl shadow-lg ${
+            totalAdminStockFine < 0
+              ? "bg-gradient-to-br from-rose-600 to-amber-700"
+              : "bg-gradient-to-br from-emerald-500 to-green-700"
+          }`}
+        >
+          <div className="flex flex-wrap justify-between items-start gap-4">
             <div>
-              <p className="text-sm opacity-90">Total Admin Stock (Fine Gold)</p>
+              <p className="text-sm opacity-90">
+                Admin&apos;s Own Net Stock (Fine Gold)
+              </p>
               <p className="text-4xl font-bold mt-2">
                 {formatWeight3(totalAdminStockFine)}g
               </p>
-              <p className="text-xs opacity-80 mt-2">
-                Admin&apos;s own gold (karat gold + admin fine gold), excluding customer advances
-              </p>
+              {totalAdminStockFine < 0 ? (
+                <p className="text-xs bg-black/20 rounded-md px-3 py-1.5 mt-3 max-w-2xl">
+                  {formatWeight3(Math.abs(totalAdminStockFine))}g of customer advance gold is currently out in production (with karigars / in orders), so gold in locker ({formatWeight3(totalPoolFine)}g) is {formatWeight3(Math.abs(totalAdminStockFine))}g below customer advances ({formatWeight3(customerAdvanceFine)}g).
+                </p>
+              ) : (
+                <p className="text-xs opacity-85 mt-2">
+                  Admin&apos;s own gold (karat gold + admin fine gold), excluding customer advances
+                </p>
+              )}
             </div>
-            {customerAdvanceFine > 0 && (
-              <span className="text-xs bg-white/20 px-2.5 py-1 rounded-md font-medium">
-                Physical in Locker: {formatWeight3(totalPoolFine)}g
-              </span>
-            )}
+            <div className="bg-black/15 rounded-lg px-4 py-2.5 text-xs space-y-1 min-w-[230px]">
+              <div className="flex justify-between gap-4">
+                <span className="opacity-85">In Locker (All Purities, Fine):</span>
+                <span className="font-semibold font-mono">{formatWeight3(totalPoolFine)}g</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="opacity-85">− Customer Advances Held:</span>
+                <span className="font-semibold font-mono">{formatWeight3(customerAdvanceFine)}g</span>
+              </div>
+              <div className="border-t border-white/25 pt-1 flex justify-between gap-4 font-bold">
+                <span>= Admin&apos;s Own Net Stock:</span>
+                <span className="font-mono">{formatWeight3(totalAdminStockFine)}g</span>
+              </div>
+            </div>
           </div>
         </div>
 
