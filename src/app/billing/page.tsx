@@ -700,10 +700,10 @@ function BillingWorkspaceInner() {
 
   // Auto-fill Admin Internal Making Charge (g) = Billed Fine - Delivered Pure Gold unless manually overridden
   useEffect(() => {
-    if (editingBillId || makingChargeManuallyEdited) return;
+    if (makingChargeManuallyEdited) return;
     const autoMaking = Math.max(0, draftTotals.makingDiff);
     setAdminMakingCharge(autoMaking > 0 ? formatWeight3(autoMaking) : "");
-  }, [editingBillId, makingChargeManuallyEdited, draftTotals.makingDiff]);
+  }, [makingChargeManuallyEdited, draftTotals.makingDiff]);
 
   // Auto-fill Advance Gold to Use with min(availableAdvance, billFineTotal) unless manually overridden
   useEffect(() => {
@@ -737,6 +737,7 @@ function BillingWorkspaceInner() {
     setBillDate(b.billDate);
     setBillType(b.billType);
     setBillNotes(b.notes || "");
+    setMakingChargeManuallyEdited(false);
     setAdminMakingCharge(
       b.adminMakingChargeRupees && b.adminMakingChargeRupees > 0
         ? String(b.adminMakingChargeRupees)
@@ -2342,8 +2343,8 @@ function BillingWorkspaceInner() {
                         />
                         <span className="text-[10px] text-amber-800">
                           {Number(adminMakingCharge || 0) > 0
-                            ? `${Math.round(Number(adminMakingCharge) * 1000)} mg • Auto: Billed Fine − Pure Gold`
-                            : "Auto-calculated (Billed Fine − Pure Gold) • Dashboard only"}
+                            ? `${Math.round(Number(adminMakingCharge) * 1000)} mg • Auto: Billed Fine − Pure Gold (updates on edit)`
+                            : "Auto-calculated (Billed Fine − Pure Gold) • Updates on edit"}
                         </span>
                       </div>
                       <div>
@@ -2851,12 +2852,15 @@ function BillingWorkspaceInner() {
                 <div className="flex flex-wrap items-center gap-2">
                   <input
                     type="number"
-                    step="0.01"
+                    step="0.001"
                     min="0"
-                    placeholder="Admin Making (₹)"
+                    placeholder="Admin Making (g)"
                     title="Admin internal making charge (hidden from customer bill PDF/preview)"
                     value={adminMakingCharge}
-                    onChange={(e) => setAdminMakingCharge(e.target.value)}
+                    onChange={(e) => {
+                      setMakingChargeManuallyEdited(true);
+                      setAdminMakingCharge(e.target.value);
+                    }}
                     className="w-36 px-2 py-1.5 text-xs border border-amber-300 bg-amber-50/40 rounded-xs font-mono"
                   />
                   <input
