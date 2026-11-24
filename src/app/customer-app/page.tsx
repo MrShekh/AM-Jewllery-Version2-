@@ -424,8 +424,7 @@ export default function CustomerAppPage() {
         thumbnailUrl: d.thumbnailUrl || d.photos[0] || null,
         quantity: 1,
         size: chosenSize || d.supportedSizes[0] || "",
-        purityId: manualPurity ? "" : chosenPurityId || d.supportedPurityIds[0] || purities[0]?.id || "",
-        customPurityLabel: manualPurity || undefined,
+        purityId: chosenPurityId || d.supportedPurityIds[0] || orderPurities[0]?.id || "",
         targetWeight: d.approxWeightMin || "",
         requestedChanges: "",
         textInstructions: "",
@@ -440,8 +439,8 @@ export default function CustomerAppPage() {
   }
 
   function openCustomUploadTab() {
-    if (!customPurityId && purities[0]?.id) {
-      setCustomPurityId(purities[0].id);
+    if (!customPurityId && orderPurities[0]?.id) {
+      setCustomPurityId(orderPurities[0].id);
     }
     setTab("CUSTOM");
   }
@@ -475,7 +474,7 @@ export default function CustomerAppPage() {
 
   function resetCustomDraft() {
     setCustomTitle("");
-    setCustomPurityId(purities[0]?.id || "");
+    setCustomPurityId(orderPurities[0]?.id || "");
     setCustomPurityText("");
     setCustomWeight("");
     setCustomSize("");
@@ -489,7 +488,6 @@ export default function CustomerAppPage() {
   function addCustomDraftToCart(e: React.FormEvent) {
     e.preventDefault();
     const title = customTitle.trim() || "Custom Jewellery Design";
-    const manualPurity = customPurityId === "__CUSTOM__" ? customPurityText.trim() : "";
     const newId = `ci_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     setCart((prev) => [
       ...prev,
@@ -502,8 +500,7 @@ export default function CustomerAppPage() {
         thumbnailUrl: customMediaIds[0] ? `/api/app-attachments/${customMediaIds[0]}` : null,
         quantity: Math.max(1, customQty),
         size: customSize.trim(),
-        purityId: manualPurity ? "" : customPurityId || purities[0]?.id || "",
-        customPurityLabel: manualPurity || undefined,
+        purityId: customPurityId || orderPurities[0]?.id || "",
         targetWeight: customWeight.trim(),
         requestedChanges: "",
         textInstructions: customInstructions.trim(),
@@ -1244,7 +1241,7 @@ export default function CustomerAppPage() {
                     </div>
                   </div>
 
-                  {/* Purity Pills + Manual Entry */}
+                  {/* Purity Pills */}
                   <div>
                     <label className="block font-semibold text-stone-700 mb-1.5">
                       Karat / Purity
@@ -1270,28 +1267,7 @@ export default function CustomerAppPage() {
                           </button>
                         );
                       })}
-                      <button
-                        type="button"
-                        onClick={() => setCustomPurityId("__CUSTOM__")}
-                        className={`px-3 py-1.5 rounded-xl border font-medium cursor-pointer transition-colors ${
-                          customPurityId === "__CUSTOM__"
-                            ? "bg-[#9E7C42] text-white border-[#9E7C42]"
-                            : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
-                        }`}
-                      >
-                        + Manual Karat
-                      </button>
                     </div>
-                    {customPurityId === "__CUSTOM__" && (
-                      <input
-                        type="text"
-                        required
-                        value={customPurityText}
-                        onChange={(e) => setCustomPurityText(e.target.value)}
-                        placeholder="e.g. 20K or 14K Rose"
-                        className="mt-2 w-full px-3 py-2 border border-[#9E7C42]/60 rounded-xl bg-white focus:outline-none focus:border-[#0F3D2E]"
-                      />
-                    )}
                   </div>
 
                   {/* Qty, Weight, Size, Date */}
@@ -2531,7 +2507,7 @@ export default function CustomerAppPage() {
                   </div>
                 </div>
 
-                {/* Choose Karat / Purity (All options + Manual) */}
+                {/* Choose Karat / Purity */}
                 <div className="space-y-1.5">
                   <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">
                     Choose Karat / Purity
@@ -2565,30 +2541,7 @@ export default function CustomerAppPage() {
                         </button>
                       );
                     })}
-                    <button
-                      type="button"
-                      onClick={() => setModalPurityId("__CUSTOM__")}
-                      className={`p-2 rounded-xl border text-left transition-all cursor-pointer ${
-                        modalPurityId === "__CUSTOM__"
-                          ? "border-[#9E7C42] bg-amber-50/40 text-stone-900 font-semibold shadow-2xs"
-                          : "border-stone-200 bg-white text-stone-600 hover:border-stone-300"
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 rounded-full bg-stone-200 border border-stone-400 shrink-0" />
-                        <span className="truncate">+ Manual Karat</span>
-                      </div>
-                    </button>
                   </div>
-                  {modalPurityId === "__CUSTOM__" && (
-                    <input
-                      type="text"
-                      value={modalCustomPurity}
-                      onChange={(e) => setModalCustomPurity(e.target.value)}
-                      placeholder="Type custom karat (e.g. 20K, 14K Rose, 916)"
-                      className="w-full px-3 py-2 border border-[#9E7C42]/60 rounded-xl bg-white focus:outline-none focus:border-[#0F3D2E]"
-                    />
-                  )}
                 </div>
 
                 {/* Choose Size */}
@@ -2632,11 +2585,8 @@ export default function CustomerAppPage() {
                   onClick={() =>
                     addCatalogueDesignToCart(
                       selectedDesign,
-                      modalPurityId === "__CUSTOM__"
-                        ? ""
-                        : modalPurityId || selectedDesign.supportedPurityIds[0] || orderPurities[0]?.id,
-                      modalSize || selectedDesign.supportedSizes[0],
-                      modalPurityId === "__CUSTOM__" ? modalCustomPurity : undefined
+                      modalPurityId || selectedDesign.supportedPurityIds[0] || orderPurities[0]?.id,
+                      modalSize || selectedDesign.supportedSizes[0]
                     )
                   }
                   className="w-full py-3 bg-[#0F3D2E] hover:bg-[#14533E] text-white rounded-xl font-semibold text-sm cursor-pointer transition-colors"

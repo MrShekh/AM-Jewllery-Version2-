@@ -117,6 +117,9 @@ export async function submitCustomerOrderRequest(
         throw new ValidationError("Selected catalogue design was not found");
       }
       const purity = item.purityId ? purityMap.get(item.purityId) : null;
+      if (purity && Number(purity.touchPercent) >= 100) {
+        throw new ValidationError("Fine (100%) purity cannot be selected for customer orders");
+      }
       const snapshot = design
         ? {
             sourceType: "CATALOGUE",
