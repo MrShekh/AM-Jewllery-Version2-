@@ -26,11 +26,64 @@ export const ALLOWED_AUDIO_MIMES = new Set([
 export function resolveAppAttachmentDir(): string {
   const configured =
     process.env.UPLOAD_STORAGE_DIR ||
-    (isStagingEnvironment() ? "./storage/staging-uploads" : "./storage/uploads");
+    (process.env.VERCEL
+      ? "/tmp/am-jewellers-uploads"
+      : isStagingEnvironment()
+      ? "./storage/staging-uploads"
+      : "./storage/uploads");
   const base = path.isAbsolute(configured)
     ? configured
     : path.resolve(process.cwd(), configured);
   return path.join(base, "app-media");
+}
+
+function hasCloudinaryConfig(): boolean {
+  return (
+    Boolean(process.env.CLOUDINARY_CLOUD_NAME?.trim()) &&
+    Boolean(process.env.CLOUDINARY_API_KEY?.trim()) &&
+    Boolean(process.env.CLOUDINARY_API_SECRET?.trim())
+  );
+}
+
+async function uploadAppMediaToCloudinary(
+  buffer: Buffer,
+  mimeType: string,
+  publicId: string,
+  kind: "IMAGE" | "VOICE_NOTE"
+): Promise<string> {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME!.trim();
+  const apiKey = process.env.CLOUDINARY_API_KEY!.trim();
+  const apiSecret = process.env.CLOUDINARY_API_SECRET!.trim();
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const folder = "am-jewellers-v2/app-media";
+  const toSign = `folder=${folder}&public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
+  const signature = crypto.createHash("sha1").update(toSign).digest("hex");
+
+  const dataUri = `data:${mimeType};base64,${buffer.toString("base64")}`;
+  const form = new FormData();
+  form.append("file", dataUri);
+  form.append("api_key", apiKey);
+  form.append("timestamp", timestamp);
+  form.append("folder", folder);
+  form.append("public_id", publicId);
+  form.append("signature", signature);
+
+  const resourceType = kind === "VOICE_NOTE" ? "video" : "image";
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${encodeURIComponent(cloudName)}/${resourceType}/upload`,
+    { method: "POST", body: form }
+  );
+  const data = (await res.json()) as {
+    secure_url?: string;
+    error?: { message?: string };
+  };
+  if (!res.ok || !data.secure_url) {
+    throw new Error(
+      data.error?.message || `Cloudinary upload failed (${res.status})`
+    );
+  }
+  return data.secure_url;
 }
 
 export function extForMime(mime: string): string {
@@ -88,12 +141,24 @@ export async function saveAppAttachmentFile(params: {
     }
   }
 
-  const dir = resolveAppAttachmentDir();
-  await fs.mkdir(dir, { recursive: true });
   const randomKey = `${Date.now()}_${crypto.randomBytes(16).toString("hex")}${extForMime(mime)}`;
-  const fullPath = path.join(dir, randomKey);
   const buffer = Buffer.from(await params.file.arrayBuffer());
-  await fs.writeFile(fullPath, buffer);
+  let storageKey = randomKey;
+
+  if (hasCloudinaryConfig()) {
+    const publicId = randomKey.replace(/\.[^.]+$/, "");
+    storageKey = await uploadAppMediaToCloudinary(
+      buffer,
+      mime,
+      publicId,
+      params.kind
+    );
+  } else {
+    const dir = resolveAppAttachmentDir();
+    await fs.mkdir(dir, { recursive: true });
+    const fullPath = path.join(dir, randomKey);
+    await fs.writeFile(fullPath, buffer);
+  }
 
   const created = await prisma.appAttachment.create({
     data: {
@@ -102,7 +167,7 @@ export async function saveAppAttachmentFile(params: {
       originalName: path.basename(params.file.name || `upload${extForMime(mime)}`),
       mimeType: mime,
       sizeBytes: buffer.length,
-      storageKey: randomKey,
+      storageKey,
       scope: params.scope ?? "PRIVATE",
       ownerUserId: params.actor.userId,
       customerId: params.customerId ?? params.actor.customerId ?? null,

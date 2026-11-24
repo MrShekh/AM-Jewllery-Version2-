@@ -13,7 +13,9 @@ const ALLOWED_MIME_TYPES = new Set([
 ]);
 
 function resolveUploadDirectory(): string {
-  const dir = process.env.UPLOAD_STORAGE_DIR || "./storage/uploads";
+  const dir =
+    process.env.UPLOAD_STORAGE_DIR ||
+    (process.env.VERCEL ? "/tmp/am-jewellers-uploads" : "./storage/uploads");
   return path.isAbsolute(dir) ? dir : path.resolve(process.cwd(), dir);
 }
 

@@ -24,12 +24,24 @@ export async function GET(
       return new NextResponse("Forbidden", { status: 403 });
     }
 
-    const cleanKey = path.basename(access.attachment.storageKey);
-    const fullPath = path.join(resolveAppAttachmentDir(), cleanKey);
-    const data = await fs.readFile(fullPath);
+    let data: Uint8Array;
+    if (
+      access.attachment.storageKey.startsWith("https://") ||
+      access.attachment.storageKey.startsWith("http://")
+    ) {
+      const remoteRes = await fetch(access.attachment.storageKey);
+      if (!remoteRes.ok) {
+        return new NextResponse("Not Found", { status: 404 });
+      }
+      data = new Uint8Array(await remoteRes.arrayBuffer());
+    } else {
+      const cleanKey = path.basename(access.attachment.storageKey);
+      const fullPath = path.join(resolveAppAttachmentDir(), cleanKey);
+      data = new Uint8Array(await fs.readFile(fullPath));
+    }
 
     const isPublic = access.attachment.scope === "PUBLIC_CATALOGUE";
-    return new NextResponse(data, {
+    return new NextResponse(Buffer.from(data), {
       status: 200,
       headers: {
         "Content-Type": access.attachment.mimeType,
