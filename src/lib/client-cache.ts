@@ -5,7 +5,9 @@ export interface CachedActor {
   organizationId: string;
   username: string;
   displayName: string;
-  role: "OWNER_ADMIN" | "OPERATOR";
+  role: "OWNER_ADMIN" | "OPERATOR" | "CUSTOMER" | "CAD_DESIGNER";
+  customerId?: string | null;
+  linkedKarigarId?: string | null;
 }
 
 interface CacheEntry {

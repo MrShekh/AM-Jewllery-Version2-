@@ -45,7 +45,7 @@ interface PurityOption {
 
 export default function NewOrderPage() {
   const router = useRouter();
-  const [actor, setActor] = useState<AppShellUser | null>(() => getCachedActor());
+  const [actor, setActor] = useState<AppShellUser | null>(null);
   const [customers, setCustomers] = useState<CustomerOption[]>(
     () => getCachedJson<{ customers: CustomerOption[] }>("/api/customers")?.customers || []
   );
@@ -82,6 +82,28 @@ export default function NewOrderPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Optional Link Customer Order (App Request)
+  const [unlinkedAppItems, setUnlinkedAppItems] = useState<
+    Array<{
+      itemId: string;
+      requestNumber: string;
+      customerId: string;
+      customerName: string;
+      confirmedDeliveryDate: string | null;
+      designCode: string;
+      designName: string;
+      thumbnailUrl: string | null;
+      remainingQuantity: number;
+      size: string | null;
+      purityId: string | null;
+      targetWeight: string | null;
+      textInstructions: string | null;
+      requestedChanges: string | null;
+    }>
+  >([]);
+  const [selectedAppItemId, setSelectedAppItemId] = useState("");
+  const [linkedAppQty, setLinkedAppQty] = useState(1);
+
   const loadInitial = useCallback(async () => {
     const [resolvedActor, cData, pData, bagData] = await Promise.all([
       fetchActorCached(),
@@ -117,6 +139,15 @@ export default function NewOrderPage() {
         setPurityId((prev) => prev || pData.purities![0].id);
       }
     }
+
+    fetch("/api/app-orders", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((ao) => {
+        if (ao?.ok && Array.isArray(ao.unlinkedApprovedItems)) {
+          setUnlinkedAppItems(ao.unlinkedApprovedItems);
+        }
+      })
+      .catch(() => {});
   }, [router]);
 
   useEffect(() => {
@@ -232,6 +263,9 @@ export default function NewOrderPage() {
           notes: notes || null,
           adDetails: adDetails.filter((a) => a.adSize || a.adPieces > 0),
           selectedProcesses,
+          requestLinks: selectedAppItemId
+            ? [{ requestItemId: selectedAppItemId, quantity: linkedAppQty }]
+            : undefined,
         }),
       });
       const data = await res.json();
@@ -366,6 +400,68 @@ export default function NewOrderPage() {
 
             {/* Customer Selection or Quick Create */}
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end bg-slate-50 p-3 border border-slate-200 rounded-xs">
+              {unlinkedAppItems.length > 0 && (
+                <div className="sm:col-span-12 p-3 bg-blue-50/70 border border-blue-200 rounded-xs space-y-2">
+                  <div className="text-xs font-bold text-blue-950">
+                    Optional: Link Customer Order (Approved App Request)
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                    <select
+                      value={selectedAppItemId}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        setSelectedAppItemId(id);
+                        const match = unlinkedAppItems.find((x) => x.itemId === id);
+                        if (match) {
+                          setLinkedAppQty(1);
+                          setCustomerId(match.customerId);
+                          setOrderName(`${match.designCode} - ${match.designName}`);
+                          if (match.size) setSize(match.size);
+                          if (match.purityId) setPurityId(match.purityId);
+                          if (match.targetWeight) setTargetWeight(match.targetWeight);
+                          if (match.confirmedDeliveryDate) {
+                            setDueDate(match.confirmedDeliveryDate);
+                          }
+                          if (match.thumbnailUrl && !photoUrl) {
+                            setPhotoUrl(match.thumbnailUrl);
+                          }
+                          const noteParts = [
+                            `Linked ${match.requestNumber}`,
+                            match.requestedChanges,
+                            match.textInstructions,
+                          ].filter(Boolean);
+                          setNotes(noteParts.join(" • "));
+                        }
+                      }}
+                      className="sm:col-span-9 px-2.5 py-1.5 text-xs bg-white border border-blue-300 rounded-xs"
+                    >
+                      <option value="">-- Walk-in / Manual Bag (No App Request) --</option>
+                      {unlinkedAppItems.map((it) => (
+                        <option key={it.itemId} value={it.itemId}>
+                          {it.requestNumber} • {it.customerName} • {it.designCode} ({it.designName}) — {it.remainingQuantity} pcs left
+                        </option>
+                      ))}
+                    </select>
+                    {selectedAppItemId && (
+                      <input
+                        type="number"
+                        min={1}
+                        max={
+                          unlinkedAppItems.find((x) => x.itemId === selectedAppItemId)
+                            ?.remainingQuantity || 1
+                        }
+                        value={linkedAppQty}
+                        onChange={(e) =>
+                          setLinkedAppQty(Math.max(1, Number(e.target.value || 1)))
+                        }
+                        className="sm:col-span-3 px-2.5 py-1.5 text-xs bg-white border border-blue-300 rounded-xs font-mono"
+                        title="Quantity to link to this bag"
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="sm:col-span-6">
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Select Customer *

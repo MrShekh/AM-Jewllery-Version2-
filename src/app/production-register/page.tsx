@@ -190,7 +190,7 @@ function ProductionRegisterContent() {
   const orderIdFromUrl = searchParams.get("order");
   const scannedParam = searchParams.get("scanned");
 
-  const [actor, setActor] = useState<AppShellUser | null>(() => getCachedActor());
+  const [actor, setActor] = useState<AppShellUser | null>(null);
   const cachedInitOrders = getCachedJson<{
     ok?: boolean;
     rows: RegisterOrderRow[];
@@ -3750,23 +3750,31 @@ function ProductionRegisterContent() {
                                 >
                                   <option value="">Auto (Next Selected Process)</option>
                                   <option value="FILING">Filing (or Lock Fitting / Repairing)</option>
-                                  <option value="FREE_POLISH">Free Polish</option>
-                                  <option value="SETTING">Setting</option>
-                                  <option value="NOKSI">Noksi (Outsource)</option>
-                                  <option value="FINAL_POLISH">Final Polish</option>
+                                  <option value="FREE_POLISH">Free Polish (or Repairing)</option>
+                                  <option value="SETTING">Setting (or Repairing)</option>
+                                  <option value="NOKSI">Noksi (Outsource / Repairing)</option>
+                                  <option value="FINAL_POLISH">Final Polish (or Repairing)</option>
                                   <option value="COMPLETE">Ready to Complete Order</option>
                                 </select>
                               </div>
-                              {showAdvancedEntry && (
-                                <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer pt-4">
-                                  <input
-                                    type="checkbox"
-                                    checked={isRepairing}
-                                    onChange={(e) => setIsRepairing(e.target.checked)}
-                                  />
-                                  <span>Mark as Repairing</span>
-                                </label>
-                              )}
+                              <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer pt-4">
+                                <input
+                                  type="checkbox"
+                                  checked={isRepairing}
+                                  onChange={(e) => setIsRepairing(e.target.checked)}
+                                />
+                                <span>Mark as Repairing</span>
+                              </label>
+                            </div>
+                          )}
+
+                          {Number(activeProcessObj.carriedStoneInWeight || 0) > 0 && (
+                            <div className="p-2 bg-amber-50 border border-amber-200 rounded-xs text-[11px] text-amber-900">
+                              Already carrying{" "}
+                              <strong className="font-mono">
+                                {Number(activeProcessObj.carriedStoneInWeight).toFixed(3)} g
+                              </strong>{" "}
+                              stone/KL in this piece. Enter <strong>ONLY newly added</strong> stone below (leave blank if no new stone was added).
                             </div>
                           )}
 

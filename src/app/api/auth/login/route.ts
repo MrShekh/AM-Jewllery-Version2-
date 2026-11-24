@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const email = String(body.email || "");
     const password = String(body.password || "");
-    const redirectTo = sanitizeRedirectPath(body.redirect);
+    const rawRedirect = typeof body.redirect === "string" ? body.redirect : undefined;
 
     const { token, expiresAt, actor } = await authenticateAndCreateSession(
       email,
@@ -21,6 +21,19 @@ export async function POST(req: NextRequest) {
         userAgent: req.headers.get("user-agent") || undefined,
       }
     );
+
+    const roleFallback =
+      actor.role === "CUSTOMER"
+        ? "/customer-app"
+        : actor.role === "CAD_DESIGNER"
+        ? "/cad-dashboard"
+        : "/production-register";
+    const redirectTo =
+      actor.role === "CUSTOMER"
+        ? "/customer-app"
+        : actor.role === "CAD_DESIGNER"
+        ? "/cad-dashboard"
+        : sanitizeRedirectPath(rawRedirect, roleFallback);
 
     const res = NextResponse.json({
       ok: true,

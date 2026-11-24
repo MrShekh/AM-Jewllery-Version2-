@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export type UserRole = "OWNER_ADMIN" | "OPERATOR";
+export type UserRole = "OWNER_ADMIN" | "OPERATOR" | "CUSTOMER" | "CAD_DESIGNER";
 
 export type ProcessType =
   | "FILING"
@@ -129,6 +129,8 @@ export interface ActorContext {
   role: UserRole;
   email?: string;
   name?: string;
+  customerId?: string | null;
+  linkedKarigarId?: string | null;
 }
 
 export interface PurityEntity {
