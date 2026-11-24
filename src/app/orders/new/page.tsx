@@ -99,6 +99,7 @@ export default function NewOrderPage() {
       targetWeight: string | null;
       textInstructions: string | null;
       requestedChanges: string | null;
+      referenceMediaIds?: string[];
     }>
   >([]);
   const [selectedAppItemId, setSelectedAppItemId] = useState("");
@@ -422,8 +423,13 @@ export default function NewOrderPage() {
                           if (match.confirmedDeliveryDate) {
                             setDueDate(match.confirmedDeliveryDate);
                           }
-                          if (match.thumbnailUrl && !photoUrl) {
-                            setPhotoUrl(match.thumbnailUrl);
+                          const linkedPhoto =
+                            match.thumbnailUrl ||
+                            (match.referenceMediaIds?.[0]
+                              ? `/api/app-attachments/${match.referenceMediaIds[0]}`
+                              : "");
+                          if (linkedPhoto) {
+                            setPhotoUrl(linkedPhoto);
                           }
                           const noteParts = [
                             `Linked ${match.requestNumber}`,

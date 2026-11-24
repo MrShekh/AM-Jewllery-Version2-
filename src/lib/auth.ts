@@ -151,7 +151,7 @@ export async function getCurrentActor(): Promise<ActorContext | null> {
 }
 
 export async function requireServerActor(
-  allowedRoles?: UserRole[]
+  allowedRoles: UserRole[] = ["OWNER_ADMIN", "OPERATOR"]
 ): Promise<ActorContext> {
   const actor = await getCurrentActor();
   if (!actor) {

@@ -33,6 +33,7 @@ import {
   Phone,
   Pencil,
   Camera,
+  CheckCircle2,
 } from "lucide-react";
 
 type CustomerTab = "DESIGNS" | "CUSTOM" | "CART" | "ORDERS" | "NOTIFICATIONS" | "PROFILE";
@@ -158,6 +159,7 @@ export default function CustomerAppPage() {
   const [heroSlide, setHeroSlide] = useState(0);
   const [orderFilter, setOrderFilter] = useState<string>("ALL");
   const [previewOrderPhoto, setPreviewOrderPhoto] = useState<string | null>(null);
+  const [orderSuccessNumber, setOrderSuccessNumber] = useState<string | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
@@ -575,9 +577,7 @@ export default function CustomerAppPage() {
       setCart([]);
       setRequestedDeliveryDate("");
       setCustomerNote("");
-      setMessage(
-        `Order Request ${data.request.requestNumber} submitted! Waiting for manager confirmation.`
-      );
+      setOrderSuccessNumber(data.request.requestNumber);
       setTab("ORDERS");
       await loadWorkspace();
     } catch (e: unknown) {
@@ -672,10 +672,25 @@ export default function CustomerAppPage() {
     return () => clearInterval(id);
   }, [heroSlides.length]);
 
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(() => setMessage(null), 2800);
+    return () => clearTimeout(t);
+  }, [message]);
+
   if (loading || !actor) {
     return (
-      <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center text-xs text-stone-500">
-        Loading AM Jewellery...
+      <div className="min-h-screen bg-[#FAF9F6] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-20 h-20 rounded-3xl bg-white border border-[#9E7C42]/30 shadow-sm flex items-center justify-center p-2.5 animate-pulse">
+          <img
+            src="/am-logo-icon.png"
+            alt="AM Jewellery"
+            className="w-full h-full object-contain"
+          />
+        </div>
+        <div className="font-serif text-lg font-semibold text-[#0F3D2E] mt-4">
+          AM Jewellery
+        </div>
       </div>
     );
   }
@@ -793,11 +808,6 @@ export default function CustomerAppPage() {
         {error && (
           <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
             {error}
-          </div>
-        )}
-        {message && (
-          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800">
-            {message}
           </div>
         )}
 
@@ -2663,6 +2673,52 @@ export default function CustomerAppPage() {
         </div>
       )}
 
+      {orderSuccessNumber && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 sm:p-7 text-center space-y-4 shadow-2xl border border-[#9E7C42]/30">
+            <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
+              <span className="absolute inset-0 rounded-full bg-emerald-200/60 animate-ping" />
+              <div className="relative w-16 h-16 rounded-full bg-[#0F3D2E] text-white flex items-center justify-center shadow-md">
+                <CheckCircle2 className="w-8 h-8 text-[#E6C27A]" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <div className="inline-block px-3 py-1 rounded-full bg-[#FAF9F6] border border-[#9E7C42]/40 font-mono text-xs font-semibold text-[#9E7C42]">
+                {orderSuccessNumber}
+              </div>
+              <h2 className="font-serif text-xl font-semibold text-[#0F3D2E]">
+                Thank You! Order Received
+              </h2>
+              <p className="text-xs text-stone-500 leading-relaxed">
+                Your AM Jewellery order has been sent to our master craftsmen. We will keep you updated at every step.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderSuccessNumber(null);
+                  setTab("ORDERS");
+                }}
+                className="w-full py-2.5 rounded-xl bg-[#0F3D2E] hover:bg-[#14533E] text-white text-xs font-semibold cursor-pointer"
+              >
+                Track My Order
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderSuccessNumber(null);
+                  setTab("DESIGNS");
+                }}
+                className="w-full py-2.5 rounded-xl border border-stone-200 hover:bg-stone-50 text-stone-700 text-xs font-medium cursor-pointer"
+              >
+                Back to Home
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {previewOrderPhoto && (
         <div
           onClick={() => setPreviewOrderPhoto(null)}
@@ -2682,6 +2738,13 @@ export default function CustomerAppPage() {
               className="w-full max-h-[75vh] object-contain rounded-xl"
             />
           </div>
+        </div>
+      )}
+
+      {message && (
+        <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-[90vw] bg-[#0F3D2E] text-white px-4 py-2.5 rounded-full shadow-xl border border-[#9E7C42]/40 flex items-center gap-2 text-xs font-medium">
+          <CheckCircle2 className="w-4 h-4 text-[#E6C27A] shrink-0" />
+          <span className="truncate">{message}</span>
         </div>
       )}
 

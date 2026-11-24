@@ -5,8 +5,8 @@ import type { ActorContext } from "@/lib/domain/types";
 import { createInAppNotification, notifyOrganizationManagers } from "@/lib/app-notifications";
 
 export const CUSTOMER_STATUS_LABELS: Record<string, string> = {
-  AWAITING_APPROVAL: "Awaiting approval",
-  MORE_DETAILS_NEEDED: "More details needed",
+  AWAITING_APPROVAL: "Order Received",
+  MORE_DETAILS_NEEDED: "Info Requested",
   APPROVED: "Approved",
   READY: "Ready",
   DELIVERED: "Delivered",

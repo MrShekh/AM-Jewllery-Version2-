@@ -1,4 +1,4 @@
-// Minimal pass-through Service Worker for AM Jewellery Customer App installability
+// Service Worker for AM Jewellery Customer App (network-first with safe fallback)
 self.addEventListener("install", () => {
   self.skipWaiting();
 });
@@ -8,7 +8,14 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  // Always use network for live ERP & customer order data
   if (event.request.method !== "GET") return;
-  event.respondWith(fetch(event.request));
+  event.respondWith(
+    fetch(event.request).catch(
+      () =>
+        new Response("Offline — please check your internet connection.", {
+          status: 503,
+          headers: { "Content-Type": "text/plain" },
+        })
+    )
+  );
 });

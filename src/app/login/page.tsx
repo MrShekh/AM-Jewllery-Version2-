@@ -15,6 +15,7 @@ function LoginFormContent() {
     : undefined;
 
   const [mode, setMode] = useState<"SIGNIN" | "SIGNUP">("SIGNIN");
+  const [showSplash, setShowSplash] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -25,6 +26,11 @@ function LoginFormContent() {
   const [signupPassword, setSignupPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    const t = setTimeout(() => setShowSplash(false), 1100);
+    return () => clearTimeout(t);
+  }, []);
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
@@ -90,6 +96,26 @@ function LoginFormContent() {
       setError(err instanceof Error ? err.message : "Network error");
       setLoading(false);
     }
+  }
+
+  if (showSplash) {
+    return (
+      <div className="min-h-screen bg-[#FAF9F6] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-24 h-24 rounded-3xl bg-white border border-[#9E7C42]/30 shadow-md flex items-center justify-center p-3 animate-pulse">
+          <img
+            src="/am-logo-icon.png"
+            alt="AM Jewellery"
+            className="w-full h-full object-contain"
+          />
+        </div>
+        <h1 className="font-serif text-2xl font-semibold tracking-wide text-[#0F3D2E] mt-5">
+          AM Jewellery
+        </h1>
+        <p className="text-xs text-[#9E7C42] tracking-widest uppercase mt-1">
+          Fine Gold &amp; Diamond Craftsmanship
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -384,15 +410,29 @@ function LoginFormContent() {
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
                   Create Password *
                 </label>
-                <input
-                  type={showPassword ? "text" : "password"}
-                  required
-                  minLength={6}
-                  value={signupPassword}
-                  onChange={(e) => setSignupPassword(e.target.value)}
-                  placeholder="Min 6 characters"
-                  className="w-full px-3 py-2 text-sm bg-stone-50/60 border border-stone-300 rounded-lg focus:bg-white focus:outline-none focus:border-[#0F3D2E]"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    minLength={6}
+                    value={signupPassword}
+                    onChange={(e) => setSignupPassword(e.target.value)}
+                    placeholder="Min 6 characters"
+                    className="w-full pl-3 pr-10 py-2 text-sm bg-stone-50/60 border border-stone-300 rounded-lg focus:bg-white focus:outline-none focus:border-[#0F3D2E]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-700 cursor-pointer"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </div>
               <button
                 type="submit"

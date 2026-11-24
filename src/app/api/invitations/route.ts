@@ -41,9 +41,9 @@ export async function GET(req: NextRequest) {
         prisma.accountInvitation.findMany({
           where: { organizationId: actor.organizationId },
           orderBy: { createdAt: "desc" },
-          take: 50,
+          take: 250,
           include: {
-            customer: { select: { name: true, customerCode: true } },
+            customer: { select: { name: true, customerCode: true, phone: true } },
           },
         }),
         prisma.user.findMany({
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
         }),
         prisma.customer.findMany({
           where: { organizationId: actor.organizationId, isActive: true },
-          select: { id: true, customerCode: true, name: true, phone: true },
+          select: { id: true, customerCode: true, name: true, phone: true, email: true },
           orderBy: { name: "asc" },
         }),
         prisma.user.findMany({
@@ -134,6 +134,70 @@ export async function POST(req: NextRequest) {
     }
 
     const actor = await requireServerActor(["OWNER_ADMIN", "OPERATOR"]);
+
+    if (body?.action === "BULK_CREATE_CUSTOMER_INVITES") {
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
+      const [allCustomers, existingUsers, pendingInvites] = await Promise.all([
+        prisma.customer.findMany({
+          where: { organizationId: actor.organizationId, isActive: true },
+          select: { id: true, customerCode: true, name: true, phone: true, email: true },
+        }),
+        prisma.user.findMany({
+          where: {
+            organizationId: actor.organizationId,
+            role: "CUSTOMER",
+            customerId: { not: null },
+          },
+          select: { customerId: true },
+        }),
+        prisma.accountInvitation.findMany({
+          where: {
+            organizationId: actor.organizationId,
+            role: "CUSTOMER",
+            acceptedAt: null,
+            expiresAt: { gt: now },
+            customerId: { not: null },
+          },
+          select: { customerId: true },
+        }),
+      ]);
+
+      const linkedIds = new Set(existingUsers.map((u) => u.customerId!));
+      const pendingIds = new Set(pendingInvites.map((i) => i.customerId!));
+
+      const toInvite = allCustomers.filter(
+        (c) => !linkedIds.has(c.id) && !pendingIds.has(c.id)
+      );
+
+      if (toInvite.length > 0) {
+        await prisma.accountInvitation.createMany({
+          data: toInvite.map((c) => {
+            const digits = (c.phone || "").replace(/\D/g, "");
+            const fallbackEmail = digits
+              ? `${digits}@customer.amjewellers.local`
+              : `${c.customerCode.toLowerCase().replace(/[^a-z0-9]/g, "")}@customer.amjewellers.local`;
+            return {
+              organizationId: actor.organizationId,
+              token: crypto.randomBytes(24).toString("hex"),
+              role: "CUSTOMER",
+              email: (c.email || "").trim().toLowerCase() || fallbackEmail,
+              displayName: c.name,
+              customerId: c.id,
+              expiresAt,
+              createdById: actor.userId,
+            };
+          }),
+        });
+      }
+
+      return NextResponse.json({
+        ok: true,
+        createdCount: toInvite.length,
+        totalCustomers: allCustomers.length,
+      });
+    }
+
     const role = String(body?.role || "") as "CUSTOMER" | "CAD_DESIGNER";
     const email = String(body?.email || "").trim().toLowerCase();
     const displayName = String(body?.displayName || "").trim();
