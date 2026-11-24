@@ -20,29 +20,18 @@ function hashToken(rawToken: string): string {
   return crypto.createHash("sha256").update(rawToken).digest("hex");
 }
 
-export async function authenticateAndCreateSession(
-  email: string,
-  password: string,
+export async function issueSessionForUser(
+  user: {
+    id: string;
+    organizationId: string;
+    role: string;
+    email: string;
+    name: string;
+    customerId: string | null;
+    linkedKarigarId: string | null;
+  },
   meta?: { ipAddress?: string; userAgent?: string }
 ): Promise<{ token: string; expiresAt: Date; actor: ActorContext }> {
-  const normalizedEmail = email.trim().toLowerCase();
-  const user = await prisma.user.findFirst({
-    where: {
-      email: { equals: normalizedEmail, mode: "insensitive" },
-      isActive: true,
-    },
-    include: { organization: true },
-  });
-
-  if (!user) {
-    throw new UnauthorizedError("Invalid email or password");
-  }
-
-  const validPassword = await bcrypt.compare(password, user.passwordHash);
-  if (!validPassword) {
-    throw new UnauthorizedError("Invalid email or password");
-  }
-
   const ttlHours = Number(process.env.SESSION_TTL_HOURS || "24");
   const expiresAt = new Date(Date.now() + ttlHours * 3600 * 1000);
   const rawNonce = crypto.randomBytes(24).toString("hex");
@@ -78,8 +67,49 @@ export async function authenticateAndCreateSession(
       role: user.role as UserRole,
       email: user.email,
       name: user.name,
+      customerId: user.customerId ?? null,
+      linkedKarigarId: user.linkedKarigarId ?? null,
     },
   };
+}
+
+export async function authenticateAndCreateSession(
+  emailOrPhone: string,
+  password: string,
+  meta?: { ipAddress?: string; userAgent?: string }
+): Promise<{ token: string; expiresAt: Date; actor: ActorContext }> {
+  const raw = emailOrPhone.trim();
+  const normalizedEmail = raw.toLowerCase();
+  const digitsOnly = raw.replace(/\D/g, "");
+
+  const user = await prisma.user.findFirst({
+    where: raw.includes("@")
+      ? {
+          email: { equals: normalizedEmail, mode: "insensitive" },
+          isActive: true,
+        }
+      : {
+          isActive: true,
+          OR: [
+            { email: { equals: normalizedEmail, mode: "insensitive" } },
+            ...(digitsOnly.length >= 6
+              ? [{ customer: { phone: { endsWith: digitsOnly.slice(-10) } } }]
+              : []),
+          ],
+        },
+    include: { organization: true },
+  });
+
+  if (!user) {
+    throw new UnauthorizedError("Invalid email/phone or password");
+  }
+
+  const validPassword = await bcrypt.compare(password, user.passwordHash);
+  if (!validPassword) {
+    throw new UnauthorizedError("Invalid email/phone or password");
+  }
+
+  return issueSessionForUser(user, meta);
 }
 
 export async function getCurrentActor(): Promise<ActorContext | null> {
@@ -112,6 +142,8 @@ export async function getCurrentActor(): Promise<ActorContext | null> {
       role: session.user.role as UserRole,
       email: session.user.email,
       name: session.user.name,
+      customerId: session.user.customerId ?? null,
+      linkedKarigarId: session.user.linkedKarigarId ?? null,
     };
   } catch {
     return null;
@@ -119,7 +151,7 @@ export async function getCurrentActor(): Promise<ActorContext | null> {
 }
 
 export async function requireServerActor(
-  allowedRoles?: UserRole[]
+  allowedRoles: UserRole[] = ["OWNER_ADMIN", "OPERATOR"]
 ): Promise<ActorContext> {
   const actor = await getCurrentActor();
   if (!actor) {

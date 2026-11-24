@@ -21,8 +21,11 @@ import {
   Camera,
   CheckCircle2,
   Flame,
+  ShoppingBag,
+  BookOpen,
 } from "lucide-react";
 import jsQR from "jsqr";
+import { StagingBanner } from "@/components/StagingBanner";
 import {
   clearAllClientCache,
   installMutationCacheInvalidator,
@@ -31,9 +34,10 @@ import {
 export interface AppShellUser {
   userId: string;
   organizationId: string;
-  role: "OWNER_ADMIN" | "OPERATOR";
+  role: "OWNER_ADMIN" | "OPERATOR" | "CUSTOMER" | "CAD_DESIGNER";
   email?: string;
   name?: string;
+  customerId?: string | null;
 }
 
 export const AppShell: React.FC<{
@@ -64,7 +68,12 @@ export const AppShell: React.FC<{
 
   useEffect(() => {
     installMutationCacheInvalidator();
-  }, []);
+    if (actor.role === "CUSTOMER") {
+      router.replace("/customer-app");
+    } else if (actor.role === "CAD_DESIGNER") {
+      router.replace("/cad-dashboard");
+    }
+  }, [actor.role, router]);
 
   // Global USB / Bluetooth 2D QR Scanner (keyboard-wedge) listener — works from any screen
   useEffect(() => {
@@ -166,6 +175,16 @@ export const AppShell: React.FC<{
   ];
 
   const secondaryItems = [
+    {
+      href: "/app-orders",
+      label: "App Orders",
+      icon: ShoppingBag,
+    },
+    {
+      href: "/catalogue",
+      label: "Design Catalogue",
+      icon: BookOpen,
+    },
     {
       href: "/casting-loss",
       label: "Casting Loss",
@@ -455,6 +474,7 @@ export const AppShell: React.FC<{
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+      <StagingBanner />
       <header className="no-print hide-on-print sticky top-0 z-30 bg-white border-b border-slate-200">
         <div className="max-w-[1600px] mx-auto px-4 h-12 flex items-center justify-between gap-4">
           <div className="flex items-center gap-6">

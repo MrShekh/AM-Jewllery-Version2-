@@ -1,0 +1,26 @@
+{
+  "id": "/customer-app",
+  "name": "AM Jewellery",
+  "short_name": "AM Jewellery",
+  "description": "AM Jewellery Customer Portal — Browse designs, upload custom jewellery orders, and track your orders.",
+  "start_url": "/customer-app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FAF9F6",
+  "theme_color": "#0F3D2E",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

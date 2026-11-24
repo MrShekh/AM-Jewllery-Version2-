@@ -3,6 +3,10 @@ import { requireServerActor } from "@/lib/auth";
 import { handleApiError } from "@/lib/api-response";
 import { erpService, ProcessType } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
+import {
+  linkRequestItemsToBag,
+  saveOrSendBagCadSheet,
+} from "@/lib/app-orders-cad-service";
 
 function computeNextBagNumber(bagNumbers: string[]): string {
   let maxNum = 100;
@@ -190,6 +194,23 @@ export async function POST(req: NextRequest) {
         : body.adDetailsJson ?? null,
       selectedProcesses,
     });
+
+    if (Array.isArray(body.requestLinks) && body.requestLinks.length > 0) {
+      await linkRequestItemsToBag(actor, created.order.id, body.requestLinks);
+    }
+    if (body.cadSheet && typeof body.cadSheet === "object") {
+      await saveOrSendBagCadSheet(actor, {
+        orderId: created.order.id,
+        cadRequired: body.cadSheet.cadRequired !== false,
+        assignedDesignerId: body.cadSheet.assignedDesignerId || null,
+        cadDeadline: body.cadSheet.cadDeadline || null,
+        instructions: String(body.cadSheet.instructions || ""),
+        selectedMediaIds: Array.isArray(body.cadSheet.selectedMediaIds)
+          ? body.cadSheet.selectedMediaIds.map(String)
+          : [],
+        sendToDesigner: false,
+      });
+    }
 
     return NextResponse.json({
       ok: true,

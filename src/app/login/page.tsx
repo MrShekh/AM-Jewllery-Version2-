@@ -9,13 +9,62 @@ import { invalidateClientCache, setCachedActor } from "@/lib/client-cache";
 function LoginFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTarget = sanitizeRedirectPath(searchParams.get("redirect"));
+  const rawRedirectParam = searchParams.get("redirect");
+  const redirectTarget = rawRedirectParam
+    ? sanitizeRedirectPath(rawRedirectParam)
+    : undefined;
 
+  const [mode, setMode] = useState<"SIGNIN" | "SIGNUP">("SIGNIN");
+  const [showSplash, setShowSplash] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [signupName, setSignupName] = useState("");
+  const [signupPhone, setSignupPhone] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupAddress, setSignupAddress] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    const t = setTimeout(() => setShowSplash(false), 1100);
+    return () => clearTimeout(t);
+  }, []);
+
+  async function handleSignup(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/customer-app/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: signupName,
+          phone: signupPhone,
+          email: signupEmail,
+          address: signupAddress,
+          password: signupPassword,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setError(data.error || "Sign up failed");
+        setLoading(false);
+        return;
+      }
+      if (data.actor) {
+        invalidateClientCache();
+        setCachedActor(data.actor);
+      }
+      router.push(data.redirectTo || "/customer-app");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error");
+      setLoading(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,12 +90,32 @@ function LoginFormContent() {
         invalidateClientCache();
         setCachedActor(data.actor);
       }
-      router.push(data.redirectTo || redirectTarget);
+      router.push(data.redirectTo || "/production-register");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error");
       setLoading(false);
     }
+  }
+
+  if (showSplash) {
+    return (
+      <div className="min-h-screen bg-[#FAF9F6] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-24 h-24 rounded-3xl bg-white border border-[#9E7C42]/30 shadow-md flex items-center justify-center p-3 animate-pulse">
+          <img
+            src="/am-logo-icon.png"
+            alt="AM Jewellery"
+            className="w-full h-full object-contain"
+          />
+        </div>
+        <h1 className="font-serif text-2xl font-semibold tracking-wide text-[#0F3D2E] mt-5">
+          AM Jewellery
+        </h1>
+        <p className="text-xs text-[#9E7C42] tracking-widest uppercase mt-1">
+          Fine Gold &amp; Diamond Craftsmanship
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -167,22 +236,55 @@ function LoginFormContent() {
             </div>
           </div>
 
-          <div className="bg-white border border-stone-200/90 rounded-2xl shadow-[0_12px_40px_-12px_rgba(28,25,23,0.12)] p-7 sm:p-8 space-y-6">
-            <div className="space-y-1.5">
+          <div className="bg-white border border-stone-200/90 rounded-2xl shadow-[0_12px_40px_-12px_rgba(28,25,23,0.12)] p-7 sm:p-8 space-y-5">
+            <div className="flex gap-1.5 p-1 bg-stone-100 rounded-xl text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("SIGNIN");
+                  setError(null);
+                }}
+                className={`flex-1 py-2 rounded-lg cursor-pointer transition-colors ${
+                  mode === "SIGNIN"
+                    ? "bg-white text-stone-900 shadow-2xs"
+                    : "text-stone-600 hover:text-stone-900"
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("SIGNUP");
+                  setError(null);
+                }}
+                className={`flex-1 py-2 rounded-lg cursor-pointer transition-colors ${
+                  mode === "SIGNUP"
+                    ? "bg-[#0F3D2E] text-white shadow-2xs"
+                    : "text-stone-600 hover:text-stone-900"
+                }`}
+              >
+                Customer Sign Up
+              </button>
+            </div>
+
+            <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <h1 className="text-xl font-bold tracking-tight text-stone-900">
-                  Welcome back
+                  {mode === "SIGNIN" ? "Welcome back" : "Create Customer Account"}
                 </h1>
                 <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                  V2
+                  AM Jewellery
                 </span>
               </div>
               <p className="text-xs text-stone-500">
-                Sign in with your workshop account to continue.
+                {mode === "SIGNIN"
+                  ? "Sign in with your Email or Phone Number."
+                  : "Register your showroom or personal profile to place orders."}
               </p>
             </div>
 
-            {searchParams.get("redirect") && (
+            {searchParams.get("redirect") && mode === "SIGNIN" && (
               <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg text-xs text-amber-900">
                 Continue to:{" "}
                 <span className="font-mono font-semibold">{redirectTarget}</span>
@@ -195,20 +297,21 @@ function LoginFormContent() {
               </div>
             )}
 
+            {mode === "SIGNIN" ? (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1.5">
-                  Email Address
+                  Email or Phone Number
                 </label>
                 <div className="relative">
                   <Mail className="h-4 w-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
-                    type="email"
+                    type="text"
                     required
                     autoFocus
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@amjewellers.local"
+                    placeholder="Email or 10-digit phone"
                     className="w-full pl-9 pr-3 py-2.5 text-sm bg-stone-50/60 border border-stone-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-600 transition-colors"
                   />
                 </div>
@@ -251,6 +354,95 @@ function LoginFormContent() {
                 <span>{loading ? "Signing in..." : "Sign In"}</span>
               </button>
             </form>
+            ) : (
+            <form onSubmit={handleSignup} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Name / Showroom Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={signupName}
+                  onChange={(e) => setSignupName(e.target.value)}
+                  placeholder="e.g. Subham Jewellers"
+                  className="w-full px-3 py-2 text-sm bg-stone-50/60 border border-stone-300 rounded-lg focus:bg-white focus:outline-none focus:border-[#0F3D2E]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Phone Number *
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={signupPhone}
+                  onChange={(e) => setSignupPhone(e.target.value)}
+                  placeholder="10-digit mobile number"
+                  className="w-full px-3 py-2 text-sm font-mono bg-stone-50/60 border border-stone-300 rounded-lg focus:bg-white focus:outline-none focus:border-[#0F3D2E]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Email (Optional)
+                </label>
+                <input
+                  type="email"
+                  value={signupEmail}
+                  onChange={(e) => setSignupEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  className="w-full px-3 py-2 text-sm bg-stone-50/60 border border-stone-300 rounded-lg focus:bg-white focus:outline-none focus:border-[#0F3D2E]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  City / Showroom Address
+                </label>
+                <input
+                  type="text"
+                  value={signupAddress}
+                  onChange={(e) => setSignupAddress(e.target.value)}
+                  placeholder="Shop / City"
+                  className="w-full px-3 py-2 text-sm bg-stone-50/60 border border-stone-300 rounded-lg focus:bg-white focus:outline-none focus:border-[#0F3D2E]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Create Password *
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    minLength={6}
+                    value={signupPassword}
+                    onChange={(e) => setSignupPassword(e.target.value)}
+                    placeholder="Min 6 characters"
+                    className="w-full pl-3 pr-10 py-2 text-sm bg-stone-50/60 border border-stone-300 rounded-lg focus:bg-white focus:outline-none focus:border-[#0F3D2E]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-700 cursor-pointer"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-[#0F3D2E] hover:bg-[#14533E] disabled:opacity-50 shadow-sm transition-all cursor-pointer"
+              >
+                {loading ? "Creating Account..." : "Create Account & Continue"}
+              </button>
+            </form>
+            )}
           </div>
 
           <p className="text-center text-[11px] text-stone-400">
