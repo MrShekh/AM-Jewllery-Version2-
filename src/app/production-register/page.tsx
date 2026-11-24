@@ -1964,7 +1964,7 @@ function ProductionRegisterContent() {
     );
   }
 
-  // Live Pre-Post calculation inside the Drawer
+  // Live Pre-Post calculation inside the Drawer (matches backend baseNonGold logic)
   const liveStoneIn = activeProcessObj
     ? Number(activeProcessObj.carriedStoneInWeight || 0)
     : 0;
@@ -1974,11 +1974,13 @@ function ProductionRegisterContent() {
   const savedRemovedStone = activeProcessObj
     ? Number(activeProcessObj.removedStoneWeight || 0)
     : 0;
-  const liveAddedStone =
-    savedAddedStone + Number(adWeight || 0) + Number(klWeight || 0);
+  const baseNonGold =
+    savedAddedStone > 0 || savedRemovedStone > 0
+      ? Number(activeProcessObj?.carriedStoneOutWeight ?? liveStoneIn)
+      : liveStoneIn;
   const liveStoneOut = Math.max(
     0,
-    liveStoneIn + liveAddedStone - savedRemovedStone
+    baseNonGold + Number(adWeight || 0) + Number(klWeight || 0)
   );
   const liveMetalIn = Math.max(0, Number((Number(grossInWeight || 0) - liveStoneIn).toFixed(6)));
   const liveMetalOut = Math.max(0, Number((Number(grossOutWeight || 0) - liveStoneOut).toFixed(6)));
