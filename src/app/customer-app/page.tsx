@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StagingBanner } from "@/components/StagingBanner";
 import { VoiceRecorderInput } from "@/components/customer-app/VoiceRecorderInput";
@@ -136,6 +136,12 @@ export default function CustomerAppPage() {
   const router = useRouter();
   const [actor, setActor] = useState<ReturnType<typeof getCachedActor>>(null);
   const [tab, setTab] = useState<CustomerTab>("DESIGNS");
+  const lastNonNotifTabRef = useRef<CustomerTab>("DESIGNS");
+  useEffect(() => {
+    if (tab !== "NOTIFICATIONS") {
+      lastNonNotifTabRef.current = tab;
+    }
+  }, [tab]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -268,15 +274,34 @@ export default function CustomerAppPage() {
   const [replyTextByReq, setReplyTextByReq] = useState<Record<string, string>>({});
   const [viewingBillHtml, setViewingBillHtml] = useState<string | null>(null);
 
-  const orderPurities = useMemo(
-    () => purities.filter((p) => !/24k|100%|fine/i.test(p.displayLabel)),
-    [purities]
-  );
+  const orderPurities = useMemo(() => {
+    const allowed: Array<{ id: string; displayLabel: string; rank: number }> = [];
+    for (const p of purities) {
+      const lbl = p.displayLabel || "";
+      if (/75\.5/.test(lbl)) continue;
+      if (/22\s*k|\b92\b/i.test(lbl)) {
+        allowed.push({ id: p.id, displayLabel: "22K", rank: 1 });
+      } else if (/20\s*k|\b84\b/i.test(lbl)) {
+        allowed.push({ id: p.id, displayLabel: "20K", rank: 2 });
+      } else if (/18\s*k|\b75\b/i.test(lbl)) {
+        allowed.push({ id: p.id, displayLabel: "18K", rank: 3 });
+      } else if (/9\s*k|37\.5/i.test(lbl)) {
+        allowed.push({ id: p.id, displayLabel: "9K", rank: 4 });
+      }
+    }
+    return allowed
+      .sort((a, b) => a.rank - b.rank)
+      .map(({ id, displayLabel }) => ({ id, displayLabel }));
+  }, [purities]);
 
-  const purityNameById = useMemo(
-    () => new Map(purities.map((p) => [p.id, p.displayLabel])),
-    [purities]
-  );
+  const purityNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of purities) {
+      const matched = orderPurities.find((op) => op.id === p.id);
+      map.set(p.id, matched ? matched.displayLabel : p.displayLabel);
+    }
+    return map;
+  }, [purities, orderPurities]);
 
   const loadWorkspace = useCallback(async () => {
     const resolved = await fetchActorCached(false);
@@ -733,6 +758,10 @@ export default function CustomerAppPage() {
             <button
               type="button"
               onClick={async () => {
+                if (tab === "NOTIFICATIONS") {
+                  setTab(lastNonNotifTabRef.current || "DESIGNS");
+                  return;
+                }
                 setTab("NOTIFICATIONS");
                 if (unreadCount > 0) {
                   await fetch("/api/notifications", {
@@ -856,12 +885,24 @@ export default function CustomerAppPage() {
                       )}
                     </div>
 
-                    <div className="w-24 h-24 sm:w-40 sm:h-36 rounded-2xl bg-white/10 border border-white/20 shadow-lg shrink-0 overflow-hidden flex items-center justify-center">
-                      <img
-                        src={activeSlide?.thumbnailUrl || "/am-logo-icon.png"}
-                        alt={activeSlide?.name || "AM Jewellery"}
-                        className="w-full h-full object-cover transition-all duration-500"
-                      />
+                    <div className="relative w-24 h-24 sm:w-40 sm:h-36 rounded-2xl bg-white/10 border border-white/20 shadow-lg shrink-0 overflow-hidden flex items-center justify-center">
+                      {heroSlides.map((s, idx) => {
+                        const isActive = idx === heroSlide % heroSlides.length;
+                        return (
+                          <img
+                            key={s.id}
+                            src={s.thumbnailUrl || "/am-logo-icon.png"}
+                            alt={s.name || "AM Jewellery"}
+                            loading="eager"
+                            decoding="async"
+                            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
+                              isActive
+                                ? "opacity-100"
+                                : "opacity-0 pointer-events-none"
+                            }`}
+                          />
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
