@@ -2934,6 +2934,23 @@ function ProductionRegisterContent() {
                             >
                               + New Piece / Gold
                             </button>
+                            {activeProcessObj.processType === "FILING" &&
+                              Number(activeProcessObj.issuedMetalWeight || 0) > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFilingEditMode("CORRECT");
+                                    setShowAddFilingGoldForm((v) => !v);
+                                  }}
+                                  className={`px-2.5 py-0.5 font-semibold cursor-pointer border-l border-slate-300 ${
+                                    showAddFilingGoldForm && filingEditMode === "CORRECT"
+                                      ? "bg-blue-700 text-white"
+                                      : "bg-blue-50 text-blue-900 hover:bg-blue-100"
+                                  }`}
+                                >
+                                  Correct Filing IN
+                                </button>
+                              )}
                           </div>
                         </div>
                         <span className="text-[11px] font-mono text-slate-600">
