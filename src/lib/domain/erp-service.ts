@@ -4974,7 +4974,9 @@ export class ErpDomainService {
                 (m) =>
                   m.orderProcessId === filingProc.id &&
                   (m.movementType === "ADMIN_ISSUE_TO_ORDER" ||
-                    m.movementType === "ADDITIONAL_ADMIN_ISSUE")
+                    m.movementType === "ADDITIONAL_ADMIN_ISSUE" ||
+                    m.movementType === "FILING_CORRECTION" ||
+                    m.movementType === "FILING_UNUSED_RETURN")
               )
               .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
           : [];
@@ -4984,13 +4986,33 @@ export class ErpDomainService {
             ? jtxMap.get(m.journalTransactionId)
             : undefined;
           const kar = m.karigarId ? karigarMap.get(m.karigarId) : undefined;
+          const isReduction =
+            m.movementType === "FILING_UNUSED_RETURN" ||
+            (m.movementType === "FILING_CORRECTION" &&
+              m.fromProcessType === "FILING");
+          const signedPhys = isReduction
+            ? m.netMetalWeight.neg()
+            : m.netMetalWeight;
+          const signedFine = isReduction
+            ? m.fineEquivalentWeight.neg()
+            : m.fineEquivalentWeight;
+          const label =
+            m.movementType === "ADMIN_ISSUE_TO_ORDER"
+              ? "Initial issue"
+              : m.movementType === "ADDITIONAL_ADMIN_ISSUE"
+              ? "Additional issue"
+              : m.movementType === "FILING_UNUSED_RETURN"
+              ? "Unused return"
+              : isReduction
+              ? "Correction (-)"
+              : "Correction (+)";
           return {
             id: m.id,
             issueNumber: idx + 1,
-            label: idx === 0 ? "Initial issue" : "Additional issue",
+            label,
             movementType: m.movementType,
-            weightGrams: m.netMetalWeight.toFixed(3),
-            fineWeightGrams: m.fineEquivalentWeight.toFixed(3),
+            weightGrams: signedPhys.toFixed(3),
+            fineWeightGrams: signedFine.toFixed(3),
             businessDate: m.businessDate.toISOString(),
             karigarId: m.karigarId,
             karigarName: kar ? `${kar.name} (${kar.karigarCode})` : null,
