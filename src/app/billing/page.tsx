@@ -213,6 +213,10 @@ interface ManualLineDraft {
   stoneChargeRupees: string;
   rupeeDiscount: string;
   adjustmentReason: string;
+  isRepairing?: boolean;
+  repairInWeight?: string;
+  repairOutWeight?: string;
+  repairMakingFine?: string;
 }
 
 function BillingWorkspaceInner() {
@@ -620,15 +624,30 @@ function BillingWorkspaceInner() {
       }
     } else {
       for (const ml of manualLines) {
-        const net = Number(ml.netWeight || 0);
-        const touch = Number(ml.touchPercent || 0);
-        const waste = Number(ml.makingPercentagePoints || 0);
-        const weightFine =
-          net > 0 && touch > 0 ? (net * (touch + waste)) / 100 : 0;
-        fineTotal +=
-          weightFine +
-          Number(ml.extraFineCharge || 0) -
-          Number(ml.fineDiscount || 0);
+        if (ml.isRepairing) {
+          const inWt = Number(ml.repairInWeight || 0);
+          const outWt = Number(ml.repairOutWeight || 0);
+          const diff = outWt - inWt;
+          const touch = Number(ml.touchPercent || 100);
+          const metalFine = touch > 0 ? (diff * touch) / 100 : diff;
+          const mkFine = Math.max(0, Number(ml.repairMakingFine || 0));
+          fineTotal +=
+            metalFine +
+            mkFine +
+            Number(ml.extraFineCharge || 0) -
+            Number(ml.fineDiscount || 0);
+          deliveredFine += metalFine;
+        } else {
+          const net = Number(ml.netWeight || 0);
+          const touch = Number(ml.touchPercent || 0);
+          const waste = Number(ml.makingPercentagePoints || 0);
+          const weightFine =
+            net > 0 && touch > 0 ? (net * (touch + waste)) / 100 : 0;
+          fineTotal +=
+            weightFine +
+            Number(ml.extraFineCharge || 0) -
+            Number(ml.fineDiscount || 0);
+        }
         inrTotal +=
           Number(ml.makingChargesRupees || 0) +
           Number(ml.stoneChargeRupees || 0) -
@@ -1722,31 +1741,59 @@ function BillingWorkspaceInner() {
               </div>
             ) : (
               <div className="bg-white border border-slate-300 rounded-xs p-3 space-y-2">
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center gap-2 flex-wrap">
                   <div className="text-xs font-bold text-slate-800">
-                    Manual Commercial Lines (Service / Fine Charge / Stone INR / Discount — No Physical Stock Change)
+                    Direct / Repairing Bill Lines
                   </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setManualLines((p) => [
-                        ...p,
-                        {
-                          lineType: "MANUAL_SERVICE",
-                          description: "",
-                          extraFineCharge: "0",
-                          fineDiscount: "0",
-                          makingChargesRupees: "0",
-                          stoneChargeRupees: "0",
-                          rupeeDiscount: "0",
-                          adjustmentReason: "",
-                        },
-                      ])
-                    }
-                    className="px-2 py-1 text-xs bg-slate-100 border border-slate-300 rounded-xs flex items-center gap-1 cursor-pointer"
-                  >
-                    <Plus className="w-3 h-3" /> Add Line
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setManualLines((p) => [
+                          ...p,
+                          {
+                            lineType: "MANUAL_FINE_CHARGE",
+                            description: "Repairing",
+                            isRepairing: true,
+                            touchPercent: "100",
+                            repairInWeight: "",
+                            repairOutWeight: "",
+                            repairMakingFine: "",
+                            extraFineCharge: "0",
+                            fineDiscount: "0",
+                            makingChargesRupees: "0",
+                            stoneChargeRupees: "0",
+                            rupeeDiscount: "0",
+                            adjustmentReason: "",
+                          },
+                        ])
+                      }
+                      className="px-2.5 py-1 text-xs font-semibold bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100 rounded-xs flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" /> Add Repairing Item
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setManualLines((p) => [
+                          ...p,
+                          {
+                            lineType: "MANUAL_SERVICE",
+                            description: "",
+                            extraFineCharge: "0",
+                            fineDiscount: "0",
+                            makingChargesRupees: "0",
+                            stoneChargeRupees: "0",
+                            rupeeDiscount: "0",
+                            adjustmentReason: "",
+                          },
+                        ])
+                      }
+                      className="px-2 py-1 text-xs bg-slate-100 border border-slate-300 rounded-xs flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" /> Add Line
+                    </button>
+                  </div>
                 </div>
                 {manualLines.map((ml, idx) => {
                   const hasWeights =
@@ -1824,7 +1871,151 @@ function BillingWorkspaceInner() {
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    {(hasWeights || billType === "MANUAL_COMMERCIAL") && (
+                    {ml.isRepairing ? (
+                      (() => {
+                        const inW = Number(ml.repairInWeight || 0);
+                        const outW = Number(ml.repairOutWeight || 0);
+                        const diffW = outW - inW;
+                        const tPct = Number(ml.touchPercent || 100);
+                        const metalFine = tPct > 0 ? (diffW * tPct) / 100 : diffW;
+                        const mkFine = Math.max(0, Number(ml.repairMakingFine || 0));
+                        const netRepairFine = metalFine + mkFine;
+                        return (
+                          <div className="bg-amber-50/50 p-2.5 rounded-xs border border-amber-200 space-y-2">
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                              <div>
+                                <label className="block text-[10px] font-semibold text-slate-700">
+                                  Touch % (100 = Direct Fine)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={ml.touchPercent ?? "100"}
+                                  onChange={(e) => {
+                                    const copy = [...manualLines];
+                                    copy[idx].touchPercent = e.target.value;
+                                    setManualLines(copy);
+                                  }}
+                                  className="w-full px-1.5 py-1 border border-slate-300 rounded-xs font-mono bg-white"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-semibold text-slate-700">
+                                  Weight In (g)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.001"
+                                  min="0"
+                                  placeholder="30.000"
+                                  value={ml.repairInWeight || ""}
+                                  onChange={(e) => {
+                                    const copy = [...manualLines];
+                                    copy[idx].repairInWeight = e.target.value;
+                                    setManualLines(copy);
+                                  }}
+                                  className="w-full px-1.5 py-1 border border-slate-300 rounded-xs font-mono bg-white"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-semibold text-slate-700">
+                                  Weight Out (g)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.001"
+                                  min="0"
+                                  placeholder="29.500 / 30.500"
+                                  value={ml.repairOutWeight || ""}
+                                  onChange={(e) => {
+                                    const copy = [...manualLines];
+                                    copy[idx].repairOutWeight = e.target.value;
+                                    setManualLines(copy);
+                                  }}
+                                  className="w-full px-1.5 py-1 border border-slate-300 rounded-xs font-mono bg-white"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-semibold text-slate-700">
+                                  Making Charge (Fine g, opt.)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.001"
+                                  min="0"
+                                  placeholder="0.050"
+                                  value={ml.repairMakingFine || ""}
+                                  onChange={(e) => {
+                                    const copy = [...manualLines];
+                                    copy[idx].repairMakingFine = e.target.value;
+                                    setManualLines(copy);
+                                  }}
+                                  className="w-full px-1.5 py-1 border border-slate-300 rounded-xs font-mono bg-white"
+                                />
+                              </div>
+                              <div className="flex flex-col justify-end text-[11px] font-mono">
+                                <span className="text-slate-500 text-[10px] font-sans">
+                                  Net Bill (Fine):
+                                </span>
+                                <span
+                                  className={`font-bold ${
+                                    netRepairFine < 0
+                                      ? "text-emerald-700"
+                                      : "text-amber-900"
+                                  }`}
+                                >
+                                  {netRepairFine >= 0 ? "+" : ""}
+                                  {netRepairFine.toFixed(3)} g
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-[11px] text-slate-600">
+                              {diffW < 0 ? (
+                                <span>
+                                  Repairing Loss:{" "}
+                                  <strong className="font-mono text-red-700">
+                                    {diffW.toFixed(3)}g
+                                  </strong>{" "}
+                                  ({metalFine.toFixed(3)}g fine)
+                                  {mkFine > 0
+                                    ? ` + Making +${mkFine.toFixed(3)}g fine`
+                                    : ""}{" "}
+                                  → Customer credit/reduction{" "}
+                                  <strong className="font-mono">
+                                    {netRepairFine.toFixed(3)}g
+                                  </strong>{" "}
+                                  (Admin locker stock unchanged)
+                                </span>
+                              ) : diffW > 0 ? (
+                                <span>
+                                  Extra Metal Added:{" "}
+                                  <strong className="font-mono text-blue-700">
+                                    +{diffW.toFixed(3)}g
+                                  </strong>{" "}
+                                  (+{metalFine.toFixed(3)}g fine, deducts from{" "}
+                                  {tPct}% Admin Locker)
+                                  {mkFine > 0
+                                    ? ` + Making +${mkFine.toFixed(3)}g fine`
+                                    : ""}{" "}
+                                  → Customer owes{" "}
+                                  <strong className="font-mono">
+                                    +{netRepairFine.toFixed(3)}g
+                                  </strong>
+                                </span>
+                              ) : (
+                                <span>
+                                  No weight change (0.000g)
+                                  {mkFine > 0
+                                    ? ` + Making +${mkFine.toFixed(3)}g fine`
+                                    : ""}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()
+                    ) : (
+                    (hasWeights || billType === "MANUAL_COMMERCIAL") && (
                       <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 bg-slate-50 p-2 rounded-xs border border-slate-200">
                         <div>
                           <label className="block text-[10px] font-semibold text-slate-600">Touch %</label>
@@ -1924,7 +2115,8 @@ function BillingWorkspaceInner() {
                           />
                         </div>
                       </div>
-                    )}
+                    ))
+                    }
                   </div>
                 );
                 })}

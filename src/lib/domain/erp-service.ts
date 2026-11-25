@@ -7903,6 +7903,9 @@ export class ErpDomainService {
       stoneWeight?: DecimalInput;
       adWeight?: DecimalInput;
       netWeight?: DecimalInput;
+      repairInWeight?: DecimalInput;
+      repairOutWeight?: DecimalInput;
+      repairMakingFine?: DecimalInput;
     }>,
     excludeBillId?: string
   ): Promise<{
@@ -8115,28 +8118,65 @@ export class ErpDomainService {
             "Description is required on manual bill lines"
           );
         }
-        const gross = roundInternal(inp.grossWeight ?? inp.customGrossWeight ?? ZERO);
+        const isRepairingLine =
+          inp.repairInWeight !== undefined &&
+          inp.repairOutWeight !== undefined &&
+          String(inp.repairInWeight).trim() !== "" &&
+          String(inp.repairOutWeight).trim() !== "";
+        const touch = roundTouch(inp.touchPercent ?? (isRepairingLine ? 100 : ZERO));
+        const wastage = roundTouch(inp.makingPercentagePoints ?? ZERO);
+
+        let gross = roundInternal(inp.grossWeight ?? inp.customGrossWeight ?? ZERO);
         const stone = roundInternal(inp.stoneWeight ?? inp.customStoneWeight ?? ZERO);
         const ad = roundInternal(inp.adWeight ?? inp.customAdWeight ?? ZERO);
-        const hasWeightBreakdown =
-          gross.gt(ZERO) ||
-          inp.netWeight !== undefined ||
-          inp.customNetWeight !== undefined;
-        const net = hasWeightBreakdown
-          ? inp.netWeight !== undefined || inp.customNetWeight !== undefined
-            ? roundInternal(inp.netWeight ?? inp.customNetWeight ?? ZERO)
-            : roundInternal(gross.add(stone).add(ad))
-          : ZERO;
-        const touch = roundTouch(inp.touchPercent ?? ZERO);
-        const wastage = roundTouch(inp.makingPercentagePoints ?? ZERO);
-        const metalChargeFine =
-          hasWeightBreakdown && touch.gt(ZERO)
-            ? calculateFineEquivalent(net, touch)
+        let net = ZERO;
+        let metalChargeFine = ZERO;
+        let makingChargeFine = ZERO;
+        let adjustmentReason = inp.adjustmentReason?.trim() || null;
+
+        if (isRepairingLine) {
+          const inWt = roundInternal(inp.repairInWeight!);
+          const outWt = roundInternal(inp.repairOutWeight!);
+          if (inWt.lt(ZERO) || outWt.lt(ZERO)) {
+            throw new ValidationError("Repairing In/Out weights cannot be negative");
+          }
+          gross = outWt;
+          net = roundInternal(outWt.sub(inWt));
+          metalChargeFine = touch.gt(ZERO)
+            ? roundInternal(net.mul(touch).div(100))
+            : net;
+          makingChargeFine = roundInternal(inp.repairMakingFine ?? ZERO);
+          if (makingChargeFine.lt(ZERO)) {
+            throw new ValidationError("Repairing making charge cannot be negative");
+          }
+          if (!adjustmentReason) {
+            const diffLabel = net.gte(ZERO)
+              ? `Extra +${net.toFixed(3)}g`
+              : `Loss ${net.toFixed(3)}g`;
+            const mkLabel = makingChargeFine.gt(ZERO)
+              ? ` | Making +${makingChargeFine.toFixed(3)}g fine`
+              : "";
+            adjustmentReason = `Repairing: In ${inWt.toFixed(3)}g -> Out ${outWt.toFixed(3)}g (${diffLabel}${mkLabel})`;
+          }
+        } else {
+          const hasWeightBreakdown =
+            gross.gt(ZERO) ||
+            inp.netWeight !== undefined ||
+            inp.customNetWeight !== undefined;
+          net = hasWeightBreakdown
+            ? inp.netWeight !== undefined || inp.customNetWeight !== undefined
+              ? roundInternal(inp.netWeight ?? inp.customNetWeight ?? ZERO)
+              : roundInternal(gross.add(stone).add(ad))
             : ZERO;
-        const makingChargeFine =
-          hasWeightBreakdown && wastage.gt(ZERO)
-            ? calculateFineEquivalent(net, wastage)
-            : ZERO;
+          metalChargeFine =
+            hasWeightBreakdown && touch.gt(ZERO)
+              ? calculateFineEquivalent(net, touch)
+              : ZERO;
+          makingChargeFine =
+            hasWeightBreakdown && wastage.gt(ZERO)
+              ? calculateFineEquivalent(net, wastage)
+              : ZERO;
+        }
 
         const extraFine = roundInternal(inp.extraFineCharge ?? ZERO);
         const fineDisc = roundInternal(inp.fineDiscount ?? ZERO);
@@ -8164,7 +8204,7 @@ export class ErpDomainService {
           orderId: null,
           purityId: null,
           bagNumberSnapshot: null,
-          orderNameSnapshot: hasWeightBreakdown ? desc : null,
+          orderNameSnapshot: isRepairingLine || gross.gt(ZERO) ? desc : null,
           photoUrlSnapshot: inp.photoUrl?.trim() || null,
           description: desc,
           grossWeight: gross,
@@ -8184,7 +8224,7 @@ export class ErpDomainService {
           makingCharges: netInr,
           stoneChargeRupees: stoneInr,
           rupeeDiscount: discInr,
-          adjustmentReason: inp.adjustmentReason?.trim() || null,
+          adjustmentReason,
         });
 
         totalFineGold = roundInternal(totalFineGold.add(netFine));
@@ -8192,7 +8232,10 @@ export class ErpDomainService {
       }
     }
 
-    if (totalFineGold.lt(ZERO) || totalCashRupees.lt(ZERO)) {
+    const hasRepairingLoss =
+      billType === "MANUAL_COMMERCIAL" &&
+      builtLines.some((l) => l.netWeight.lt(ZERO));
+    if ((!hasRepairingLoss && totalFineGold.lt(ZERO)) || totalCashRupees.lt(ZERO)) {
       throw new ValidationError("Bill totals cannot be negative");
     }
 
@@ -14171,7 +14214,7 @@ export class ErpDomainService {
           .filter((a) => a.billId === b.id)
           .reduce((s, a) => roundInternal(s.add(a.allocatedFineWeight)), ZERO);
         const rem = roundInternal(b.totalFineGold.sub(allocFine));
-        if (rem.gt(ZERO)) {
+        if (rem.gt(ZERO) || (b.billType === "MANUAL_COMMERCIAL" && !rem.isZero())) {
           customerFineOwed = roundInternal(customerFineOwed.add(rem));
           customerBillItems.push({
             billId: b.id,
