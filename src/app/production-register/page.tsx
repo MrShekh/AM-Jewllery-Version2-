@@ -928,6 +928,13 @@ function ProductionRegisterContent() {
   async function handlePostProcessEntry(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedOrderRow || !activeProcessObj) return;
+    if (closeProcess && nextProcessType === activeProcessObj.processType) {
+      const stageName = activeProcessObj.processType.replace(/_/g, " ");
+      const confirmed = window.confirm(
+        `Warning: You selected the SAME process (${stageName} -> ${stageName}) instead of moving to the next stage.\n\nAre you sure you want to send Bag #${selectedOrderRow.order.bagNumber} back into ${stageName}?`
+      );
+      if (!confirmed) return;
+    }
     setActionError(null);
     setActionSuccess(null);
     setSubmittingAction(true);
