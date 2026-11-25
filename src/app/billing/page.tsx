@@ -1592,14 +1592,64 @@ function BillingWorkspaceInner() {
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-slate-700">Bill Type:</span>
                 <select
-                  value={billType}
-                  onChange={(e) =>
-                    setBillType(e.target.value as "ORDER_DELIVERY" | "MANUAL_COMMERCIAL")
+                  value={
+                    billType === "MANUAL_COMMERCIAL" &&
+                    manualLines.some((m) => m.isRepairing)
+                      ? "REPAIRING"
+                      : billType
                   }
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "REPAIRING") {
+                      setBillType("MANUAL_COMMERCIAL");
+                      if (!manualLines.some((m) => m.isRepairing)) {
+                        setManualLines([
+                          {
+                            lineType: "MANUAL_FINE_CHARGE",
+                            description: "Repairing",
+                            isRepairing: true,
+                            touchPercent: "100",
+                            repairInWeight: "",
+                            repairOutWeight: "",
+                            repairMakingFine: "",
+                            extraFineCharge: "0",
+                            fineDiscount: "0",
+                            makingChargesRupees: "0",
+                            stoneChargeRupees: "0",
+                            rupeeDiscount: "0",
+                            adjustmentReason: "",
+                          },
+                        ]);
+                      }
+                    } else {
+                      setBillType(val as "ORDER_DELIVERY" | "MANUAL_COMMERCIAL");
+                      if (
+                        val === "MANUAL_COMMERCIAL" &&
+                        manualLines.length === 1 &&
+                        manualLines[0].isRepairing &&
+                        !manualLines[0].repairInWeight &&
+                        !manualLines[0].repairOutWeight
+                      ) {
+                        setManualLines([
+                          {
+                            lineType: "MANUAL_SERVICE",
+                            description: "",
+                            extraFineCharge: "0",
+                            fineDiscount: "0",
+                            makingChargesRupees: "0",
+                            stoneChargeRupees: "0",
+                            rupeeDiscount: "0",
+                            adjustmentReason: "",
+                          },
+                        ]);
+                      }
+                    }
+                  }}
                   className="px-2 py-1 border border-slate-300 rounded-xs"
                 >
                   <option value="ORDER_DELIVERY">Completed Orders Delivery Bill</option>
-                  <option value="MANUAL_COMMERCIAL">Manual Commercial Bill (No Stock Movement)</option>
+                  <option value="REPAIRING">Repairing Bill (Weight In / Out &amp; Making)</option>
+                  <option value="MANUAL_COMMERCIAL">Direct / Manual Bill</option>
                 </select>
               </div>
               <div className="flex items-center gap-2">
