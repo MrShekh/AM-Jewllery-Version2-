@@ -246,6 +246,22 @@ export default function AppOrdersManagerPage() {
     void loadWorkspace();
   }, [loadWorkspace]);
 
+  useEffect(() => {
+    const sync = () => {
+      if (document.visibilityState === "visible") {
+        void loadWorkspace();
+      }
+    };
+    window.addEventListener("focus", sync);
+    document.addEventListener("visibilitychange", sync);
+    const id = setInterval(sync, 12000);
+    return () => {
+      window.removeEventListener("focus", sync);
+      document.removeEventListener("visibilitychange", sync);
+      clearInterval(id);
+    };
+  }, [loadWorkspace]);
+
   const reloadInvites = useCallback(async () => {
     try {
       const r = await fetch("/api/invitations", { cache: "no-store" });
@@ -360,6 +376,7 @@ export default function AppOrdersManagerPage() {
       | "MARK_READY"
       | "MARK_DELIVERED"
       | "RESOLVE_CHANGE_REQUEST"
+      | "CANCEL_ORDER"
   ) {
     setError(null);
     setMessage(null);
@@ -391,6 +408,7 @@ export default function AppOrdersManagerPage() {
         DECLINE: "DECLINED",
         MARK_READY: "READY",
         MARK_DELIVERED: "DELIVERED",
+        CANCEL_ORDER: "CANCELLED",
       };
       setData((prev) => {
         if (!prev) return prev;
@@ -404,7 +422,8 @@ export default function AppOrdersManagerPage() {
                   confirmedDeliveryDate: confirmedDate || r.confirmedDeliveryDate,
                   managerVisibleNote: note || r.managerVisibleNote,
                   hasPendingChangeReq:
-                    decision === "RESOLVE_CHANGE_REQUEST"
+                    decision === "RESOLVE_CHANGE_REQUEST" ||
+                    decision === "CANCEL_ORDER"
                       ? false
                       : r.hasPendingChangeReq,
                 }
@@ -986,6 +1005,26 @@ export default function AppOrdersManagerPage() {
                           className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded font-semibold cursor-pointer"
                         >
                           {busyReqId === r.id ? "Saving..." : "Mark Delivered"}
+                        </button>
+                      )}
+                      {(r.status === "APPROVED" ||
+                        r.status === "READY" ||
+                        r.hasPendingChangeReq) && (
+                        <button
+                          type="button"
+                          disabled={busyReqId === r.id}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Cancel order ${r.requestNumber}?`
+                              )
+                            ) {
+                              void reviewRequest(r.id, "CANCEL_ORDER");
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded font-semibold cursor-pointer"
+                        >
+                          Cancel Order
                         </button>
                       )}
                     </div>

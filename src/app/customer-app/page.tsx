@@ -376,6 +376,22 @@ export default function CustomerAppPage() {
     }
   }, []);
 
+  useEffect(() => {
+    const sync = () => {
+      if (document.visibilityState === "visible") {
+        void loadWorkspace();
+      }
+    };
+    window.addEventListener("focus", sync);
+    document.addEventListener("visibilitychange", sync);
+    const id = setInterval(sync, 12000);
+    return () => {
+      window.removeEventListener("focus", sync);
+      document.removeEventListener("visibilitychange", sync);
+      clearInterval(id);
+    };
+  }, [loadWorkspace]);
+
   const loadCatalogue = useCallback(async () => {
     const qs = new URLSearchParams({
       page: String(page),

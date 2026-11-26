@@ -300,7 +300,8 @@ export async function reviewCustomerOrderRequest(
       | "DECLINE"
       | "MARK_READY"
       | "MARK_DELIVERED"
-      | "RESOLVE_CHANGE_REQUEST";
+      | "RESOLVE_CHANGE_REQUEST"
+      | "CANCEL_ORDER";
     confirmedDeliveryDate?: string | null;
     note?: string;
   }
@@ -354,6 +355,11 @@ export async function reviewCustomerOrderRequest(
     } else if (input.decision === "RESOLVE_CHANGE_REQUEST") {
       data.hasPendingChangeReq = false;
       if (note) data.managerVisibleNote = note;
+    } else if (input.decision === "CANCEL_ORDER") {
+      nextStatus = "CANCELLED";
+      data.status = "CANCELLED";
+      data.hasPendingChangeReq = false;
+      data.declineReason = note || "Cancelled by manager";
     }
 
     const saved = await tx.customerOrderRequest.update({
