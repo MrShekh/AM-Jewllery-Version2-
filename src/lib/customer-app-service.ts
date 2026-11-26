@@ -224,7 +224,16 @@ export async function listCustomerOwnWorkspace(actor: ActorContext) {
         orderBy: { submittedAt: "desc" },
         take: 50,
         include: {
-          items: { orderBy: { createdAt: "asc" } },
+          items: {
+            orderBy: { createdAt: "asc" },
+            include: {
+              bagLinks: {
+                include: {
+                  order: { select: { activeBillId: true } },
+                },
+              },
+            },
+          },
           messages: {
             where: { visibility: "CUSTOMER_AND_MANAGER" },
             orderBy: { createdAt: "asc" },
@@ -261,28 +270,89 @@ export async function listCustomerOwnWorkspace(actor: ActorContext) {
 
   if (!customer) throw new NotFoundError("Customer profile not found");
 
+  const linkedBillIds = Array.from(
+    new Set(
+      requests.flatMap((r) =>
+        r.items.flatMap((it) =>
+          it.bagLinks
+            .map((bl) => bl.order?.activeBillId)
+            .filter((id): id is string => Boolean(id))
+        )
+      )
+    )
+  );
+  const orderLinkedBills =
+    linkedBillIds.length > 0
+      ? await prisma.customerBill.findMany({
+          where: {
+            id: { in: linkedBillIds },
+            organizationId: actor.organizationId,
+            customerId: actor.customerId,
+            status: "POSTED",
+          },
+          select: {
+            id: true,
+            billNumber: true,
+            billDate: true,
+            totalFineGold: true,
+            totalCashRupees: true,
+            settlementStatus: true,
+            previewHtml: true,
+          },
+        })
+      : [];
+  const billById = new Map(
+    orderLinkedBills.map((b) => [
+      b.id,
+      {
+        id: b.id,
+        billNumber: b.billNumber,
+        billDate: b.billDate.toISOString().slice(0, 10),
+        totalFineGold: Number(b.totalFineGold).toFixed(3),
+        totalCashRupees: Number(b.totalCashRupees).toFixed(2),
+        settlementStatus: b.settlementStatus,
+        previewHtml: b.previewHtml,
+      },
+    ])
+  );
+
   return {
     customer,
-    requests: requests.map((r) => ({
-      ...r,
-      statusLabel: CUSTOMER_STATUS_LABELS[r.status] || r.status,
-      requestedDeliveryDate: r.requestedDeliveryDate
-        ? r.requestedDeliveryDate.toISOString().slice(0, 10)
-        : null,
-      confirmedDeliveryDate: r.confirmedDeliveryDate
-        ? r.confirmedDeliveryDate.toISOString().slice(0, 10)
-        : null,
-      items: r.items.map((it) => ({
-        ...it,
-        targetWeight: it.targetWeight ? Number(it.targetWeight).toFixed(3) : null,
-        designSnapshot: safeJsonObj(it.designSnapshotJson),
-        referenceMediaIds: safeJsonArr(it.referenceMediaIdsJson),
-      })),
-      messages: r.messages.map((m) => ({
-        ...m,
-        attachmentIds: safeJsonArr(m.attachmentIdsJson),
-      })),
-    })),
+    requests: requests.map((r) => {
+      const reqBillIds = Array.from(
+        new Set(
+          r.items.flatMap((it) =>
+            it.bagLinks
+              .map((bl) => bl.order?.activeBillId)
+              .filter((id): id is string => Boolean(id))
+          )
+        )
+      );
+      const linkedBills = reqBillIds
+        .map((id) => billById.get(id))
+        .filter((b): b is NonNullable<typeof b> => Boolean(b));
+      return {
+        ...r,
+        statusLabel: CUSTOMER_STATUS_LABELS[r.status] || r.status,
+        requestedDeliveryDate: r.requestedDeliveryDate
+          ? r.requestedDeliveryDate.toISOString().slice(0, 10)
+          : null,
+        confirmedDeliveryDate: r.confirmedDeliveryDate
+          ? r.confirmedDeliveryDate.toISOString().slice(0, 10)
+          : null,
+        linkedBills,
+        items: r.items.map((it) => ({
+          ...it,
+          targetWeight: it.targetWeight ? Number(it.targetWeight).toFixed(3) : null,
+          designSnapshot: safeJsonObj(it.designSnapshotJson),
+          referenceMediaIds: safeJsonArr(it.referenceMediaIdsJson),
+        })),
+        messages: r.messages.map((m) => ({
+          ...m,
+          attachmentIds: safeJsonArr(m.attachmentIdsJson),
+        })),
+      };
+    }),
     bills: bills.map((b) => ({
       ...b,
       billDate: b.billDate.toISOString().slice(0, 10),

@@ -33,6 +33,8 @@ import {
   Phone,
   Pencil,
   Camera,
+  MoreVertical,
+  RotateCcw,
   CheckCircle2,
 } from "lucide-react";
 
@@ -226,6 +228,9 @@ export default function CustomerAppPage() {
       submittedAt: string;
       items: Array<{
         id: string;
+        sourceType?: "CATALOGUE" | "CUSTOM";
+        designId?: string | null;
+        purityId?: string | null;
         quantity: number;
         size: string | null;
         purityLabelSnapshot: string | null;
@@ -239,6 +244,15 @@ export default function CustomerAppPage() {
           name?: string;
           thumbnailUrl?: string | null;
         };
+      }>;
+      linkedBills?: Array<{
+        id: string;
+        billNumber: string;
+        billDate: string;
+        totalFineGold: string;
+        totalCashRupees: string;
+        settlementStatus: string;
+        previewHtml: string | null;
       }>;
       messages: Array<{
         id: string;
@@ -273,6 +287,7 @@ export default function CustomerAppPage() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [replyTextByReq, setReplyTextByReq] = useState<Record<string, string>>({});
   const [viewingBillHtml, setViewingBillHtml] = useState<string | null>(null);
+  const [openOrderMenuId, setOpenOrderMenuId] = useState<string | null>(null);
 
   const orderPurities = useMemo(() => {
     const allowed: Array<{ id: string; displayLabel: string; rank: number }> = [];
@@ -673,6 +688,32 @@ export default function CustomerAppPage() {
       setRequests(prev);
       setError("Network error while deleting order");
     }
+  }
+
+  function handleRepeatOrderWithChanges(r: (typeof requests)[number]) {
+    const repeatedItems: CartItem[] = r.items.map((it) => ({
+      localId: `ci_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      sourceType: it.sourceType === "CATALOGUE" && it.designId ? "CATALOGUE" : "CUSTOM",
+      designId: it.designId || null,
+      code: it.designSnapshot?.code || "CUSTOM",
+      name: it.designSnapshot?.name || "Repeat Jewellery Item",
+      thumbnailUrl: it.designSnapshot?.thumbnailUrl || null,
+      quantity: Math.max(1, it.quantity || 1),
+      size: it.size || "",
+      purityId: it.purityId || orderPurities[0]?.id || "",
+      targetWeight: it.targetWeight || "",
+      requestedChanges: it.requestedChanges || "",
+      textInstructions: it.textInstructions || "",
+      requestedItemDate: "",
+      voiceAttachmentId: it.voiceAttachmentId || null,
+      referenceMediaIds: it.referenceMediaIds || [],
+    }));
+    setCart((prev) => [...prev, ...repeatedItems]);
+    setOpenOrderMenuId(null);
+    setMessage(
+      `Loaded ${r.requestNumber} into Cart — add your changes and submit!`
+    );
+    setTab("CART");
   }
 
   async function handleRequestCancelApprovedOrder(
@@ -1994,34 +2035,93 @@ export default function CustomerAppPage() {
                         {r.submittedAt.slice(0, 10)}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 relative">
                       <span className={`px-3 py-1 rounded-full border font-semibold ${badgeClass}`}>
                         {r.statusLabel}
                       </span>
-                      {(r.status === "AWAITING_APPROVAL" ||
-                        r.status === "MORE_DETAILS_NEEDED" ||
-                        r.status === "DECLINED") && (
+                      {(r.linkedBills ?? []).length > 0 && (
                         <button
                           type="button"
-                          onClick={() => void handleDeleteOrder(r.id, r.requestNumber)}
-                          title="Cancel & Delete Order"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-red-200 bg-red-50/70 text-red-700 hover:bg-red-100 text-[11px] font-semibold cursor-pointer"
+                          onClick={() => {
+                            const b = r.linkedBills![0];
+                            if (b?.previewHtml) {
+                              setViewingBillHtml(b.previewHtml);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-[11px] font-semibold cursor-pointer"
                         >
-                          <Trash2 className="w-3 h-3" />
-                          <span>Cancel / Delete</span>
+                          <FileText className="w-3 h-3" />
+                          <span>Bill {r.linkedBills![0].billNumber}</span>
                         </button>
                       )}
-                      {r.status === "APPROVED" && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void handleRequestCancelApprovedOrder(r.id, r.requestNumber)
-                          }
-                          title="Request Cancellation from Manager"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 text-[11px] font-semibold cursor-pointer"
-                        >
-                          <span>Request Cancel</span>
-                        </button>
+                      <button
+                        type="button"
+                        aria-label="Order options"
+                        onClick={() =>
+                          setOpenOrderMenuId((cur) => (cur === r.id ? null : r.id))
+                        }
+                        className="p-1.5 rounded-full border border-stone-200 text-stone-600 hover:bg-stone-100 cursor-pointer"
+                      >
+                        <MoreVertical className="w-3.5 h-3.5" />
+                      </button>
+                      {openOrderMenuId === r.id && (
+                        <div className="absolute right-0 top-8 z-20 w-52 bg-white border border-stone-200 rounded-xl shadow-lg py-1 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => handleRepeatOrderWithChanges(r)}
+                            className="w-full px-3 py-2 text-left flex items-center gap-2 text-stone-800 hover:bg-stone-50 font-medium cursor-pointer"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5 text-[#0F3D2E]" />
+                            <span>Repeat Order (With Changes)</span>
+                          </button>
+                          {(r.linkedBills ?? []).map((b) =>
+                            b.previewHtml ? (
+                              <button
+                                key={b.id}
+                                type="button"
+                                onClick={() => {
+                                  setOpenOrderMenuId(null);
+                                  setViewingBillHtml(b.previewHtml);
+                                }}
+                                className="w-full px-3 py-2 text-left flex items-center gap-2 text-emerald-800 hover:bg-emerald-50 font-medium cursor-pointer"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                <span>View Bill ({b.billNumber})</span>
+                              </button>
+                            ) : null
+                          )}
+                          {(r.status === "AWAITING_APPROVAL" ||
+                            r.status === "MORE_DETAILS_NEEDED" ||
+                            r.status === "DECLINED") && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenOrderMenuId(null);
+                                void handleDeleteOrder(r.id, r.requestNumber);
+                              }}
+                              className="w-full px-3 py-2 text-left flex items-center gap-2 text-red-700 hover:bg-red-50 font-medium cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Cancel / Delete Order</span>
+                            </button>
+                          )}
+                          {r.status === "APPROVED" && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenOrderMenuId(null);
+                                void handleRequestCancelApprovedOrder(
+                                  r.id,
+                                  r.requestNumber
+                                );
+                              }}
+                              className="w-full px-3 py-2 text-left flex items-center gap-2 text-amber-800 hover:bg-amber-50 font-medium cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              <span>Request Cancellation</span>
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
