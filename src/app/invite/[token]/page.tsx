@@ -90,7 +90,7 @@ export default function AcceptInvitePage() {
             </div>
           ) : invite ? (
             <form onSubmit={handleAccept} className="space-y-3">
-              <div className="p-3 rounded bg-slate-50 border border-slate-200 text-xs space-y-1">
+              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-1 overflow-hidden">
                 <div>
                   <span className="text-slate-500">Business:</span>{" "}
                   <strong>{invite.organizationName}</strong>
@@ -99,12 +99,12 @@ export default function AcceptInvitePage() {
                   <span className="text-slate-500">Role:</span>{" "}
                   <strong className="font-mono">{invite.role}</strong>
                 </div>
-                <div>
+                <div className="break-all">
                   <span className="text-slate-500">Email:</span>{" "}
-                  <strong className="font-mono">{invite.email}</strong>
+                  <strong className="font-mono break-all">{invite.email}</strong>
                 </div>
                 {invite.customerName && (
-                  <div>
+                  <div className="break-words">
                     <span className="text-slate-500">Linked Customer:</span>{" "}
                     <strong>
                       {invite.customerName} ({invite.customerCode})
