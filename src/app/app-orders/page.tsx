@@ -22,6 +22,7 @@ type RequestFilter =
   | "MORE_DETAILS_NEEDED"
   | "APPROVED"
   | "DECLINED"
+  | "CANCELLED"
   | "READY";
 
 interface RequestItemRow {
@@ -596,6 +597,7 @@ export default function AppOrdersManagerPage() {
                     ["MORE_DETAILS_NEEDED", "Need Info"],
                     ["APPROVED", "Approved"],
                     ["DECLINED", "Declined"],
+                    ["CANCELLED", "Cancelled"],
                     ["READY", "Ready"],
                   ] as const
                 ).map(([fKey, fLabel]) => (
@@ -758,6 +760,7 @@ export default function AppOrdersManagerPage() {
                     READY: ["Ready", "bg-emerald-100 text-[#0F3D2E] border-emerald-300"],
                     DELIVERED: ["Delivered", "bg-stone-100 text-stone-700 border-stone-200"],
                     DECLINED: ["Declined", "bg-red-50 text-red-700 border-red-200"],
+                    CANCELLED: ["Cancelled", "bg-stone-100 text-stone-600 border-stone-300"],
                   };
                   const [statusLabel, statusTone] = statusMap[r.status] || [
                     r.status,

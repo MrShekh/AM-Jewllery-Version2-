@@ -288,6 +288,7 @@ export default function CustomerAppPage() {
   const [replyTextByReq, setReplyTextByReq] = useState<Record<string, string>>({});
   const [viewingBillHtml, setViewingBillHtml] = useState<string | null>(null);
   const [openOrderMenuId, setOpenOrderMenuId] = useState<string | null>(null);
+  const [expandedOrderChatIds, setExpandedOrderChatIds] = useState<Record<string, boolean>>({});
   const [cancelModal, setCancelModal] = useState<{
     mode: "DELETE" | "REQUEST_CANCEL";
     requestId: string;
@@ -1998,10 +1999,24 @@ export default function CustomerAppPage() {
               <div className="flex gap-1.5 overflow-x-auto pb-0.5 text-xs">
                 {(
                   [
-                    ["ALL", `All (${requests.length})`],
+                    [
+                      "ALL",
+                      `Active (${
+                        requests.filter(
+                          (r) => r.status !== "CANCELLED" && r.status !== "DECLINED"
+                        ).length
+                      })`,
+                    ],
                     ["AWAITING_APPROVAL", "Pending"],
                     ["APPROVED", "Approved"],
                     ["READY", "Ready"],
+                    ["DELIVERED", "Delivered"],
+                    [
+                      "CANCELLED",
+                      `Cancelled (${
+                        requests.filter((r) => r.status === "CANCELLED").length
+                      })`,
+                    ],
                     ["DECLINED", "Declined"],
                   ] as const
                 ).map(([fKey, fLabel]) => (
@@ -2021,9 +2036,13 @@ export default function CustomerAppPage() {
               </div>
             )}
 
-            {requests.filter((r) => orderFilter === "ALL" || r.status === orderFilter).length === 0 ? (
+            {requests.filter((r) =>
+              orderFilter === "ALL"
+                ? r.status !== "CANCELLED" && r.status !== "DECLINED"
+                : r.status === orderFilter
+            ).length === 0 ? (
               <div className="bg-white border border-stone-200 rounded-2xl p-10 text-center text-xs text-stone-500 space-y-3">
-                <p>No orders match this filter.</p>
+                <p>No orders in this section.</p>
                 <button
                   type="button"
                   onClick={openCustomUploadTab}
@@ -2034,24 +2053,31 @@ export default function CustomerAppPage() {
               </div>
             ) : (
               requests
-                .filter((r) => orderFilter === "ALL" || r.status === orderFilter)
+                .filter((r) =>
+                  orderFilter === "ALL"
+                    ? r.status !== "CANCELLED" && r.status !== "DECLINED"
+                    : r.status === orderFilter
+                )
                 .map((r) => {
+                const isClosedNegative =
+                  r.status === "CANCELLED" || r.status === "DECLINED";
                 const badgeClass =
                   r.status === "APPROVED" || r.status === "READY" || r.status === "DELIVERED"
                     ? "bg-emerald-50 text-[#0F3D2E] border-emerald-200"
                     : r.status === "DECLINED"
                     ? "bg-red-50 text-red-700 border-red-200"
+                    : r.status === "CANCELLED"
+                    ? "bg-stone-100 text-stone-600 border-stone-300"
                     : r.status === "MORE_DETAILS_NEEDED"
                     ? "bg-amber-50 text-amber-800 border-amber-200"
                     : "bg-stone-100 text-stone-800 border-stone-200";
-                const stepLevel =
-                  r.status === "READY" || r.status === "DELIVERED"
-                    ? 3
-                    : r.status === "APPROVED"
-                    ? 2
-                    : r.status === "DECLINED"
-                    ? 0
-                    : 1;
+                const stepLevel = isClosedNegative
+                  ? 0
+                  : r.status === "READY" || r.status === "DELIVERED"
+                  ? 3
+                  : r.status === "APPROVED"
+                  ? 2
+                  : 1;
                 return (
                 <div
                   key={r.id}
@@ -2186,33 +2212,40 @@ export default function CustomerAppPage() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-[#FAF9F6] border border-stone-200/70 text-stone-600">
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wider text-stone-400">
-                        Requested Date
-                      </div>
-                      <strong className="font-mono text-stone-800">
-                        {r.requestedDeliveryDate || "Flexible"}
-                      </strong>
+                  {!isClosedNegative && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[#FAF9F6] border border-stone-200/70 text-[11px] text-stone-600">
+                      <span>
+                        Requested:{" "}
+                        <strong className="font-mono text-stone-800">
+                          {r.requestedDeliveryDate || "Flexible"}
+                        </strong>
+                      </span>
+                      <span>
+                        Delivery:{" "}
+                        <strong className="font-mono text-[#0F3D2E]">
+                          {r.confirmedDeliveryDate || "Pending"}
+                        </strong>
+                      </span>
                     </div>
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wider text-stone-400">
-                        Confirmed Delivery
-                      </div>
-                      <strong className="font-mono text-[#0F3D2E]">
-                        {r.confirmedDeliveryDate || "Pending"}
-                      </strong>
-                    </div>
-                  </div>
+                  )}
 
-                  {r.managerVisibleNote && (
-                    <div className="p-3 bg-emerald-50/50 border border-emerald-200/70 rounded-xl text-stone-800">
-                      <strong className="text-[#0F3D2E]">Manager Note:</strong> {r.managerVisibleNote}
+                  {!isClosedNegative && r.managerVisibleNote && (
+                    <div className="px-3 py-2 bg-emerald-50/50 border border-emerald-200/70 rounded-xl text-[11px] text-stone-800">
+                      <strong className="text-[#0F3D2E]">Note:</strong> {r.managerVisibleNote}
                     </div>
                   )}
                   {r.declineReason && (
-                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700">
-                      <strong>Declined:</strong> {r.declineReason}
+                    <div
+                      className={`px-3 py-2 rounded-xl text-[11px] border ${
+                        r.status === "CANCELLED"
+                          ? "bg-stone-50 border-stone-200 text-stone-600"
+                          : "bg-red-50 border-red-200 text-red-700"
+                      }`}
+                    >
+                      <strong>
+                        {r.status === "CANCELLED" ? "Cancelled:" : "Declined:"}
+                      </strong>{" "}
+                      {r.declineReason}
                     </div>
                   )}
 
@@ -2255,9 +2288,11 @@ export default function CustomerAppPage() {
                             </span>
                           </div>
                           <div className="flex flex-wrap gap-1.5 text-[10px]">
-                            {it.purityLabelSnapshot && (
+                            {((it.purityId && purityNameById.get(it.purityId)) ||
+                              it.purityLabelSnapshot) && (
                               <span className="px-2 py-0.5 rounded-md bg-amber-50/80 border border-[#9E7C42]/30 text-[#7D5E2A] font-medium">
-                                {it.purityLabelSnapshot}
+                                {(it.purityId && purityNameById.get(it.purityId)) ||
+                                  it.purityLabelSnapshot}
                               </span>
                             )}
                             {it.size && (
@@ -2289,36 +2324,60 @@ export default function CustomerAppPage() {
                     })}
                   </div>
 
-                  {r.messages.length > 0 && (
-                    <div className="space-y-1.5 border-t border-stone-100 pt-2.5">
-                      {r.messages.map((m) => (
-                        <div
-                          key={m.id}
-                          className="px-3 py-2 rounded-xl bg-[#FAF9F6] border border-stone-200/70 text-[11px] text-stone-700"
-                        >
-                          <strong className="text-[#0F3D2E]">{m.senderName}:</strong> {m.body}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="flex gap-2 pt-1">
-                    <input
-                      type="text"
-                      value={replyTextByReq[r.id] || ""}
-                      onChange={(e) =>
-                        setReplyTextByReq((prev) => ({
-                          ...prev,
-                          [r.id]: e.target.value,
-                        }))
-                      }
-                      placeholder={
-                        r.status === "APPROVED"
-                          ? "Request a change..."
-                          : "Send a message..."
-                      }
-                      className="flex-1 px-3 py-1.5 border border-stone-200 rounded-lg"
-                    />
+                  {!isClosedNegative && (
+                    <div className="border-t border-stone-100 pt-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedOrderChatIds((prev) => ({
+                            ...prev,
+                            [r.id]: !prev[r.id],
+                          }))
+                        }
+                        className="text-[11px] font-medium text-[#0F3D2E] hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        {expandedOrderChatIds[r.id] ? (
+                          <ChevronUp className="w-3.5 h-3.5" />
+                        ) : (
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        )}
+                        <span>
+                          {r.messages.length > 0
+                            ? `Messages (${r.messages.length})`
+                            : "Message Manager"}
+                        </span>
+                      </button>
+                      {expandedOrderChatIds[r.id] && (
+                        <div className="mt-2 space-y-2">
+                          {r.messages.length > 0 && (
+                            <div className="space-y-1.5">
+                              {r.messages.map((m) => (
+                                <div
+                                  key={m.id}
+                                  className="px-3 py-2 rounded-xl bg-[#FAF9F6] border border-stone-200/70 text-[11px] text-stone-700"
+                                >
+                                  <strong className="text-[#0F3D2E]">{m.senderName}:</strong> {m.body}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={replyTextByReq[r.id] || ""}
+                              onChange={(e) =>
+                                setReplyTextByReq((prev) => ({
+                                  ...prev,
+                                  [r.id]: e.target.value,
+                                }))
+                              }
+                              placeholder={
+                                r.status === "APPROVED"
+                                  ? "Request a change..."
+                                  : "Send a message..."
+                              }
+                              className="flex-1 px-3 py-1.5 border border-stone-200 rounded-lg"
+                            />
                     <button
                       type="button"
                       onClick={async () => {
@@ -2344,7 +2403,11 @@ export default function CustomerAppPage() {
                       <Send className="w-3 h-3" />
                       Send
                     </button>
-                  </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 );
               })
