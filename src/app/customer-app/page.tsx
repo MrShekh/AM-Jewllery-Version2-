@@ -675,6 +675,39 @@ export default function CustomerAppPage() {
     }
   }
 
+  async function handleRequestCancelApprovedOrder(
+    requestId: string,
+    requestNumber: string
+  ) {
+    const reason = window.prompt(
+      `Order ${requestNumber} is already approved. Enter reason to request cancellation from the manager:`,
+      "Ordered by mistake — please cancel"
+    );
+    if (reason === null) return;
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/customer-app", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "SUBMIT_CHANGE_REQUEST",
+          requestId,
+          body: `CANCELLATION REQUEST: ${reason.trim() || "Customer requested cancellation"}`,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setError(data.error || "Could not send cancellation request");
+        return;
+      }
+      setMessage(`Cancellation request sent to manager for ${requestNumber}.`);
+      await loadWorkspace();
+    } catch {
+      setError("Network error while sending cancellation request");
+    }
+  }
+
   async function handleLogout() {
     if (actor?.userId && typeof window !== "undefined") {
       window.localStorage.removeItem(`am_cust_cart_${actor.userId}`);
@@ -1971,10 +2004,23 @@ export default function CustomerAppPage() {
                         <button
                           type="button"
                           onClick={() => void handleDeleteOrder(r.id, r.requestNumber)}
-                          title="Delete Order"
-                          className="p-1.5 rounded-full border border-stone-200 text-stone-400 hover:text-red-600 hover:border-red-200 cursor-pointer"
+                          title="Cancel & Delete Order"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-red-200 bg-red-50/70 text-red-700 hover:bg-red-100 text-[11px] font-semibold cursor-pointer"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3 h-3" />
+                          <span>Cancel / Delete</span>
+                        </button>
+                      )}
+                      {r.status === "APPROVED" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleRequestCancelApprovedOrder(r.id, r.requestNumber)
+                          }
+                          title="Request Cancellation from Manager"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 text-[11px] font-semibold cursor-pointer"
+                        >
+                          <span>Request Cancel</span>
                         </button>
                       )}
                     </div>
