@@ -288,6 +288,15 @@ export default function CustomerAppPage() {
   const [replyTextByReq, setReplyTextByReq] = useState<Record<string, string>>({});
   const [viewingBillHtml, setViewingBillHtml] = useState<string | null>(null);
   const [openOrderMenuId, setOpenOrderMenuId] = useState<string | null>(null);
+  const [cancelModal, setCancelModal] = useState<{
+    mode: "DELETE" | "REQUEST_CANCEL";
+    requestId: string;
+    requestNumber: string;
+  } | null>(null);
+  const [cancelReason, setCancelReason] = useState(
+    "Ordered by mistake — please cancel"
+  );
+  const [submittingCancel, setSubmittingCancel] = useState(false);
 
   const orderPurities = useMemo(() => {
     const allowed: Array<{ id: string; displayLabel: string; rank: number }> = [];
@@ -665,35 +674,11 @@ export default function CustomerAppPage() {
     }
   }
 
-  async function handleDeleteOrder(requestId: string, requestNumber: string) {
-    if (!window.confirm(`Delete order ${requestNumber}?`)) return;
-    setError(null);
-    setMessage(null);
-    const prev = requests;
-    setRequests((cur) => cur.filter((r) => r.id !== requestId));
-    try {
-      const res = await fetch("/api/customer-app", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "DELETE_REQUEST", requestId }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        setRequests(prev);
-        setError(data.error || "Could not delete order");
-        return;
-      }
-      setMessage(`Deleted ${requestNumber}.`);
-    } catch {
-      setRequests(prev);
-      setError("Network error while deleting order");
-    }
-  }
-
   function handleRepeatOrderWithChanges(r: (typeof requests)[number]) {
     const repeatedItems: CartItem[] = r.items.map((it) => ({
       localId: `ci_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      sourceType: it.sourceType === "CATALOGUE" && it.designId ? "CATALOGUE" : "CUSTOM",
+      sourceType:
+        it.sourceType === "CATALOGUE" && it.designId ? "CATALOGUE" : "CUSTOM",
       designId: it.designId || null,
       code: it.designSnapshot?.code || "CUSTOM",
       name: it.designSnapshot?.name || "Repeat Jewellery Item",
@@ -716,36 +701,66 @@ export default function CustomerAppPage() {
     setTab("CART");
   }
 
-  async function handleRequestCancelApprovedOrder(
+  function handleDeleteOrder(requestId: string, requestNumber: string) {
+    setCancelModal({ mode: "DELETE", requestId, requestNumber });
+  }
+
+  function handleRequestCancelApprovedOrder(
     requestId: string,
     requestNumber: string
   ) {
-    const reason = window.prompt(
-      `Order ${requestNumber} is already approved. Enter reason to request cancellation from the manager:`,
-      "Ordered by mistake — please cancel"
-    );
-    if (reason === null) return;
+    setCancelReason("Ordered by mistake — please cancel");
+    setCancelModal({ mode: "REQUEST_CANCEL", requestId, requestNumber });
+  }
+
+  async function confirmCancelModal() {
+    if (!cancelModal) return;
+    const { mode, requestId, requestNumber } = cancelModal;
+    setSubmittingCancel(true);
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch("/api/customer-app", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "SUBMIT_CHANGE_REQUEST",
-          requestId,
-          body: `CANCELLATION REQUEST: ${reason.trim() || "Customer requested cancellation"}`,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        setError(data.error || "Could not send cancellation request");
-        return;
+      if (mode === "DELETE") {
+        const prev = requests;
+        setRequests((cur) => cur.filter((r) => r.id !== requestId));
+        const res = await fetch("/api/customer-app", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "DELETE_REQUEST", requestId }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          setRequests(prev);
+          setError(data.error || "Could not cancel order");
+          return;
+        }
+        setMessage(`Order ${requestNumber} cancelled and deleted.`);
+        setCancelModal(null);
+      } else {
+        const res = await fetch("/api/customer-app", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "SUBMIT_CHANGE_REQUEST",
+            requestId,
+            body: `CANCELLATION REQUEST: ${
+              cancelReason.trim() || "Customer requested cancellation"
+            }`,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          setError(data.error || "Could not send cancellation request");
+          return;
+        }
+        setMessage(`Cancellation request sent to manager for ${requestNumber}.`);
+        setCancelModal(null);
+        await loadWorkspace();
       }
-      setMessage(`Cancellation request sent to manager for ${requestNumber}.`);
-      await loadWorkspace();
     } catch {
-      setError("Network error while sending cancellation request");
+      setError("Network error while updating order");
+    } finally {
+      setSubmittingCancel(false);
     }
   }
 
@@ -2781,6 +2796,99 @@ export default function CustomerAppPage() {
                   Add to Order Cart
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancelModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl border border-stone-200">
+            <div className="flex items-start gap-3">
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                  cancelModal.mode === "DELETE"
+                    ? "bg-red-50 text-red-600 border border-red-200"
+                    : "bg-amber-50 text-amber-700 border border-amber-200"
+                }`}
+              >
+                {cancelModal.mode === "DELETE" ? (
+                  <Trash2 className="w-5 h-5" />
+                ) : (
+                  <X className="w-5 h-5" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-serif text-base font-semibold text-stone-900">
+                  {cancelModal.mode === "DELETE"
+                    ? `Cancel Order ${cancelModal.requestNumber}?`
+                    : `Request Cancellation`}
+                </h3>
+                <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">
+                  {cancelModal.mode === "DELETE"
+                    ? "This order has not been approved yet. Cancelling will remove it immediately."
+                    : `Order ${cancelModal.requestNumber} is already approved by AM Jewellery. Send a cancellation request to the manager:`}
+                </p>
+              </div>
+            </div>
+
+            {cancelModal.mode === "REQUEST_CANCEL" && (
+              <div className="space-y-2.5">
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    "Ordered by mistake",
+                    "Need different size / weight",
+                    "Change in delivery date",
+                  ].map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => setCancelReason(chip)}
+                      className={`px-2.5 py-1 rounded-full text-[11px] border cursor-pointer transition-colors ${
+                        cancelReason === chip
+                          ? "bg-[#0F3D2E] text-white border-[#0F3D2E]"
+                          : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
+                      }`}
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  rows={2}
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Enter reason for cancellation..."
+                  className="w-full px-3 py-2 text-xs border border-stone-200 rounded-xl bg-stone-50/60 focus:bg-white focus:outline-none focus:border-[#0F3D2E]"
+                />
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                disabled={submittingCancel}
+                onClick={() => setCancelModal(null)}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-stone-200 text-stone-700 text-xs font-semibold hover:bg-stone-50 cursor-pointer"
+              >
+                Keep Order
+              </button>
+              <button
+                type="button"
+                disabled={submittingCancel}
+                onClick={() => void confirmCancelModal()}
+                className={`flex-1 py-2.5 px-4 rounded-xl text-white text-xs font-semibold cursor-pointer transition-colors ${
+                  cancelModal.mode === "DELETE"
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-[#0F3D2E] hover:bg-[#14533E]"
+                }`}
+              >
+                {submittingCancel
+                  ? "Sending..."
+                  : cancelModal.mode === "DELETE"
+                  ? "Yes, Cancel Order"
+                  : "Send Request"}
+              </button>
             </div>
           </div>
         </div>
