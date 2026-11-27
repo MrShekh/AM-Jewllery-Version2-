@@ -104,6 +104,7 @@ export async function authenticateAndCreateSession(
           ],
         },
     include: { organization: true },
+    orderBy: [{ canViewBills: "desc" }, { createdAt: "asc" }],
   });
 
   if (!user) {
