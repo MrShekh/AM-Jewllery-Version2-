@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
       secure: cookieSecure,
       path: "/",
       expires: expiresAt,
+      maxAge: Math.max(60, Math.floor((expiresAt.getTime() - Date.now()) / 1000)),
     });
 
     return res;

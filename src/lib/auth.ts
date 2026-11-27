@@ -33,7 +33,11 @@ export async function issueSessionForUser(
   },
   meta?: { ipAddress?: string; userAgent?: string }
 ): Promise<{ token: string; expiresAt: Date; actor: ActorContext }> {
-  const ttlHours = Number(process.env.SESSION_TTL_HOURS || "24");
+  const defaultTtlHours = user.role === "CUSTOMER" ? 720 : 24;
+  const ttlHours =
+    user.role === "CUSTOMER"
+      ? Math.max(Number(process.env.SESSION_TTL_HOURS || defaultTtlHours), 720)
+      : Number(process.env.SESSION_TTL_HOURS || defaultTtlHours);
   const expiresAt = new Date(Date.now() + ttlHours * 3600 * 1000);
   const rawNonce = crypto.randomBytes(24).toString("hex");
 

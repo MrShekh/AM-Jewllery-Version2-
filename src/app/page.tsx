@@ -6,6 +6,12 @@ export default async function HomePage() {
   if (!actor) {
     redirect("/login");
   }
+  if (actor.role === "CUSTOMER") {
+    redirect("/customer-app");
+  }
+  if (actor.role === "CAD_DESIGNER") {
+    redirect("/cad-dashboard");
+  }
   redirect("/dashboard");
 }
 

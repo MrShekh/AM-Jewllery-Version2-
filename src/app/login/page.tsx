@@ -14,9 +14,10 @@ function LoginFormContent() {
     ? sanitizeRedirectPath(rawRedirectParam)
     : undefined;
 
+  const rawEmailParam = searchParams.get("email");
   const [mode, setMode] = useState<"SIGNIN" | "SIGNUP">("SIGNIN");
   const [showSplash, setShowSplash] = useState(true);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(rawEmailParam || "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [signupName, setSignupName] = useState("");
@@ -31,6 +32,27 @@ function LoginFormContent() {
     const t = setTimeout(() => setShowSplash(false), 1100);
     return () => clearTimeout(t);
   }, []);
+
+  React.useEffect(() => {
+    let active = true;
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!active || !data?.ok || !data?.actor) return;
+        const role = data.actor.role;
+        if (role === "CUSTOMER") {
+          router.replace("/customer-app");
+        } else if (role === "CAD_DESIGNER") {
+          router.replace("/cad-dashboard");
+        } else {
+          router.replace(redirectTarget || "/production-register");
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [router, redirectTarget]);
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
