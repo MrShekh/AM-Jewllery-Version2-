@@ -225,81 +225,122 @@ export default function KarigarProfilePage() {
           </div>
         ) : profile ? (
           <>
-            {/* KPI Summary Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              <div className="bg-white border border-slate-200 rounded-xs p-3">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Total Orders
-                </div>
-                <div className="mt-1 text-xl font-bold font-mono text-slate-900">
-                  {profile.summary.totalOrders}
-                </div>
-                <div className="text-[11px] text-blue-700 font-medium mt-0.5">
-                  {profile.summary.activeOrders} active in-hand
-                </div>
-              </div>
+            {/* KPI Summary Cards — Clear Workshop Language */}
+            {(() => {
+              const showStones =
+                profile.summary.totalAdPieces > 0 ||
+                profile.summary.totalKlPieces > 0 ||
+                profile.karigar.capabilities.includes("SETTING");
+              const totalSettledFine = (
+                Number(profile.summary.recoveredFineWeight || 0) +
+                Number(profile.summary.writtenOffFineWeight || 0) +
+                Number(profile.summary.makingDeductedFineWeight || 0)
+              ).toFixed(4);
+              return (
+                <div className="space-y-2.5">
+                  <div
+                    className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 ${
+                      showStones ? "xl:grid-cols-6" : ""
+                    }`}
+                  >
+                    <div className="bg-white border border-slate-200 rounded-xs p-3">
+                      <div className="text-[11px] font-bold uppercase tracking-wide text-slate-600">
+                        1. Orders Worked
+                      </div>
+                      <div className="mt-1 text-xl font-bold font-mono text-slate-900">
+                        {profile.summary.totalOrders}
+                      </div>
+                      <div className="text-[11px] text-blue-700 font-medium mt-0.5">
+                        {profile.summary.activeOrders} active in-hand right now
+                      </div>
+                    </div>
 
-              <div className="bg-white border border-slate-200 rounded-xs p-3">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Total Order Loss
-                </div>
-                <div className="mt-1 text-xl font-bold font-mono text-rose-700">
-                  {profile.summary.totalRawLossWeight} g
-                </div>
-                <div className="text-[11px] text-slate-600 font-mono mt-0.5">
-                  Fine eq: {profile.summary.totalFineLossWeight} g
-                </div>
-              </div>
+                    <div className="bg-white border border-slate-200 rounded-xs p-3">
+                      <div className="text-[11px] font-bold uppercase tracking-wide text-slate-600">
+                        2. Gold In Hand (Custody)
+                      </div>
+                      <div className="mt-1 text-xl font-bold font-mono text-slate-900">
+                        {profile.summary.currentCustodyWeight} g
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        Unreturned gold currently with karigar
+                      </div>
+                    </div>
 
-              <div className="bg-white border border-slate-200 rounded-xs p-3">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Pending Recovery (Fine)
-                </div>
-                <div className="mt-1 text-xl font-bold font-mono text-amber-700">
-                  {profile.summary.pendingRecoverableFine} g
-                </div>
-                <div className="text-[11px] text-slate-600 font-mono mt-0.5">
-                  Advance: {profile.summary.unallocatedAdvanceFine} g
-                </div>
-              </div>
+                    <div className="bg-white border border-rose-200 bg-rose-50/30 rounded-xs p-3">
+                      <div className="text-[11px] font-bold uppercase tracking-wide text-rose-800">
+                        3. Total Order Loss
+                      </div>
+                      <div className="mt-1 text-xl font-bold font-mono text-rose-700">
+                        {profile.summary.totalRawLossWeight} g{" "}
+                        <span className="text-xs font-normal text-slate-500">raw</span>
+                      </div>
+                      <div className="text-[11px] text-slate-600 font-mono mt-0.5">
+                        Pure Fine eq: <strong>{profile.summary.totalFineLossWeight} g</strong>
+                      </div>
+                    </div>
 
-              <div className="bg-white border border-slate-200 rounded-xs p-3">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Setting Stones (Pcs)
-                </div>
-                <div className="mt-1 text-base font-bold font-mono text-blue-800">
-                  AD: {profile.summary.totalAdPieces}
-                </div>
-                <div className="text-xs font-bold font-mono text-purple-800 mt-0.5">
-                  KL: {profile.summary.totalKlPieces}
-                </div>
-              </div>
+                    <div className="bg-white border border-emerald-200 bg-emerald-50/30 rounded-xs p-3">
+                      <div className="text-[11px] font-bold uppercase tracking-wide text-emerald-800">
+                        4. Settled / Recovered (Fine)
+                      </div>
+                      <div className="mt-1 text-xl font-bold font-mono text-emerald-700">
+                        {totalSettledFine} g
+                      </div>
+                      <div className="text-[10px] text-slate-600 font-mono mt-0.5">
+                        Gold Rec: {profile.summary.recoveredFineWeight}g • Write-off:{" "}
+                        {profile.summary.writtenOffFineWeight}g • Making:{" "}
+                        {profile.summary.makingDeductedFineWeight}g
+                      </div>
+                    </div>
 
-              <div className="bg-white border border-slate-200 rounded-xs p-3">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Recovered / Settled (Fine)
-                </div>
-                <div className="mt-1 text-xl font-bold font-mono text-emerald-700">
-                  {profile.summary.recoveredFineWeight} g
-                </div>
-                <div className="text-[11px] text-slate-600 font-mono mt-0.5">
-                  Write-off: {profile.summary.writtenOffFineWeight} g • Making:{" "}
-                  {profile.summary.makingDeductedFineWeight} g
-                </div>
-              </div>
+                    <div className="bg-white border border-amber-300 bg-amber-50/40 rounded-xs p-3">
+                      <div className="text-[11px] font-bold uppercase tracking-wide text-amber-900">
+                        5. Balance to Recover (Fine)
+                      </div>
+                      <div className="mt-1 text-xl font-bold font-mono text-amber-700">
+                        {profile.summary.pendingRecoverableFine} g
+                      </div>
+                      <div className="text-[11px] text-slate-600 font-mono mt-0.5">
+                        Still owed by karigar (Adv: {profile.summary.unallocatedAdvanceFine} g)
+                      </div>
+                    </div>
 
-              <div className="bg-white border border-slate-200 rounded-xs p-3">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Current Custody Gold
+                    {showStones && (
+                      <div className="bg-white border border-slate-200 rounded-xs p-3">
+                        <div className="text-[11px] font-bold uppercase tracking-wide text-slate-600">
+                          6. Setting Stones (Pcs)
+                        </div>
+                        <div className="mt-1 text-base font-bold font-mono text-blue-800">
+                          AD: {profile.summary.totalAdPieces}
+                        </div>
+                        <div className="text-xs font-bold font-mono text-purple-800 mt-0.5">
+                          KL: {profile.summary.totalKlPieces}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xs text-[11px] text-slate-600 flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      <strong>How Loss Balance Works:</strong> Total Fine Loss (
+                      <span className="font-mono text-rose-700">
+                        {profile.summary.totalFineLossWeight} g
+                      </span>
+                      ) − Settled / Write-off (
+                      <span className="font-mono text-emerald-700">
+                        {totalSettledFine} g
+                      </span>
+                      ) ={" "}
+                      <strong className="font-mono text-amber-800">
+                        {profile.summary.pendingRecoverableFine} g
+                      </strong>{" "}
+                      still to recover.
+                    </span>
+                  </div>
                 </div>
-                <div className="mt-1 text-xl font-bold font-mono text-slate-900">
-                  {profile.summary.currentCustodyWeight} g
-                </div>
-                <div className="text-[11px] text-slate-500 mt-0.5">
-                  Across open processes
-                </div>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* Karat-Wise Order Loss Breakdown */}
             <div className="bg-white border border-slate-200 rounded-xs p-4 space-y-3">
