@@ -276,6 +276,11 @@ export default function CustomerAppPage() {
     }>
   >([]);
   const [canViewBills, setCanViewBills] = useState(true);
+  const [loggedInUser, setLoggedInUser] = useState<{
+    id: string;
+    name: string;
+    email: string;
+  } | null>(null);
   const [notifications, setNotifications] = useState<
     Array<{
       id: string;
@@ -363,6 +368,7 @@ export default function CustomerAppPage() {
     setRequests(data.requests || []);
     setBills(data.bills || []);
     setCanViewBills(data.canViewBills !== false);
+    setLoggedInUser(data.loggedInUser || null);
     setNotifications(data.notifications || []);
     setUnreadCount(data.unreadCount || 0);
     setLoading(false);
@@ -857,7 +863,15 @@ export default function CustomerAppPage() {
                 AM Jewellery
               </div>
               <div className="text-[11px] text-stone-500 truncate">
-                Welcome, <span className="font-medium text-stone-700">{customer?.name || "Guest"}</span>
+                Welcome,{" "}
+                <span className="font-medium text-stone-700">
+                  {loggedInUser?.name || customer?.name || "Guest"}
+                </span>
+                {loggedInUser?.name &&
+                  customer?.name &&
+                  loggedInUser.name !== customer.name && (
+                    <span className="text-stone-400"> ({customer.name})</span>
+                  )}
               </div>
             </div>
           </div>
@@ -2455,6 +2469,7 @@ export default function CustomerAppPage() {
                     {(customer?.name || "C").slice(0, 1).toUpperCase()}
                   </div>
                 )}
+                {canViewBills && (
                 <label
                   title="Upload profile or showroom photo"
                   className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[#0F3D2E] hover:bg-[#14533E] text-white border-2 border-white flex items-center justify-center shadow-sm cursor-pointer"
@@ -2472,17 +2487,32 @@ export default function CustomerAppPage() {
                     }}
                   />
                 </label>
+                )}
               </div>
               <div className="space-y-1">
                 <h2 className="font-serif text-lg font-semibold text-stone-900">
-                  {customer?.name}
+                  {loggedInUser?.name || customer?.name}
                 </h2>
+                {loggedInUser?.name && customer?.name && loggedInUser.name !== customer.name && (
+                  <div className="text-xs font-medium text-[#0F3D2E]">
+                    Showroom: {customer.name}
+                  </div>
+                )}
                 <div className="text-xs text-stone-500">
-                  {customer?.email || customer?.phone || "No contact added"}
+                  {loggedInUser?.email || customer?.email || customer?.phone || "No contact added"}
                 </div>
-                <div className="inline-flex items-center justify-center gap-1.5 text-[11px] text-stone-500 pt-0.5">
+                <div className="inline-flex items-center justify-center gap-1.5 text-[11px] text-stone-500 pt-0.5 flex-wrap">
                   <span className="font-mono text-[#9E7C42] font-semibold">
                     {customer?.customerCode}
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                      canViewBills
+                        ? "bg-emerald-50 text-[#0F3D2E] border-emerald-200"
+                        : "bg-amber-50 text-amber-900 border-amber-200"
+                    }`}
+                  >
+                    {canViewBills ? "Showroom Account" : "Order Staff Only"}
                   </span>
                   {customer?.address && (
                     <>
@@ -2493,6 +2523,7 @@ export default function CustomerAppPage() {
                   )}
                 </div>
               </div>
+              {canViewBills && (
               <div className="pt-1">
                 <button
                   type="button"
@@ -2503,6 +2534,7 @@ export default function CustomerAppPage() {
                   {editingProfile ? "Close Editor" : "Edit Profile"}
                 </button>
               </div>
+              )}
             </div>
 
             {/* Inline Edit Form (when Edit Profile clicked) */}

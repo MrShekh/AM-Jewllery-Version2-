@@ -118,6 +118,9 @@ interface ManagerWorkspaceData {
     customerId: string | null;
     customerCode: string;
     name: string;
+    loginName?: string;
+    loginEmail?: string;
+    canViewBills?: boolean;
     phone: string | null;
     email: string;
     address: string | null;
@@ -1229,7 +1232,7 @@ export default function AppOrdersManagerPage() {
                   .filter((c) => {
                     const q = customerDirSearch.trim().toLowerCase();
                     if (!q) return true;
-                    return `${c.name} ${c.customerCode} ${c.phone || ""} ${c.email || ""} ${c.address || ""}`
+                    return `${c.name} ${c.loginName || ""} ${c.customerCode} ${c.phone || ""} ${c.loginEmail || c.email || ""} ${c.address || ""}`
                       .toLowerCase()
                       .includes(q);
                   })
@@ -1241,29 +1244,43 @@ export default function AppOrdersManagerPage() {
                     {c.profilePhotoUrl ? (
                       <img
                         src={c.profilePhotoUrl}
-                        alt={c.name}
+                        alt={c.loginName || c.name}
                         className="w-11 h-11 rounded-full object-cover border border-[#9E7C42]/40 shrink-0"
                       />
                     ) : (
                       <div className="w-11 h-11 rounded-full bg-[#0F3D2E] text-white font-serif font-semibold text-sm flex items-center justify-center shrink-0">
-                        {c.name.slice(0, 1).toUpperCase()}
+                        {(c.loginName || c.name).slice(0, 1).toUpperCase()}
                       </div>
                     )}
                     <div className="min-w-0 flex-1 space-y-0.5">
                       <div className="font-bold text-stone-900 truncate">
-                        {c.name}
+                        {c.loginName || c.name}
                       </div>
-                      <div className="font-mono text-[11px] text-stone-500 truncate">
-                        {c.customerCode} • {c.phone || c.email}
-                      </div>
-                      {c.address && (
-                        <div className="text-[11px] text-stone-500 truncate">
-                          {c.address}
+                      {c.loginName && c.loginName !== c.name && (
+                        <div className="text-[11px] font-medium text-[#0F3D2E] truncate">
+                          Showroom: {c.name}
                         </div>
                       )}
-                      <div className="flex items-center gap-2 pt-1.5 text-[11px]">
+                      <div className="font-mono text-[11px] text-stone-500 truncate">
+                        {c.customerCode} • {c.loginEmail || c.email}
+                      </div>
+                      {c.phone && (
+                        <div className="font-mono text-[11px] text-stone-400 truncate">
+                          {c.phone}
+                        </div>
+                      )}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1.5 text-[11px]">
                         <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-[#0F3D2E] font-semibold">
                           {c.orderCount} Orders
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                            c.canViewBills === false
+                              ? "bg-amber-50 text-amber-900 border-amber-200"
+                              : "bg-stone-100 text-stone-700 border-stone-200"
+                          }`}
+                        >
+                          {c.canViewBills === false ? "Order Staff Only" : "Bills: ON"}
                         </span>
                         <span className="text-stone-400 font-mono">
                           Joined {c.joinedAt.slice(0, 10)}

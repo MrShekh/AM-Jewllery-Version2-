@@ -334,6 +334,11 @@ export async function listCustomerOwnWorkspace(actor: ActorContext) {
 
   return {
     customer,
+    loggedInUser: {
+      id: actor.userId,
+      name: actor.name || customer.name,
+      email: actor.email || "",
+    },
     canViewBills,
     requests: requests.map((r) => {
       const reqBillIds = canViewBills

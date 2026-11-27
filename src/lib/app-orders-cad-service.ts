@@ -109,6 +109,7 @@ export async function getManagerAppOrdersWorkspace(actor: ActorContext) {
         id: true,
         name: true,
         email: true,
+        canViewBills: true,
         createdAt: true,
         customer: {
           select: {
@@ -234,8 +235,11 @@ export async function getManagerAppOrdersWorkspace(actor: ActorContext) {
       customerId: u.customer?.id || null,
       customerCode: u.customer?.customerCode || "—",
       name: u.customer?.name || u.name,
+      loginName: u.name,
+      loginEmail: u.email,
+      canViewBills: u.canViewBills,
       phone: u.customer?.phone || null,
-      email: u.customer?.email || u.email,
+      email: u.email || u.customer?.email || "",
       address: u.customer?.address || null,
       profilePhotoUrl: u.customer?.profilePhotoUrl || null,
       orderCount: u.customer?._count.orderRequests || 0,
