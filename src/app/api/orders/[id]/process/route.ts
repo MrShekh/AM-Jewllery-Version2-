@@ -252,6 +252,283 @@ export async function POST(
       return NextResponse.json({ ok: true, ...result });
     }
 
+    if (action === "UNDO_LAST_STEP") {
+      if (actor.role !== "OWNER_ADMIN") {
+        return NextResponse.json(
+          { ok: false, error: "Only Owner/Admin can undo process steps" },
+          { status: 403 }
+        );
+      }
+
+      const order = await prisma.order.findFirst({
+        where: { id: orderId, organizationId: actor.organizationId },
+        include: {
+          processes: { orderBy: { sequenceOrder: "asc" } },
+        },
+      });
+      if (!order) {
+        return NextResponse.json({ ok: false, error: "Order not found" }, { status: 404 });
+      }
+      if (order.status === "COMPLETED" || order.status === "CANCELLED") {
+        return NextResponse.json(
+          { ok: false, error: `Cannot undo steps on ${order.status} Bag #${order.bagNumber}` },
+          { status: 409 }
+        );
+      }
+
+      const latestActiveVisit = await prisma.processVisit.findFirst({
+        where: { orderId, organizationId: actor.organizationId, status: { not: "REVERSED" } },
+        orderBy: { createdAt: "desc" },
+      });
+
+      const latestRepairMovement = await prisma.metalMovement.findFirst({
+        where: {
+          orderId,
+          organizationId: actor.organizationId,
+          idempotencyKey: { startsWith: "repair_" },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      // Case A: Latest action was a "Send Existing Piece for Repair" transfer
+      if (
+        latestRepairMovement &&
+        (!latestActiveVisit ||
+          latestRepairMovement.createdAt.getTime() >= latestActiveVisit.createdAt.getTime())
+      ) {
+        const targetProc = order.processes.find(
+          (p) => p.id === latestRepairMovement.orderProcessId
+        );
+        if (!targetProc) {
+          return NextResponse.json(
+            { ok: false, error: "Target process for repair movement not found" },
+            { status: 404 }
+          );
+        }
+
+        const priorVisitOnTarget = await prisma.processVisit.findFirst({
+          where: {
+            orderId,
+            orderProcessId: targetProc.id,
+            status: { not: "REVERSED" },
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+        await prisma.$transaction(
+          async (tx) => {
+            const metalDec = latestRepairMovement.netMetalWeight;
+            const stoneDec = latestRepairMovement.nonGoldWeight;
+            const grossNum = Number(latestRepairMovement.grossWeight);
+
+            const nextIssued = Math.max(0, Number(targetProc.issuedMetalWeight) - Number(metalDec));
+            const nextCustody = Math.max(0, Number(targetProc.custodyMetalWeight) - Number(metalDec));
+            const nextStoneIn = Math.max(0, Number(targetProc.carriedStoneInWeight) - Number(stoneDec));
+
+            const wasClosedBefore = Boolean(priorVisitOnTarget && targetProc.returnedMetalWeight.gt(0));
+
+            await tx.orderProcess.update({
+              where: { id: targetProc.id },
+              data: {
+                status: wasClosedBefore
+                  ? "CLOSED"
+                  : nextIssued > 0
+                  ? "IN_PROGRESS"
+                  : "PENDING",
+                issuedMetalWeight: new Decimal(nextIssued.toFixed(6)),
+                custodyMetalWeight: new Decimal(nextCustody.toFixed(6)),
+                carriedStoneInWeight: new Decimal(nextStoneIn.toFixed(6)),
+                latestGrossInWeight: wasClosedBefore && priorVisitOnTarget
+                  ? priorVisitOnTarget.grossInWeight
+                  : new Decimal(Math.max(0, Number(targetProc.latestGrossInWeight) - grossNum).toFixed(6)),
+                closedAt: wasClosedBefore && priorVisitOnTarget ? priorVisitOnTarget.createdAt : null,
+                closedById: wasClosedBefore && priorVisitOnTarget ? priorVisitOnTarget.createdById : null,
+              },
+            });
+
+            if (latestRepairMovement.fromProcessType) {
+              const holderProc = order.processes.find(
+                (p) => p.processType === latestRepairMovement.fromProcessType
+              );
+              if (holderProc) {
+                await tx.orderProcess.update({
+                  where: { id: holderProc.id },
+                  data: {
+                    issuedMetalWeight: { increment: metalDec },
+                    custodyMetalWeight: { increment: metalDec },
+                    carriedStoneInWeight: { increment: stoneDec },
+                    carriedStoneOutWeight: { increment: stoneDec },
+                    latestGrossInWeight: { increment: latestRepairMovement.grossWeight },
+                  },
+                });
+              }
+            }
+
+            await tx.metalMovement.delete({
+              where: { id: latestRepairMovement.id },
+            });
+
+            await tx.auditEvent.create({
+              data: {
+                id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                organizationId: actor.organizationId,
+                actorId: actor.userId,
+                entityType: "OrderProcess",
+                entityId: targetProc.id,
+                action: "REPAIR_TRANSFER_REVERSED",
+                summary: `Undid repair transfer (${Number(latestRepairMovement.grossWeight).toFixed(3)} g) to ${targetProc.processType} on Bag #${order.bagNumber}`,
+                metadataJson: JSON.stringify({
+                  orderId: order.id,
+                  movementId: latestRepairMovement.id,
+                  toProcessType: targetProc.processType,
+                  fromProcessType: latestRepairMovement.fromProcessType,
+                  grossWeight: latestRepairMovement.grossWeight.toString(),
+                }),
+              },
+            });
+          },
+          { timeout: 20000 }
+        );
+
+        return NextResponse.json({
+          ok: true,
+          undoneType: "REPAIR_TRANSFER",
+          processType: targetProc.processType,
+          message: `Undid repair transfer (${Number(latestRepairMovement.grossWeight).toFixed(3)} g) to ${targetProc.processType}.`,
+        });
+      }
+
+      // Case B: Latest action was a completed/partial ProcessVisit
+      if (!latestActiveVisit) {
+        return NextResponse.json(
+          { ok: false, error: "No completed process step or repair transfer to undo on this bag" },
+          { status: 400 }
+        );
+      }
+
+      const revResult = await erpService.reverseProcessVisit(actor, {
+        orderId,
+        visitId: latestActiveVisit.id,
+        reason: String(body.reason || "Undo last process step from Production Register"),
+        businessDate: body.businessDate,
+        idempotencyKey,
+      });
+
+      // Clean up stones, MetalMovements, and any PENDING downstream stage created by that visit
+      await prisma.$transaction(
+        async (tx) => {
+          const visitStones = await tx.stoneComponentEntry.findMany({
+            where: {
+              orderId,
+              organizationId: actor.organizationId,
+              processVisitId: latestActiveVisit.id,
+            },
+          });
+
+          const removedAddedStoneWeight = visitStones
+            .filter((s) => s.direction === "ADDED")
+            .reduce((sum, s) => sum + Number(s.weightGrams), 0);
+
+          if (visitStones.length > 0) {
+            await tx.stoneComponentEntry.deleteMany({
+              where: {
+                id: { in: visitStones.map((s) => s.id) },
+              },
+            });
+          }
+
+          const visitMovements = await tx.metalMovement.findMany({
+            where: {
+              orderId,
+              organizationId: actor.organizationId,
+              processVisitId: latestActiveVisit.id,
+            },
+          });
+
+          for (const mv of visitMovements) {
+            if (mv.movementType === "PROCESS_TRANSFER" && mv.toProcessType) {
+              const downstream = await tx.orderProcess.findFirst({
+                where: { orderId, processType: mv.toProcessType },
+              });
+              if (downstream && downstream.status === "PENDING") {
+                await tx.orderProcess.update({
+                  where: { id: downstream.id },
+                  data: {
+                    assignedKarigarId: null,
+                    issuedMetalWeight: new Decimal(0),
+                    custodyMetalWeight: new Decimal(0),
+                    carriedStoneInWeight: new Decimal(0),
+                    carriedStoneOutWeight: new Decimal(0),
+                    latestGrossInWeight: new Decimal(0),
+                  },
+                });
+              }
+            }
+          }
+
+          if (visitMovements.length > 0) {
+            await tx.metalMovement.deleteMany({
+              where: {
+                id: { in: visitMovements.map((m) => m.id) },
+              },
+            });
+          }
+
+          const prevActiveVisit = await tx.processVisit.findFirst({
+            where: {
+              orderId,
+              orderProcessId: revResult.process.id,
+              status: { not: "REVERSED" },
+            },
+            orderBy: { createdAt: "desc" },
+          });
+
+          const currentProcFresh = await tx.orderProcess.findUnique({
+            where: { id: revResult.process.id },
+          });
+
+          if (currentProcFresh) {
+            await tx.orderProcess.update({
+              where: { id: currentProcFresh.id },
+              data: {
+                addedStoneWeight: new Decimal(
+                  Math.max(0, Number(currentProcFresh.addedStoneWeight) - removedAddedStoneWeight).toFixed(6)
+                ),
+                carriedStoneOutWeight: new Decimal(
+                  Math.max(0, Number(currentProcFresh.carriedStoneOutWeight) - removedAddedStoneWeight).toFixed(6)
+                ),
+                latestGrossOutWeight: prevActiveVisit
+                  ? prevActiveVisit.grossOutWeight
+                  : new Decimal(0),
+              },
+            });
+          }
+
+          if (removedAddedStoneWeight > 0) {
+            const ordFresh = await tx.order.findUnique({ where: { id: orderId } });
+            if (ordFresh) {
+              await tx.order.update({
+                where: { id: orderId },
+                data: {
+                  retainedStoneWeight: new Decimal(
+                    Math.max(0, Number(ordFresh.retainedStoneWeight) - removedAddedStoneWeight).toFixed(6)
+                  ),
+                },
+              });
+            }
+          }
+        },
+        { timeout: 20000 }
+      );
+
+      return NextResponse.json({
+        ok: true,
+        undoneType: "PROCESS_VISIT",
+        processType: revResult.process.processType,
+        message: `Reversed ${revResult.process.processType} back to IN_PROGRESS with all weights, stones & losses restored.`,
+      });
+    }
+
     if (action === "ADD_STAGE_GOLD") {
       const processType = body.processType as ProcessType;
       const karigarId = String(body.karigarId || "").trim();

@@ -260,6 +260,8 @@ function BillingWorkspaceInner() {
   const [livePreviewHtml, setLivePreviewHtml] = useState<string | null>(null);
 
   const [selectedOrderLines, setSelectedOrderLines] = useState<Record<string, OrderLineDraft>>({});
+  const [orderSearch, setOrderSearch] = useState("");
+  const [orderFilterMode, setOrderFilterMode] = useState<"ELIGIBLE" | "ALL">("ELIGIBLE");
   const [manualLines, setManualLines] = useState<ManualLineDraft[]>([
     {
       lineType: "MANUAL_SERVICE",
@@ -1702,13 +1704,99 @@ function BillingWorkspaceInner() {
               </div>
             </div>
 
-            {billType === "ORDER_DELIVERY" ? (
-              <div className="bg-white border border-slate-300 rounded-xs overflow-x-auto">
-                <div className="p-2.5 bg-slate-100 border-b border-slate-300 text-xs font-bold text-slate-800">
-                  1. Select Completed Orders ({customerId ? activeCustomer?.name : "Select a customer above"})
+            {billType === "ORDER_DELIVERY" ? (() => {
+              const eligibleOrders = orders.filter((o) => o.eligibility === "ELIGIBLE");
+              const q = orderSearch.trim().toLowerCase();
+              const baseList = orderFilterMode === "ELIGIBLE" ? eligibleOrders : orders;
+              const filteredOrders = q
+                ? baseList.filter(
+                    (o) =>
+                      o.bagNumber.toLowerCase().includes(q) ||
+                      o.orderName.toLowerCase().includes(q)
+                  )
+                : baseList;
+              const selectedCount = Object.keys(selectedOrderLines).length;
+
+              return (
+              <div className="bg-white border border-slate-300 rounded-xs overflow-hidden">
+                <div className="p-2.5 bg-slate-100 border-b border-slate-300 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-bold text-slate-800">
+                      1. Select Completed Orders ({customerId ? activeCustomer?.name : "Select a customer above"})
+                    </span>
+                    <div className="inline-flex rounded-xs border border-slate-300 overflow-hidden text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => setOrderFilterMode("ELIGIBLE")}
+                        className={`px-2 py-0.5 font-semibold cursor-pointer ${
+                          orderFilterMode === "ELIGIBLE"
+                            ? "bg-emerald-700 text-white"
+                            : "bg-white text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        Ready to Bill ({eligibleOrders.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOrderFilterMode("ALL")}
+                        className={`px-2 py-0.5 font-semibold border-l border-slate-300 cursor-pointer ${
+                          orderFilterMode === "ALL"
+                            ? "bg-slate-800 text-white"
+                            : "bg-white text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        All Orders ({orders.length})
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      value={orderSearch}
+                      onChange={(e) => setOrderSearch(e.target.value)}
+                      placeholder="Search Bag # or Name..."
+                      className="px-2 py-1 text-xs bg-white border border-slate-300 rounded-xs w-44"
+                    />
+                    {eligibleOrders.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allSelected = eligibleOrders.every((o) => Boolean(selectedOrderLines[o.id]));
+                          if (allSelected) {
+                            setSelectedOrderLines({});
+                          } else {
+                            for (const o of eligibleOrders) {
+                              if (!selectedOrderLines[o.id]) toggleOrderSelection(o);
+                            }
+                          }
+                        }}
+                        className="px-2 py-1 text-[11px] font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xs cursor-pointer"
+                      >
+                        {eligibleOrders.every((o) => Boolean(selectedOrderLines[o.id]))
+                          ? "Clear All"
+                          : `Select All Ready (${eligibleOrders.length})`}
+                      </button>
+                    )}
+                    {selectedCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          document
+                            .getElementById("billing-summary-section")
+                            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }}
+                        className="px-2.5 py-1 text-[11px] font-bold bg-indigo-700 hover:bg-indigo-800 text-white rounded-xs cursor-pointer"
+                      >
+                        {selectedCount} Selected • Jump to Summary ↓
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                <div className="max-h-[340px] overflow-auto">
                 <table className="w-full text-xs border-collapse">
-                  <thead>
+                  <thead className="sticky top-0 z-10 bg-slate-50 shadow-2xs">
                     <tr className="bg-slate-50 border-b border-slate-300 text-slate-700">
                       <th className="p-2 text-center w-8">Sel</th>
                       <th className="p-2 text-left">Bag #</th>
@@ -1723,14 +1811,18 @@ function BillingWorkspaceInner() {
                     </tr>
                   </thead>
                   <tbody>
-                    {orders.length === 0 ? (
+                    {filteredOrders.length === 0 ? (
                       <tr>
                         <td colSpan={10} className="p-4 text-center text-slate-500">
-                          No orders found for this customer.
+                          {orders.length === 0
+                            ? "No orders found for this customer."
+                            : orderFilterMode === "ELIGIBLE" && eligibleOrders.length === 0
+                            ? "No ready-to-bill orders. Click 'All Orders' to inspect previous orders."
+                            : "No orders match your search."}
                         </td>
                       </tr>
                     ) : (
-                      orders.map((ord) => {
+                      filteredOrders.map((ord) => {
                         const checked = Boolean(selectedOrderLines[ord.id]);
                         return (
                           <tr
@@ -1788,8 +1880,10 @@ function BillingWorkspaceInner() {
                     )}
                   </tbody>
                 </table>
+                </div>
               </div>
-            ) : (
+              );
+            })() : (
               <div className="bg-white border border-slate-300 rounded-xs p-3 space-y-2">
                 <div className="flex justify-between items-center gap-2 flex-wrap">
                   <div className="text-xs font-bold text-slate-800">
@@ -2499,7 +2593,7 @@ function BillingWorkspaceInner() {
                 </div>
 
                 {/* Step 3: Side-by-Side Complete Billing Summary & Live AM Jewellers Invoice Preview */}
-                <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+                <div id="billing-summary-section" className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
                   {/* Left 5 Cols: Advance Gold, Notes & Submit Action */}
                   <div className="xl:col-span-5 bg-indigo-50/70 border border-indigo-200 rounded-xs p-4 space-y-3 text-xs">
                     <div className="text-sm font-bold text-indigo-950">

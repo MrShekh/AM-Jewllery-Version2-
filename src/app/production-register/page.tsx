@@ -687,6 +687,46 @@ function ProductionRegisterContent() {
     }
   }
 
+  async function handleUndoLastStep() {
+    if (!selectedOrderRow || submittingAction) return;
+    if (
+      !window.confirm(
+        `Undo the last completed step or repair transfer on Bag #${selectedOrderRow.order.bagNumber}? This will restore the previous stage's weights, stones, and losses.`
+      )
+    ) {
+      return;
+    }
+    setActionError(null);
+    setActionSuccess(null);
+    setSubmittingAction(true);
+    try {
+      const res = await fetch(
+        `/api/orders/${selectedOrderRow.order.id}/process`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "UNDO_LAST_STEP",
+            reason: "Undo last step from Production Register",
+            idempotencyKey: `ui_undo_${selectedOrderRow.order.id}_${Date.now()}`,
+          }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setActionError(data.error || "Failed to undo last step");
+      } else {
+        setActionSuccess(data.message || "Last step undone cleanly.");
+        if (data.processType) {
+          setActiveProcessType(data.processType);
+        }
+        await loadRegister();
+      }
+    } finally {
+      setSubmittingAction(false);
+    }
+  }
+
   async function handleAddStageGold(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedOrderRow || !activeProcessObj || submittingAction) return;
@@ -2747,8 +2787,31 @@ function ProductionRegisterContent() {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                 {/* Left: Stacked Process Cards */}
                 <div className="lg:col-span-5 space-y-2">
-                  <div className="text-xs font-bold text-slate-700 uppercase">
-                    Selected Order Processes (Click to Inspect/Enter)
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs font-bold text-slate-700 uppercase">
+                      Selected Order Processes (Click to Inspect/Enter)
+                    </div>
+                    {actor.role === "OWNER_ADMIN" &&
+                      selectedOrderRow.order.status !== "COMPLETED" &&
+                      selectedOrderRow.order.status !== "DELIVERED" &&
+                      selectedOrderRow.order.status !== "CANCELLED" &&
+                      selectedOrderRow.processes.some(
+                        (p) =>
+                          p.status === "CLOSED" ||
+                          p.status === "PARTIAL_RETURN" ||
+                          Number(p.returnedMetalWeight || 0) > 0 ||
+                          p.status === "IN_PROGRESS"
+                      ) && (
+                        <button
+                          type="button"
+                          disabled={submittingAction}
+                          onClick={() => void handleUndoLastStep()}
+                          title="Undo the last completed step or repair transfer on this bag"
+                          className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 rounded-xs text-[11px] font-bold cursor-pointer disabled:opacity-50 shrink-0"
+                        >
+                          {submittingAction ? "Undoing..." : "↩ Undo Last Step"}
+                        </button>
+                      )}
                   </div>
                   {selectedOrderRow.processes.map((proc, idx) => {
                     const isCurrent = proc.processType === activeProcessType;
