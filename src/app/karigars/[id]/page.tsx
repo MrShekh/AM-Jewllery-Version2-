@@ -227,15 +227,17 @@ export default function KarigarProfilePage() {
           <>
             {/* KPI Summary Cards — Clear Workshop Language */}
             {(() => {
+              const fmt3 = (v: string | number | undefined | null) =>
+                Number(v || 0).toFixed(3);
               const showStones =
                 profile.summary.totalAdPieces > 0 ||
                 profile.summary.totalKlPieces > 0 ||
                 profile.karigar.capabilities.includes("SETTING");
-              const totalSettledFine = (
+              const totalSettledFine = fmt3(
                 Number(profile.summary.recoveredFineWeight || 0) +
-                Number(profile.summary.writtenOffFineWeight || 0) +
-                Number(profile.summary.makingDeductedFineWeight || 0)
-              ).toFixed(4);
+                  Number(profile.summary.writtenOffFineWeight || 0) +
+                  Number(profile.summary.makingDeductedFineWeight || 0)
+              );
               return (
                 <div className="space-y-2.5">
                   <div
@@ -260,7 +262,7 @@ export default function KarigarProfilePage() {
                         2. Gold In Hand (Custody)
                       </div>
                       <div className="mt-1 text-xl font-bold font-mono text-slate-900">
-                        {profile.summary.currentCustodyWeight} g
+                        {fmt3(profile.summary.currentCustodyWeight)} g
                       </div>
                       <div className="text-[11px] text-slate-500 mt-0.5">
                         Unreturned gold currently with karigar
@@ -272,11 +274,11 @@ export default function KarigarProfilePage() {
                         3. Total Order Loss
                       </div>
                       <div className="mt-1 text-xl font-bold font-mono text-rose-700">
-                        {profile.summary.totalRawLossWeight} g{" "}
+                        {fmt3(profile.summary.totalRawLossWeight)} g{" "}
                         <span className="text-xs font-normal text-slate-500">raw</span>
                       </div>
                       <div className="text-[11px] text-slate-600 font-mono mt-0.5">
-                        Pure Fine eq: <strong>{profile.summary.totalFineLossWeight} g</strong>
+                        Pure Fine eq: <strong>{fmt3(profile.summary.totalFineLossWeight)} g</strong>
                       </div>
                     </div>
 
@@ -288,9 +290,9 @@ export default function KarigarProfilePage() {
                         {totalSettledFine} g
                       </div>
                       <div className="text-[10px] text-slate-600 font-mono mt-0.5">
-                        Gold Rec: {profile.summary.recoveredFineWeight}g • Write-off:{" "}
-                        {profile.summary.writtenOffFineWeight}g • Making:{" "}
-                        {profile.summary.makingDeductedFineWeight}g
+                        Gold Rec: {fmt3(profile.summary.recoveredFineWeight)}g • Write-off:{" "}
+                        {fmt3(profile.summary.writtenOffFineWeight)}g • Making:{" "}
+                        {fmt3(profile.summary.makingDeductedFineWeight)}g
                       </div>
                     </div>
 
@@ -299,10 +301,10 @@ export default function KarigarProfilePage() {
                         5. Balance to Recover (Fine)
                       </div>
                       <div className="mt-1 text-xl font-bold font-mono text-amber-700">
-                        {profile.summary.pendingRecoverableFine} g
+                        {fmt3(profile.summary.pendingRecoverableFine)} g
                       </div>
                       <div className="text-[11px] text-slate-600 font-mono mt-0.5">
-                        Still owed by karigar (Adv: {profile.summary.unallocatedAdvanceFine} g)
+                        Still owed by karigar (Adv: {fmt3(profile.summary.unallocatedAdvanceFine)} g)
                       </div>
                     </div>
 
@@ -325,7 +327,7 @@ export default function KarigarProfilePage() {
                     <span>
                       <strong>How Loss Balance Works:</strong> Total Fine Loss (
                       <span className="font-mono text-rose-700">
-                        {profile.summary.totalFineLossWeight} g
+                        {fmt3(profile.summary.totalFineLossWeight)} g
                       </span>
                       ) − Settled / Write-off (
                       <span className="font-mono text-emerald-700">
@@ -333,7 +335,7 @@ export default function KarigarProfilePage() {
                       </span>
                       ) ={" "}
                       <strong className="font-mono text-amber-800">
-                        {profile.summary.pendingRecoverableFine} g
+                        {fmt3(profile.summary.pendingRecoverableFine)} g
                       </strong>{" "}
                       still to recover.
                     </span>
