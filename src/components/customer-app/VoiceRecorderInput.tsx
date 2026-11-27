@@ -53,27 +53,42 @@ export function VoiceRecorderInput({
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      const preferredMime =
+        typeof MediaRecorder !== "undefined" && typeof MediaRecorder.isTypeSupported === "function"
+          ? ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find((m) =>
+              MediaRecorder.isTypeSupported(m)
+            )
+          : undefined;
+      const recorder = preferredMime
+        ? new MediaRecorder(stream, { mimeType: preferredMime })
+        : new MediaRecorder(stream);
       chunksRef.current = [];
       recorder.ondataavailable = (ev) => {
         if (ev.data.size > 0) chunksRef.current.push(ev.data);
       };
       recorder.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunksRef.current, {
-          type: recorder.mimeType || "audio/webm",
-        });
+        const mime = recorder.mimeType || preferredMime || "audio/webm";
+        const ext = mime.includes("mp4") ? "m4a" : mime.includes("ogg") ? "ogg" : "webm";
+        const blob = new Blob(chunksRef.current, { type: mime });
         const preview = URL.createObjectURL(blob);
         setLocalUrl(preview);
-        void uploadAudioBlob(blob, `voice_${Date.now()}.webm`);
+        void uploadAudioBlob(blob, `voice_${Date.now()}.${ext}`);
       };
       mediaRecorderRef.current = recorder;
       recorder.start();
       setRecording(true);
-    } catch {
-      setError(
-        "Microphone permission denied or unavailable. You can still upload a recorded audio file below."
-      );
+    } catch (err: unknown) {
+      const errName = err instanceof Error ? err.name : "";
+      if (errName === "NotAllowedError" || errName === "PermissionDeniedError") {
+        setError(
+          "Microphone permission is blocked. On Android: open Chrome → ⋮ → Settings → Site settings → Microphone (allow this site), and check Phone Settings → Apps → Chrome → Permissions → Microphone. Or use Upload Audio File."
+        );
+      } else {
+        setError(
+          "Microphone unavailable in this app view. Tap 'Upload Audio File' or open in Chrome to record."
+        );
+      }
     }
   }
 
