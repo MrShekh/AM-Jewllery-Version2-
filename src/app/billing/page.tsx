@@ -161,6 +161,7 @@ interface OrderLineDraft {
   finishWeight: string;
   netWeight: string;
   baseWeightOption: "pure_gold" | "with_stones";
+  settingGhotWeight: string;
   customStoneWeight: string;
   customAdWeight: string;
   billingBasis: "NET_METAL" | "GROSS_WEIGHT" | "MANUAL";
@@ -530,6 +531,7 @@ function BillingWorkspaceInner() {
           finishWeight: ord.grossWeight,
           netWeight: ord.netWeight,
           baseWeightOption: "pure_gold",
+          settingGhotWeight: "0",
           customStoneWeight: "0",
           customAdWeight: "0",
           billingBasis: "MANUAL",
@@ -566,6 +568,7 @@ function BillingWorkspaceInner() {
           finishWeight: ord.grossWeight,
           netWeight: ord.netWeight,
           baseWeightOption: "pure_gold",
+          settingGhotWeight: "0",
           customStoneWeight: "0",
           customAdWeight: "0",
           billingBasis: "MANUAL",
@@ -606,9 +609,10 @@ function BillingWorkspaceInner() {
           draft.baseWeightOption === "with_stones"
             ? Number(draft.finishWeight || 0)
             : Number(draft.netWeight || 0);
+        const settingGhot = Math.max(0, Number(draft.settingGhotWeight || 0));
         const customStone = Number(draft.customStoneWeight || 0);
         const customAd = Number(draft.customAdWeight || 0);
-        const finalBillingWt = Math.max(0, baseWt + customStone + customAd);
+        const finalBillingWt = Math.max(0, baseWt + settingGhot + customStone + customAd);
         const pts = Number(draft.makingPercentagePoints || 0);
         const effectivePurity = (touch + pts) / 100;
         const lineFine =
@@ -778,11 +782,14 @@ function BillingWorkspaceInner() {
             Number(l.grossWeight) > 0 &&
             Math.abs(Number(l.grossWeight) - Number(grossWt)) < 0.002 &&
             Math.abs(Number(grossWt) - Number(netWt)) > 0.002;
+          const ghotMatch = (l.adjustmentReason || "").match(/Setting Ghot:\s*\+?([0-9.]+)\s*g/i);
+          const parsedGhot = ghotMatch ? ghotMatch[1] : "0";
           nextOrders[l.orderId] = {
             orderId: l.orderId,
             finishWeight: grossWt,
             netWeight: netWt,
             baseWeightOption: isWithStones ? "with_stones" : "pure_gold",
+            settingGhotWeight: parsedGhot,
             customStoneWeight: Number(l.stoneWeight || 0) === 0 ? "0" : l.stoneWeight,
             customAdWeight: Number(l.adKlWeight || 0) === 0 ? "0" : String(l.adKlWeight || "0"),
             billingBasis: "MANUAL",
@@ -854,17 +861,28 @@ function BillingWorkspaceInner() {
                 draft.baseWeightOption === "with_stones"
                   ? Number(draft.finishWeight || 0)
                   : Number(draft.netWeight || 0);
+              const settingGhot = Math.max(0, Number(draft.settingGhotWeight || 0));
               const customStone = Number(draft.customStoneWeight || 0);
               const customAd = Number(draft.customAdWeight || 0);
-              const finalBillingWt = Math.max(0, baseWt + customStone + customAd);
+              const finalBillingWt = Math.max(0, baseWt + settingGhot + customStone + customAd);
+              const cleanedReason = (draft.adjustmentReason || "")
+                .replace(/\|?\s*Setting Ghot:\s*\+?[0-9.]+\s*g/gi, "")
+                .trim();
+              const combinedReason =
+                settingGhot > 0
+                  ? cleanedReason
+                    ? `${cleanedReason} | Setting Ghot: +${settingGhot.toFixed(3)}g`
+                    : `Setting Ghot: +${settingGhot.toFixed(3)}g`
+                  : cleanedReason;
               return {
                 ...draft,
                 billingBasis: "MANUAL" as const,
                 manualChargeableWeight: finalBillingWt.toFixed(3),
-                customGrossWeight: baseWt.toFixed(3),
+                customGrossWeight: (baseWt + settingGhot).toFixed(3),
                 customStoneWeight: customStone.toFixed(3),
                 customAdWeight: customAd.toFixed(3),
                 customNetWeight: finalBillingWt.toFixed(3),
+                adjustmentReason: combinedReason,
               };
             })
           : [...manualLines];
@@ -2283,7 +2301,7 @@ function BillingWorkspaceInner() {
                       </span>
                     </div>
                     <div className="text-[11px] font-medium text-blue-700">
-                      Formula: Gross Billing Wt = Selected Base Wt + Custom Stone + Custom AD • Fine Gold = Gross × (Touch% + Wastage%)
+                      Formula: Gross Billing Wt = Selected Base Wt + Setting Ghot (+) + Custom Stone + Custom AD • Fine Gold = Gross × (Touch% + Wastage%)
                     </div>
                   </div>
 
@@ -2295,6 +2313,7 @@ function BillingWorkspaceInner() {
                           <th className="py-2 px-2 text-left font-bold whitespace-nowrap">Base Weight Mode</th>
                           <th className="py-2 px-2 text-right font-bold whitespace-nowrap">Finish Wt (g)</th>
                           <th className="py-2 px-2 text-right font-bold whitespace-nowrap">Net Gold Wt (g)</th>
+                          <th className="py-2 px-2 text-right font-bold whitespace-nowrap text-indigo-800">+ Setting Ghot (g)</th>
                           <th className="py-2 px-2 text-right font-bold whitespace-nowrap">+/- Stone KL (g)</th>
                           <th className="py-2 px-2 text-right font-bold whitespace-nowrap">+/- AD Wt (g)</th>
                           <th className="py-2 px-2 text-left font-bold whitespace-nowrap">Wastage / Making %</th>
@@ -2319,10 +2338,11 @@ function BillingWorkspaceInner() {
                             draft.baseWeightOption === "with_stones"
                               ? Number(draft.finishWeight || 0)
                               : Number(draft.netWeight || 0);
+                          const settingGhot = Math.max(0, Number(draft.settingGhotWeight || 0));
                           const customStone = Number(draft.customStoneWeight || 0);
                           const customAd = Number(draft.customAdWeight || 0);
                           const totalCustomStone = customStone + customAd;
-                          const finalBillingWt = Math.max(0, baseWt + totalCustomStone);
+                          const finalBillingWt = Math.max(0, baseWt + settingGhot + totalCustomStone);
                           const lineFine =
                             (finalBillingWt * effectivePurity) / 100 +
                             Number(draft.extraFineCharge || 0) -
@@ -2446,6 +2466,34 @@ function BillingWorkspaceInner() {
                                 />
                                 <div className="text-[10px] text-right text-slate-500 mt-0.5">
                                   Gold: {ord.netWeight}g
+                                </div>
+                              </td>
+
+                              {/* 4b. Setting Ghot / Making Charge (Always +) */}
+                              <td className="py-2.5 px-2 min-w-[110px]">
+                                <input
+                                  type="number"
+                                  step="0.001"
+                                  min="0"
+                                  value={draft.settingGhotWeight}
+                                  onChange={(e) => {
+                                    const raw = e.target.value;
+                                    const safe = Number(raw) < 0 ? "0" : raw;
+                                    updateOrderLine(draft.orderId, {
+                                      settingGhotWeight: safe,
+                                    });
+                                  }}
+                                  className="w-20 px-2 py-1.5 text-right text-xs border border-indigo-300 rounded-xs bg-indigo-50/30 font-mono font-semibold text-indigo-950"
+                                  placeholder="0"
+                                />
+                                <div className="text-[10px] text-right mt-0.5 font-mono">
+                                  {settingGhot > 0 ? (
+                                    <span className="font-bold text-indigo-700">
+                                      +{settingGhot.toFixed(3)} g
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-500">always +</span>
+                                  )}
                                 </div>
                               </td>
 
@@ -2951,9 +2999,10 @@ function BillingWorkspaceInner() {
                               draft.baseWeightOption === "with_stones"
                                 ? Number(draft.finishWeight || 0)
                                 : Number(draft.netWeight || 0);
+                            const settingGhot = Math.max(0, Number(draft.settingGhotWeight || 0));
                             const customStone = Number(draft.customStoneWeight || 0);
                             const customAd = Number(draft.customAdWeight || 0);
-                            const finalBillingWt = Math.max(0, baseWt + customStone + customAd);
+                            const finalBillingWt = Math.max(0, baseWt + settingGhot + customStone + customAd);
                             const lineFine =
                               (finalBillingWt * (touch + makingPts)) / 100 +
                               Number(draft.extraFineCharge || 0) -
@@ -2984,7 +3033,12 @@ function BillingWorkspaceInner() {
                                   #{ord.bagNumber} - {ord.orderName} ({Number(ord.touchPercent).toFixed(2).replace(/\.?0+$/, "")}%)
                                 </td>
                                 <td className="border border-slate-200 px-2 py-2.5 text-right font-mono">
-                                  {formatWeight3(baseWt)}
+                                  <div>{formatWeight3(baseWt + settingGhot)}</div>
+                                  {settingGhot > 0 && (
+                                    <div className="text-[10px] text-indigo-700">
+                                      (incl. +{formatWeight3(settingGhot)} ghot)
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="border border-slate-200 px-2 py-2.5 text-right font-mono">
                                   {formatWeight3(customStone)}
