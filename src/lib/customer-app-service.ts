@@ -270,19 +270,35 @@ export async function listCustomerOwnWorkspace(actor: ActorContext) {
 
   if (!customer) throw new NotFoundError("Customer profile not found");
 
-  const linkedBillIds = Array.from(
-    new Set(
-      requests.flatMap((r) =>
-        r.items.flatMap((it) =>
-          it.bagLinks
-            .map((bl) => bl.order?.activeBillId)
-            .filter((id): id is string => Boolean(id))
+  const canViewBills = actor.canViewBills !== false;
+
+  const submittedUserIds = Array.from(
+    new Set(requests.map((r) => r.submittedByUserId).filter(Boolean))
+  );
+  const submitters =
+    submittedUserIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: submittedUserIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+  const submitterNameById = new Map(submitters.map((u) => [u.id, u.name]));
+
+  const linkedBillIds = canViewBills
+    ? Array.from(
+        new Set(
+          requests.flatMap((r) =>
+            r.items.flatMap((it) =>
+              it.bagLinks
+                .map((bl) => bl.order?.activeBillId)
+                .filter((id): id is string => Boolean(id))
+            )
+          )
         )
       )
-    )
-  );
+    : [];
   const orderLinkedBills =
-    linkedBillIds.length > 0
+    canViewBills && linkedBillIds.length > 0
       ? await prisma.customerBill.findMany({
           where: {
             id: { in: linkedBillIds },
@@ -318,21 +334,27 @@ export async function listCustomerOwnWorkspace(actor: ActorContext) {
 
   return {
     customer,
+    canViewBills,
     requests: requests.map((r) => {
-      const reqBillIds = Array.from(
-        new Set(
-          r.items.flatMap((it) =>
-            it.bagLinks
-              .map((bl) => bl.order?.activeBillId)
-              .filter((id): id is string => Boolean(id))
+      const reqBillIds = canViewBills
+        ? Array.from(
+            new Set(
+              r.items.flatMap((it) =>
+                it.bagLinks
+                  .map((bl) => bl.order?.activeBillId)
+                  .filter((id): id is string => Boolean(id))
+              )
+            )
           )
-        )
-      );
-      const linkedBills = reqBillIds
-        .map((id) => billById.get(id))
-        .filter((b): b is NonNullable<typeof b> => Boolean(b));
+        : [];
+      const linkedBills = canViewBills
+        ? reqBillIds
+            .map((id) => billById.get(id))
+            .filter((b): b is NonNullable<typeof b> => Boolean(b))
+        : [];
       return {
         ...r,
+        submittedByName: submitterNameById.get(r.submittedByUserId) ?? null,
         statusLabel: CUSTOMER_STATUS_LABELS[r.status] || r.status,
         requestedDeliveryDate: r.requestedDeliveryDate
           ? r.requestedDeliveryDate.toISOString().slice(0, 10)

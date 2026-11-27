@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
           organizationName: invite.organization.name,
           customerName: invite.customer?.name ?? null,
           customerCode: invite.customer?.customerCode ?? null,
+          canViewBills: invite.canViewBills,
         },
       });
     }
@@ -64,7 +65,7 @@ export async function GET(req: NextRequest) {
             organizationId: actor.organizationId,
             role: "CUSTOMER",
           },
-          select: { id: true, name: true, email: true, customerId: true, isActive: true },
+          select: { id: true, name: true, email: true, customerId: true, isActive: true, canViewBills: true },
         }),
       ]);
 
@@ -117,6 +118,7 @@ export async function POST(req: NextRequest) {
             customerId: invite.role === "CUSTOMER" ? invite.customerId : null,
             linkedKarigarId:
               invite.role === "CAD_DESIGNER" ? invite.linkedKarigarId : null,
+            canViewBills: invite.role === "CUSTOMER" ? invite.canViewBills : true,
           },
         });
         await tx.accountInvitation.update({
@@ -134,6 +136,26 @@ export async function POST(req: NextRequest) {
     }
 
     const actor = await requireServerActor(["OWNER_ADMIN", "OPERATOR"]);
+
+    if (body?.action === "TOGGLE_BILL_ACCESS") {
+      const userId = String(body?.userId || "").trim();
+      const canViewBills = Boolean(body?.canViewBills);
+      if (!userId) {
+        return NextResponse.json(
+          { ok: false, error: "userId is required" },
+          { status: 400 }
+        );
+      }
+      await prisma.user.updateMany({
+        where: {
+          id: userId,
+          organizationId: actor.organizationId,
+          role: "CUSTOMER",
+        },
+        data: { canViewBills },
+      });
+      return NextResponse.json({ ok: true, userId, canViewBills });
+    }
 
     if (body?.action === "BULK_CREATE_CUSTOMER_INVITES") {
       const now = new Date();
@@ -237,6 +259,7 @@ export async function POST(req: NextRequest) {
 
     const token = crypto.randomBytes(24).toString("hex");
     const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+    const canViewBills = role === "CUSTOMER" ? body?.canViewBills !== false : true;
 
     const invite = await prisma.accountInvitation.create({
       data: {
@@ -247,6 +270,7 @@ export async function POST(req: NextRequest) {
         displayName,
         customerId,
         linkedKarigarId,
+        canViewBills,
         expiresAt,
         createdById: actor.userId,
       },

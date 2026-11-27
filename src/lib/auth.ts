@@ -29,6 +29,7 @@ export async function issueSessionForUser(
     name: string;
     customerId: string | null;
     linkedKarigarId: string | null;
+    canViewBills?: boolean;
   },
   meta?: { ipAddress?: string; userAgent?: string }
 ): Promise<{ token: string; expiresAt: Date; actor: ActorContext }> {
@@ -69,6 +70,7 @@ export async function issueSessionForUser(
       name: user.name,
       customerId: user.customerId ?? null,
       linkedKarigarId: user.linkedKarigarId ?? null,
+      canViewBills: user.canViewBills ?? true,
     },
   };
 }
@@ -144,6 +146,7 @@ export async function getCurrentActor(): Promise<ActorContext | null> {
       name: session.user.name,
       customerId: session.user.customerId ?? null,
       linkedKarigarId: session.user.linkedKarigarId ?? null,
+      canViewBills: session.user.canViewBills ?? true,
     };
   } catch {
     return null;

@@ -58,6 +58,7 @@ interface RequestRow {
   managerVisibleNote: string | null;
   hasPendingChangeReq: boolean;
   submittedAt: string;
+  submittedByName?: string | null;
   customer: {
     id: string;
     customerCode: string;
@@ -182,6 +183,10 @@ export default function AppOrdersManagerPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteCustomerId, setInviteCustomerId] = useState("");
+  const [inviteCanViewBills, setInviteCanViewBills] = useState(true);
+  const [linkedCustomerUsers, setLinkedCustomerUsers] = useState<
+    Array<{ id: string; name: string; email: string; customerId: string | null; isActive: boolean; canViewBills: boolean }>
+  >([]);
   const [customers, setCustomers] = useState<
     Array<{ id: string; customerCode: string; name: string; phone?: string | null; email?: string | null }>
   >([]);
@@ -270,6 +275,7 @@ export default function AppOrdersManagerPage() {
       if (inv?.ok) {
         setCustomers(inv.customers || []);
         setInvitations(inv.invitations || []);
+        setLinkedCustomerUsers(inv.linkedCustomerUsers || []);
         setLinkedCustomerIds(
           (inv.linkedCustomerUsers || [])
             .map((u: { customerId?: string | null }) => u.customerId)
@@ -779,6 +785,11 @@ export default function AppOrdersManagerPage() {
                         <span className="text-stone-400 font-mono">
                           {r.submittedAt.slice(0, 10)}
                         </span>
+                        {r.submittedByName && (
+                          <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 text-[10px] font-medium">
+                            By {r.submittedByName}
+                          </span>
+                        )}
                         {r.hasPendingChangeReq && (
                           <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 rounded-full font-semibold text-[10px]">
                             Change Request
@@ -1269,10 +1280,15 @@ export default function AppOrdersManagerPage() {
         {/* TAB: INVITATIONS */}
         {tab === "INVITES" && (
           <div className="space-y-4">
-            <div className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 space-y-3 text-xs shadow-2xs">
-              <div className="font-bold text-stone-900 flex items-center gap-1.5">
-                <UserPlus className="w-4 h-4 text-[#0F3D2E]" />
-                Create Single Customer Invite
+            <div id="create-single-invite-box" className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 space-y-3 text-xs shadow-2xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="font-bold text-stone-900 flex items-center gap-1.5">
+                  <UserPlus className="w-4 h-4 text-[#0F3D2E]" />
+                  Create Customer / Staff Invite
+                </div>
+                <span className="text-[11px] text-stone-500">
+                  Multiple staff logins can link to the same showroom — zero double-counting.
+                </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <select
@@ -1282,21 +1298,21 @@ export default function AppOrdersManagerPage() {
                   }
                   className="px-2.5 py-2 border border-stone-200 rounded-xl bg-white"
                 >
-                  <option value="CUSTOMER">Customer</option>
+                  <option value="CUSTOMER">Customer / Showroom Staff</option>
                   <option value="CAD_DESIGNER">CAD Designer</option>
                 </select>
                 <input
                   type="text"
                   value={inviteName}
                   onChange={(e) => setInviteName(e.target.value)}
-                  placeholder="Name (e.g. Subham Jewellers)"
+                  placeholder="Person / Staff Name (e.g. Ramesh)"
                   className="px-2.5 py-2 border border-stone-200 rounded-xl"
                 />
                 <input
                   type="email"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="Email"
+                  placeholder="Login Email (unique per person)"
                   className="px-2.5 py-2 border border-stone-200 rounded-xl"
                 />
                 {inviteRole === "CUSTOMER" && (
@@ -1305,7 +1321,7 @@ export default function AppOrdersManagerPage() {
                     onChange={(e) => setInviteCustomerId(e.target.value)}
                     className="px-2.5 py-2 border border-stone-200 rounded-xl bg-white"
                   >
-                    <option value="">-- Link to Customer --</option>
+                    <option value="">-- Link to Showroom / Customer --</option>
                     {customers.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name} ({c.customerCode})
@@ -1314,6 +1330,20 @@ export default function AppOrdersManagerPage() {
                   </select>
                 )}
               </div>
+              {inviteRole === "CUSTOMER" && (
+                <label className="inline-flex items-center gap-2 text-xs text-stone-700 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={!inviteCanViewBills}
+                    onChange={(e) => setInviteCanViewBills(!e.target.checked)}
+                    className="rounded border-stone-300"
+                  />
+                  <span>
+                    <strong>Order Staff Only</strong> (Hide Bills &amp; Balance — staff can place &amp; track orders only)
+                  </span>
+                </label>
+              )}
+              <div>
               <button
                 type="button"
                 onClick={async () => {
@@ -1327,6 +1357,8 @@ export default function AppOrdersManagerPage() {
                       email: inviteEmail,
                       customerId:
                         inviteRole === "CUSTOMER" ? inviteCustomerId : null,
+                      canViewBills:
+                        inviteRole === "CUSTOMER" ? inviteCanViewBills : true,
                     }),
                   });
                   const d = await res.json();
@@ -1345,6 +1377,7 @@ export default function AppOrdersManagerPage() {
               >
                 Generate Invite Link
               </button>
+              </div>
               {createdInviteUrl && (
                 <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl font-mono break-all">
                   Invite Link: <strong>{createdInviteUrl}</strong>
@@ -1411,7 +1444,10 @@ export default function AppOrdersManagerPage() {
                     return `${c.name} ${c.customerCode} ${c.phone || ""}`.toLowerCase().includes(q);
                   })
                   .map((c) => {
-                    const isLinked = linkedCustomerIds.includes(c.id);
+                    const customerLogins = linkedCustomerUsers.filter(
+                      (u) => u.customerId === c.id
+                    );
+                    const isLinked = customerLogins.length > 0 || linkedCustomerIds.includes(c.id);
                     const pending = invitations.find(
                       (i) =>
                         i.customerId === c.id &&
@@ -1443,11 +1479,60 @@ export default function AppOrdersManagerPage() {
                           <div className="text-[11px] font-mono text-stone-500">
                             {c.phone || "No phone"}
                           </div>
+                          {customerLogins.length > 0 && (
+                            <div className="mt-1.5 flex flex-wrap gap-1.5">
+                              {customerLogins.map((u) => (
+                                <button
+                                  key={u.id}
+                                  type="button"
+                                  title="Click to toggle Bills visibility for this login"
+                                  onClick={async () => {
+                                    await fetch("/api/invitations", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({
+                                        action: "TOGGLE_BILL_ACCESS",
+                                        userId: u.id,
+                                        canViewBills: !u.canViewBills,
+                                      }),
+                                    });
+                                    await reloadInvites();
+                                  }}
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-medium border cursor-pointer ${
+                                    u.canViewBills
+                                      ? "bg-emerald-50 border-emerald-200 text-[#0F3D2E]"
+                                      : "bg-amber-50 border-amber-200 text-amber-900"
+                                  }`}
+                                >
+                                  {u.name} ({u.email}) • {u.canViewBills ? "Bills: ON" : "Order Only"}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setInviteRole("CUSTOMER");
+                              setInviteCustomerId(c.id);
+                              setInviteName("");
+                              setInviteEmail("");
+                              setInviteCanViewBills(false);
+                              setCreatedInviteUrl(null);
+                              document
+                                .getElementById("create-single-invite-box")
+                                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }}
+                            className="px-2.5 py-1 rounded-lg border border-stone-200 hover:bg-stone-100 text-stone-700 font-semibold text-[11px] cursor-pointer"
+                          >
+                            + Add Staff Login
+                          </button>
                           {isLinked ? (
                             <span className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[#0F3D2E] font-semibold">
-                              Active on App
+                              {customerLogins.length > 1
+                                ? `${customerLogins.length} Logins Active`
+                                : "Active on App"}
                             </span>
                           ) : pending ? (
                             <>

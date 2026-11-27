@@ -131,6 +131,7 @@ export interface ActorContext {
   name?: string;
   customerId?: string | null;
   linkedKarigarId?: string | null;
+  canViewBills?: boolean;
 }
 
 export interface PurityEntity {

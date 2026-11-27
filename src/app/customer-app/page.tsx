@@ -275,6 +275,7 @@ export default function CustomerAppPage() {
       previewHtml: string | null;
     }>
   >([]);
+  const [canViewBills, setCanViewBills] = useState(true);
   const [notifications, setNotifications] = useState<
     Array<{
       id: string;
@@ -361,6 +362,7 @@ export default function CustomerAppPage() {
     }
     setRequests(data.requests || []);
     setBills(data.bills || []);
+    setCanViewBills(data.canViewBills !== false);
     setNotifications(data.notifications || []);
     setUnreadCount(data.unreadCount || 0);
     setLoading(false);
@@ -2096,7 +2098,7 @@ export default function CustomerAppPage() {
                       <span className={`px-3 py-1 rounded-full border font-semibold ${badgeClass}`}>
                         {r.statusLabel}
                       </span>
-                      {(r.linkedBills ?? []).length > 0 && (
+                      {canViewBills && (r.linkedBills ?? []).length > 0 && (
                         <button
                           type="button"
                           onClick={() => {
@@ -2131,7 +2133,7 @@ export default function CustomerAppPage() {
                             <RotateCcw className="w-3.5 h-3.5 text-[#0F3D2E]" />
                             <span>Repeat Order (With Changes)</span>
                           </button>
-                          {(r.linkedBills ?? []).map((b) =>
+                          {canViewBills && (r.linkedBills ?? []).map((b) =>
                             b.previewHtml ? (
                               <button
                                 key={b.id}

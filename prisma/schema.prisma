@@ -263,6 +263,7 @@ model User {
   customerId      String?
   customer        Customer?    @relation(fields: [customerId], references: [id])
   linkedKarigarId String?
+  canViewBills    Boolean      @default(true)
   isActive        Boolean      @default(true)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
@@ -1367,6 +1368,7 @@ model AccountInvitation {
   customerId      String?
   customer        Customer?    @relation(fields: [customerId], references: [id])
   linkedKarigarId String?
+  canViewBills    Boolean      @default(true)
   expiresAt       DateTime
   acceptedAt      DateTime?
   acceptedUserId  String?

@@ -215,6 +215,8 @@ export async function getManagerAppOrdersWorkspace(actor: ActorContext) {
       o.cadAssignment.status === "CHANGES_REQUIRED"
   ).length;
 
+  const userNameById = new Map(appUsers.map((u) => [u.id, u.name]));
+
   return {
     counts: {
       newToday,
@@ -241,6 +243,7 @@ export async function getManagerAppOrdersWorkspace(actor: ActorContext) {
     })),
     requests: requests.map((r) => ({
       ...r,
+      submittedByName: userNameById.get(r.submittedByUserId) ?? null,
       requestedDeliveryDate: r.requestedDeliveryDate
         ? r.requestedDeliveryDate.toISOString().slice(0, 10)
         : null,
