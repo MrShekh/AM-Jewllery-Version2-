@@ -349,10 +349,9 @@ export async function reviewCustomerOrderRequest(
       data.status = "MORE_DETAILS_NEEDED";
       data.managerVisibleNote = note;
     } else if (input.decision === "DECLINE") {
-      if (!note) throw new ValidationError("Please enter a decline reason");
       nextStatus = "DECLINED";
       data.status = "DECLINED";
-      data.declineReason = note;
+      data.declineReason = note || "Declined by manager";
     } else if (input.decision === "MARK_READY") {
       nextStatus = "READY";
       data.status = "READY";

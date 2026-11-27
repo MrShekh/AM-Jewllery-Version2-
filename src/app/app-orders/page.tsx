@@ -393,7 +393,18 @@ export default function AppOrdersManagerPage() {
     setBusyReqId(requestId);
     try {
       const confirmedDate = confirmDateByReq[requestId] || null;
-      const note = noteByReq[requestId] || "";
+      let note = (noteByReq[requestId] || "").trim();
+      if (decision === "DECLINE" && !note) {
+        const entered = window.prompt(
+          "Reason for declining this order (optional):",
+          "Declined by manager"
+        );
+        if (entered === null) {
+          setBusyReqId(null);
+          return;
+        }
+        note = entered.trim() || "Declined by manager";
+      }
       const res = await fetch("/api/app-orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -760,6 +771,12 @@ export default function AppOrdersManagerPage() {
                     {activeCustomerCard.requests.length} order(s)
                   </span>
                 </div>
+
+                {error && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl">
+                    {error}
+                  </div>
+                )}
 
                 {activeCustomerCard.requests.map((r) => {
                   const statusMap: Record<string, [string, string]> = {
