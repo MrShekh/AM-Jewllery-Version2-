@@ -16,7 +16,28 @@ export async function GET(req: NextRequest) {
           organization: { select: { name: true } },
         },
       });
-      if (!invite || invite.acceptedAt || invite.expiresAt.getTime() < Date.now()) {
+      if (!invite) {
+        return NextResponse.json(
+          { ok: false, error: "Invitation link is invalid or expired" },
+          { status: 404 }
+        );
+      }
+      if (invite.acceptedAt) {
+        return NextResponse.json({
+          ok: true,
+          alreadyAccepted: true,
+          invite: {
+            email: invite.email,
+            displayName: invite.displayName,
+            role: invite.role,
+            organizationName: invite.organization.name,
+            customerName: invite.customer?.name ?? null,
+            customerCode: invite.customer?.customerCode ?? null,
+            canViewBills: invite.canViewBills,
+          },
+        });
+      }
+      if (invite.expiresAt.getTime() < Date.now()) {
         return NextResponse.json(
           { ok: false, error: "Invitation link is invalid or expired" },
           { status: 404 }

@@ -11,6 +11,7 @@ export default function AcceptInvitePage() {
   const token = String(params?.token || "");
 
   const [loading, setLoading] = useState(true);
+  const [alreadyAccepted, setAlreadyAccepted] = useState(false);
   const [invite, setInvite] = useState<{
     email: string;
     displayName: string;
@@ -35,6 +36,7 @@ export default function AcceptInvitePage() {
         if (!d.ok || !d.invite) {
           setError(d.error || "Invalid or expired invitation link");
         } else {
+          setAlreadyAccepted(Boolean(d.alreadyAccepted));
           setInvite(d.invite);
           setDisplayName(d.invite.displayName || "");
         }
@@ -90,6 +92,27 @@ export default function AcceptInvitePage() {
           ) : error && !invite ? (
             <div className="p-3 rounded bg-red-50 border border-red-200 text-xs text-red-700">
               {error}
+            </div>
+          ) : alreadyAccepted && invite ? (
+            <div className="space-y-4">
+              <div className="p-3.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1.5">
+                <div className="font-bold text-sm">Your account is already activated!</div>
+                <div>
+                  You have already set your password for{" "}
+                  <strong>{invite.customerName || invite.displayName}</strong>.
+                </div>
+                <div className="break-all">
+                  Login with your <strong>phone number</strong> or{" "}
+                  <strong className="font-mono">{invite.email}</strong>.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => router.push(`/login?email=${encodeURIComponent(invite.email)}`)}
+                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-md cursor-pointer"
+              >
+                Continue to Login →
+              </button>
             </div>
           ) : invite ? (
             <form onSubmit={handleAccept} className="space-y-3">
